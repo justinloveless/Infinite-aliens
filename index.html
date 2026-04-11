@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infinite Aliens</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles/main.css" />
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- HUD: always visible during combat -->
+  <div id="hud" class="hidden">
+    <div id="hud-top-left">
+      <div id="hp-container">
+        <div class="bar-label">HULL</div>
+        <div class="bar-track">
+          <div id="hp-bar" class="bar hp-bar"></div>
+        </div>
+      </div>
+      <div id="shield-container">
+        <div class="bar-label">SHIELD</div>
+        <div class="bar-track">
+          <div id="shield-bar" class="bar shield-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="hud-top-center">
+      <div id="round-display">
+        <span class="round-label">ROUND</span>
+        <span id="round-number">1</span>
+      </div>
+      <div id="enemies-display">
+        <span id="enemies-defeated">0</span>
+        <span class="round-label"> / </span>
+        <span id="enemies-required">5</span>
+        <span class="round-label"> DEFEATED</span>
+      </div>
+    </div>
+
+    <div id="hud-top-right">
+      <button id="tech-tree-btn" class="neon-btn">TECH TREE</button>
+      <button id="mute-btn" class="neon-btn small">♪</button>
+    </div>
+
+    <div id="currency-display">
+      <div class="currency-item" id="currency-scrapMetal">
+        <span class="currency-icon">⚙</span>
+        <span class="currency-name">Scrap</span>
+        <span class="currency-amount" id="amt-scrapMetal">0</span>
+      </div>
+      <div class="currency-item" id="currency-plasmaCrystals">
+        <span class="currency-icon">◆</span>
+        <span class="currency-name">Plasma</span>
+        <span class="currency-amount" id="amt-plasmaCrystals">0</span>
+      </div>
+      <div class="currency-item" id="currency-bioEssence">
+        <span class="currency-icon">✦</span>
+        <span class="currency-name">Bio</span>
+        <span class="currency-amount" id="amt-bioEssence">0</span>
+      </div>
+      <div class="currency-item" id="currency-darkMatter">
+        <span class="currency-icon">◉</span>
+        <span class="currency-name">Dark</span>
+        <span class="currency-amount" id="amt-darkMatter">0</span>
+      </div>
+      <div class="currency-item" id="currency-stellarDust">
+        <span class="currency-icon">★</span>
+        <span class="currency-name">Stellar</span>
+        <span class="currency-amount" id="amt-stellarDust">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tech Tree Screen -->
+  <div id="tech-tree-screen" class="overlay hidden">
+    <div id="tech-tree-header">
+      <h2>TECH TREE</h2>
+      <button id="close-tree-btn" class="neon-btn">✕ CLOSE</button>
+    </div>
+    <div id="tech-tree-currencies"></div>
+    <canvas id="tech-tree-canvas"></canvas>
+    <div id="node-tooltip" class="hidden"></div>
+    <div id="tech-tree-footer">
+      <button id="launch-btn" class="neon-btn launch">▶ LAUNCH ROUND</button>
+    </div>
+  </div>
+
+  <!-- Round Transition -->
+  <div id="round-transition" class="overlay hidden">
+    <div id="transition-content">
+      <div id="transition-title">ROUND <span id="transition-round">1</span> COMPLETE!</div>
+      <div id="transition-loot"></div>
+      <div id="transition-sub">Opening Tech Tree...</div>
+    </div>
+  </div>
+
+  <!-- Death Screen -->
+  <div id="death-screen" class="overlay hidden">
+    <div id="death-content">
+      <div id="death-title">SHIP DESTROYED</div>
+      <p>Your materials are safe. Upgrade and try again!</p>
+      <button id="retry-btn" class="neon-btn launch">REPAIR & UPGRADE</button>
+    </div>
+  </div>
+
+  <!-- Welcome / Offline Earnings -->
+  <div id="welcome-screen" class="overlay hidden">
+    <div id="welcome-content">
+      <div id="welcome-title">WELCOME BACK, COMMANDER</div>
+      <div id="offline-earnings"></div>
+      <button id="welcome-ok-btn" class="neon-btn">ENGAGE</button>
+    </div>
+  </div>
+
+  <!-- Start Screen -->
+  <div id="start-screen" class="overlay">
+    <div id="start-content">
+      <div id="start-title">INFINITE<br/>ALIENS</div>
+      <div id="start-sub">A Cozy Space Idle Game</div>
+      <button id="start-btn" class="neon-btn launch">▶ BEGIN MISSION</button>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
