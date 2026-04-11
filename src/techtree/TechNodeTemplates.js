@@ -1,6 +1,48 @@
 // Node template pool organized by category
 // Each template: { name, description, icon, maxLevel, effects[], baseCost{}, category }
 
+// Starter nodes: one per non-special category. These sit at the 4 cardinal
+// positions of ring 0 and are free to pick — they let the player choose which
+// direction to branch into first.
+export const STARTER_NODES = {
+  weapon: {
+    id: 'starter_weapon',
+    name: 'Combat Training',
+    description: 'Basic military doctrine sharpens your weapon systems.',
+    icon: '⚔',
+    maxLevel: 1,
+    effects: [{ type: 'multiply', stat: 'damage', value: 1.1, statLabel: 'Damage' }],
+    baseCost: {},
+  },
+  defense: {
+    id: 'starter_defense',
+    name: 'Reinforced Frame',
+    description: 'A sturdier chassis gives your hull extra structural integrity.',
+    icon: '🛡',
+    maxLevel: 1,
+    effects: [{ type: 'add', stat: 'maxHp', value: 20, statLabel: 'Max Hull' }],
+    baseCost: {},
+  },
+  utility: {
+    id: 'starter_utility',
+    name: 'Field Engineer',
+    description: 'Practical engineering extends the reach of your loot tether.',
+    icon: '⊕',
+    maxLevel: 1,
+    effects: [{ type: 'add', stat: 'magnetRange', value: 2, statLabel: 'Magnet Range' }],
+    baseCost: {},
+  },
+  passive: {
+    id: 'starter_passive',
+    name: 'Cosmic Attunement',
+    description: 'Attune your sensors to begin passively collecting Stellar Dust.',
+    icon: '✦',
+    maxLevel: 1,
+    effects: [{ type: 'add', stat: 'stellarDustRate', value: 0.1, statLabel: 'Stellar/sec' }],
+    baseCost: {},
+  },
+};
+
 export const NODE_TEMPLATES = {
   weapon: [
     {

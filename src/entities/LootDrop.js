@@ -38,7 +38,7 @@ export class LootDrop {
   update(delta, playerPos, attractionSpeed) {
     if (!this.active) return;
     this._time += delta * 2.5;
-  
+
     // Home toward player so loot can't be stranded far from the ship.
     if (playerPos) {
       const dx = playerPos.x - this.mesh.position.x;

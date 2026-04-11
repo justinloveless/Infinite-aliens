@@ -102,7 +102,7 @@ export class TechTreeUI {
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
-      const newZoom = Math.max(0.4, Math.min(2.5, this._camera.zoom * zoomDelta));
+      const newZoom = Math.max(0.15, Math.min(2.5, this._camera.zoom * zoomDelta));
 
       // Zoom toward mouse position
       const rect = canvas.getBoundingClientRect();
@@ -161,11 +161,14 @@ export class TechTreeUI {
   }
 
   _centerOnFrontier() {
-    const frontierTier = this._tree.frontier;
-    const targetY = -(TECH_TREE.GRID_OFFSET_Y + frontierTier * (TECH_TREE.NODE_H + TECH_TREE.NODE_PADDING_Y)) + this._canvas.height * 0.4;
-    const targetX = this._canvas.width / 2 - 200;
-    this._camera.x = targetX;
-    this._camera.y = targetY;
+    // Circular layout: place world origin (0,0) at canvas center and
+    // auto-zoom so the player's current frontier ring is comfortably visible.
+    this._camera.x = this._canvas.width / 2;
+    this._camera.y = this._canvas.height / 2;
+    const frontierRing = Math.max(1, this._tree.frontier);
+    const viewRadius = TECH_TREE.CENTER_RADIUS + (frontierRing + 1) * TECH_TREE.RING_SPACING;
+    const minDim = Math.min(this._canvas.width, this._canvas.height);
+    this._camera.zoom = Math.max(0.2, Math.min(1.4, (minDim * 0.42) / viewRadius));
   }
 
   _screenToWorld(sx, sy) {
@@ -213,15 +216,25 @@ export class TechTreeUI {
     ctx.translate(this._camera.x, this._camera.y);
     ctx.scale(this._camera.zoom, this._camera.zoom);
 
+    // Center hub marker (anchors the eye on the starter ring)
+    this._drawCenterHub(ctx);
+
     const nodes = this._tree.getVisibleNodes();
     const nodesMap = {};
     for (const n of nodes) nodesMap[n.id] = n;
 
-    // Draw connections first
+    // Draw connections first, deduplicated (lateral links are bidirectional
+    // so each edge appears in both endpoints' prerequisite lists).
+    const drawnEdges = new Set();
     for (const node of nodes) {
       for (const prereqId of node.prerequisites) {
         const prereq = nodesMap[prereqId];
         if (!prereq) continue;
+        const key = node.id < prereq.id
+          ? `${node.id}|${prereq.id}`
+          : `${prereq.id}|${node.id}`;
+        if (drawnEdges.has(key)) continue;
+        drawnEdges.add(key);
         this._drawConnection(ctx, prereq, node);
       }
     }
@@ -234,25 +247,49 @@ export class TechTreeUI {
     ctx.restore();
   }
 
+  _drawCenterHub(ctx) {
+    // Inner hub ring with gentle synthwave glow
+    ctx.save();
+    const r1 = TECH_TREE.CENTER_RADIUS - 42;
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, r1);
+    grad.addColorStop(0, 'rgba(255, 0, 200, 0.18)');
+    grad.addColorStop(0.6, 'rgba(0, 200, 255, 0.08)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, r1, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(0, 245, 255, 0.35)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.arc(0, 0, TECH_TREE.CENTER_RADIUS - 18, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   _drawConnection(ctx, from, to) {
+    // Straight line between node centers (circular layout)
     const fx = from.position.x + NODE_W / 2;
-    const fy = from.position.y + NODE_H;
+    const fy = from.position.y + NODE_H / 2;
     const tx = to.position.x + NODE_W / 2;
-    const ty = to.position.y;
+    const ty = to.position.y + NODE_H / 2;
 
     const bothUnlocked = from.isUnlocked && to.isUnlocked;
-    const fromUnlocked = from.isUnlocked;
+    const eitherUnlocked = from.isUnlocked || to.isUnlocked;
 
     ctx.beginPath();
     ctx.moveTo(fx, fy);
-    ctx.bezierCurveTo(fx, fy + 30, tx, ty - 30, tx, ty);
+    ctx.lineTo(tx, ty);
 
     if (bothUnlocked) {
-      ctx.strokeStyle = 'rgba(0, 245, 255, 0.7)';
-      ctx.lineWidth = 2;
-    } else if (fromUnlocked) {
-      ctx.strokeStyle = 'rgba(0, 245, 255, 0.3)';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(0, 245, 255, 0.75)';
+      ctx.lineWidth = 2.2;
+    } else if (eitherUnlocked) {
+      ctx.strokeStyle = 'rgba(0, 245, 255, 0.35)';
+      ctx.lineWidth = 1.6;
       ctx.setLineDash([6, 4]);
     } else {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';

@@ -1,7 +1,7 @@
 // ===== GAME CONSTANTS =====
 
 export const GAME = {
-  VERSION: 1,
+  VERSION: 2,
   AUTO_SAVE_INTERVAL: 30000,  // ms
   OFFLINE_CAP: 8 * 3600,     // seconds
   OFFLINE_EFFICIENCY: 0.5,
@@ -62,17 +62,17 @@ export const CURRENCIES = {
 export const TECH_TREE = {
   BASE_SEED: 42,
   TIER_PRIME: 7919,
-  ROOT_TIER_COUNTS: [1, 2, 3],   // forced counts for tiers 0, 1, 2
-  MIN_NODES_PER_TIER: 2,
-  MAX_NODES_PER_TIER: 4,
-  COST_SCALING_BASE: 2.0,        // cost * COST_SCALING^tier
-  EFFECT_TIER_BONUS: 0.05,       // +5% per tier on effect values
+  // Circular layout (Path of Exile style)
+  CENTER_RADIUS: 150,            // Radius of ring 0 (the starter ring)
+  RING_SPACING: 110,             // Distance between consecutive rings
+  MIN_NODES_PER_RING: 5,         // Minimum nodes per non-starter ring
+  MAX_NODES_PER_RING: 7,         // Maximum nodes per non-starter ring
+  LATERAL_CONNECT_CHANCE: 0.45,  // Chance a node links to the next angular neighbor on same ring
+  CROSS_CONNECT_CHANCE: 0.28,    // Chance a node links to a second (non-closest) inward neighbor
+  COST_SCALING_BASE: 2.0,        // cost * COST_SCALING^(ring/2)
+  EFFECT_TIER_BONUS: 0.05,       // +5% per ring on effect values
   LEVEL_COST_SCALING: 1.4,       // level cost * LEVEL_COST^currentLevel
-  NODE_W: 130, NODE_H: 52,
-  NODE_PADDING_X: 60,
-  NODE_PADDING_Y: 90,
-  GRID_OFFSET_X: 80,
-  GRID_OFFSET_Y: 60,
+  NODE_W: 124, NODE_H: 48,
 };
 
 export const SCENE = {
