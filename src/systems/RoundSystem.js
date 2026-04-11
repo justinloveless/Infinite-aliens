@@ -1,5 +1,8 @@
 import { ROUND } from '../constants.js';
 import { eventBus, EVENTS } from '../core/EventBus.js';
+
+const VACUUM_ATTRACTION = 88;
+const VACUUM_MAX_SEC = 2.0;
 import { EnemyFactory } from '../entities/EnemyFactory.js';
 import { LootDrop } from '../entities/LootDrop.js';
 import { Explosion } from '../entities/Explosion.js';
@@ -18,6 +21,7 @@ export class RoundSystem {
     this._state = null;
     this._onRoundComplete = null;
     this._onRoundStart = null;
+    this._vacuumTimer = 0;
   }
 
   init(state, scene, onRoundComplete, onRoundStart) {
@@ -40,6 +44,7 @@ export class RoundSystem {
     state.roundLoot = {};
     this._spawnedThisRound = 0;
     this._spawnTimer = 0;
+    this._vacuumTimer = 0;
     this._clearLoot();
     eventBus.emit(EVENTS.ROUND_STARTED, { round });
     if (this._onRoundStart) this._onRoundStart(round);
@@ -92,15 +97,21 @@ export class RoundSystem {
     state.round.totalEnemiesDefeated++;
 
     if (state.round.enemiesDefeated >= state.round.enemiesRequired) {
-      this._beginTransition();
+      this._beginVacuum();
     }
+  }
+
+  _beginVacuum() {
+    const state = this._state;
+    state.round.phase = 'vacuum';
+    this._vacuumTimer = 0;
+    this._clearEnemies();
   }
 
   _beginTransition() {
     const state = this._state;
     state.round.phase = 'transition';
     this._transitionTimer = 0;
-    this._clearEnemies();
     eventBus.emit(EVENTS.ROUND_COMPLETE, {
       round: state.round.current,
       loot: { ...state.roundLoot },
@@ -132,19 +143,57 @@ export class RoundSystem {
       if (!this._explosions[i].alive) this._explosions.splice(i, 1);
     }
 
-    // Update loot
+    const playerPos =
+      this._scene.groups.player.children[0]?.position || { x: 0, z: 0 };
+
+    const isVacuum = state.round.phase === 'vacuum';
+
     for (const loot of this._lootDrops) {
-      loot.update(delta);
+      loot.update(delta, playerPos, isVacuum ? VACUUM_ATTRACTION : undefined);
     }
-    // Remove collected
+
+    if (isVacuum) {
+      this._vacuumTimer += delta;
+      const collectR = Math.max(computed?.magnetRange ?? 4, 3.5);
+      for (const loot of this._lootDrops) {
+        if (!loot.active) continue;
+        if (loot.position.distanceTo(playerPos) < collectR) {
+          eventBus.emit(EVENTS.LOOT_COLLECTED, {
+            currencyType: loot.currencyType,
+            amount: loot.amount,
+          });
+          loot.collect();
+        }
+      }
+    }
+
     for (let i = this._lootDrops.length - 1; i >= 0; i--) {
       if (!this._lootDrops[i].active) this._lootDrops.splice(i, 1);
+    }
+
+    if (isVacuum) {
+      const timedOut = this._vacuumTimer >= VACUUM_MAX_SEC;
+      if (this._lootDrops.length === 0 || timedOut) {
+        if (timedOut && this._lootDrops.length > 0) {
+          for (const loot of this._lootDrops) {
+            if (!loot.active) continue;
+            eventBus.emit(EVENTS.LOOT_COLLECTED, {
+              currencyType: loot.currencyType,
+              amount: loot.amount,
+            });
+            loot.collect();
+          }
+          this._lootDrops.length = 0;
+        }
+        this._vacuumTimer = 0;
+        this._beginTransition();
+      }
+      return;
     }
 
     if (state.round.phase !== 'combat') return;
 
     // Update enemies
-    const playerPos = this._scene.groups.player.children[0]?.position || { x: 0, z: 0 };
     for (let i = this._enemies.length - 1; i >= 0; i--) {
       const e = this._enemies[i];
       if (!e.active) {

@@ -189,7 +189,10 @@ export class TechTreeUI {
   _purchaseNode(node) {
     const success = this._tree.purchase(node.id, this._currency);
     if (success) {
-      if (this._audio) this._audio.play('upgrade');
+      if (this._audio) {
+        if (node.id === 'drone') this._audio.play('droneSpawn');
+        else this._audio.play('upgrade');
+      }
       // Flash animation via re-render
       this.render();
     } else {

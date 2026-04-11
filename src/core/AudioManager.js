@@ -1,4 +1,6 @@
-// Audio manager using Web Audio API for SFX + <audio> elements for music
+// Audio manager: optional MP3 SFX (decoded buffers) + synth fallback; <audio> for music loops
+import { MUSIC_BY_KEY, SFX_BY_KEY, urlPublicAudio } from '../audio/audioAssets.js';
+
 export class AudioManager {
   constructor() {
     this._ctx = null;
@@ -8,39 +10,91 @@ export class AudioManager {
     this._musicEl = null;
     this._currentTrack = null;
     this._initialized = false;
+    /** @type {Map<string, AudioBuffer>} */
+    this._sfxBuffers = new Map();
   }
 
-  // Must be called after a user gesture
   init() {
     if (this._initialized) return;
     try {
       this._ctx = new (window.AudioContext || window.webkitAudioContext)();
       this._initialized = true;
+      this._preloadSfx();
     } catch (e) {
       console.warn('Web Audio not available:', e);
     }
   }
 
-  // Play a procedurally generated synth sound (no files needed)
+  _preloadSfx() {
+    const ctx = this._ctx;
+    if (!ctx) return;
+    for (const [key, file] of Object.entries(SFX_BY_KEY)) {
+      fetch(urlPublicAudio(file))
+        .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject()))
+        .then((ab) => ctx.decodeAudioData(ab.slice(0)))
+        .then((buf) => {
+          this._sfxBuffers.set(key, buf);
+        })
+        .catch(() => {});
+    }
+  }
+
   play(name) {
     if (this._muted || !this._initialized || !this._ctx) return;
 
+    const buf = this._sfxBuffers.get(name);
+    if (buf) {
+      try {
+        const ctx = this._ctx;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const g = ctx.createGain();
+        g.gain.value = this._sfxVolume;
+        src.connect(g);
+        g.connect(ctx.destination);
+        src.start();
+      } catch (_) {}
+      return;
+    }
+
+    this._playSynth(name);
+  }
+
+  _playSynth(name) {
     const defs = {
-      laser:       { freq: 880, type: 'sawtooth', duration: 0.12, decay: 0.08, vol: 0.15, sweep: 0.3 },
-      missile:     { freq: 440, type: 'square',   duration: 0.25, decay: 0.15, vol: 0.2,  sweep: -0.2 },
-      plasma:      { freq: 660, type: 'sine',      duration: 0.18, decay: 0.1,  vol: 0.18, sweep: 0.5 },
-      hit:         { freq: 220, type: 'sawtooth', duration: 0.08, decay: 0.05, vol: 0.12, sweep: -0.5 },
-      explosion:   { freq: 120, type: 'sawtooth', duration: 0.35, decay: 0.3,  vol: 0.25, sweep: -0.8, noise: true },
-      bossExplosion:{ freq: 80, type: 'sawtooth', duration: 0.7,  decay: 0.6,  vol: 0.35, sweep: -0.9, noise: true },
-      pickup:      { freq: 1200, type: 'sine',    duration: 0.1,  decay: 0.08, vol: 0.15, sweep: 0.8 },
-      rarePickup:  { freq: 600, type: 'sine',     duration: 0.25, decay: 0.2,  vol: 0.2,  sweep: 0.5 },
-      shieldHit:   { freq: 500, type: 'sine',     duration: 0.15, decay: 0.1,  vol: 0.15, sweep: 0.1 },
-      playerDamage:{ freq: 200, type: 'square',   duration: 0.15, decay: 0.1,  vol: 0.2,  sweep: -0.3 },
-      upgrade:     { freq: 800, type: 'sine',     duration: 0.4,  decay: 0.35, vol: 0.25, sweep: 0.6 },
-      hover:       { freq: 600, type: 'sine',     duration: 0.06, decay: 0.04, vol: 0.06, sweep: 0.1 },
-      launch:      { freq: 300, type: 'sawtooth', duration: 0.5,  decay: 0.4,  vol: 0.3,  sweep: 0.4 },
-      crit:        { freq: 1400, type: 'sine',    duration: 0.15, decay: 0.1,  vol: 0.2,  sweep: 0.9 },
-      roundComplete:{ freq: 600, type: 'sine',    duration: 0.6,  decay: 0.5,  vol: 0.3,  sweep: 0.7 },
+      laser: { freq: 880, type: 'sawtooth', duration: 0.12, decay: 0.08, vol: 0.15, sweep: 0.3 },
+      missile: { freq: 440, type: 'square', duration: 0.25, decay: 0.15, vol: 0.2, sweep: -0.2 },
+      plasma: { freq: 660, type: 'sine', duration: 0.18, decay: 0.1, vol: 0.18, sweep: 0.5 },
+      hit: { freq: 220, type: 'sawtooth', duration: 0.08, decay: 0.05, vol: 0.12, sweep: -0.5 },
+      explosion: {
+        freq: 120,
+        type: 'sawtooth',
+        duration: 0.35,
+        decay: 0.3,
+        vol: 0.25,
+        sweep: -0.8,
+        noise: true,
+      },
+      bossExplosion: {
+        freq: 80,
+        type: 'sawtooth',
+        duration: 0.7,
+        decay: 0.6,
+        vol: 0.35,
+        sweep: -0.9,
+        noise: true,
+      },
+      pickup: { freq: 1200, type: 'sine', duration: 0.1, decay: 0.08, vol: 0.15, sweep: 0.8 },
+      rarePickup: { freq: 600, type: 'sine', duration: 0.25, decay: 0.2, vol: 0.2, sweep: 0.5 },
+      shieldHit: { freq: 500, type: 'sine', duration: 0.15, decay: 0.1, vol: 0.15, sweep: 0.1 },
+      playerDamage: { freq: 200, type: 'square', duration: 0.15, decay: 0.1, vol: 0.2, sweep: -0.3 },
+      upgrade: { freq: 800, type: 'sine', duration: 0.4, decay: 0.35, vol: 0.25, sweep: 0.6 },
+      hover: { freq: 600, type: 'sine', duration: 0.06, decay: 0.04, vol: 0.06, sweep: 0.1 },
+      launch: { freq: 300, type: 'sawtooth', duration: 0.5, decay: 0.4, vol: 0.3, sweep: 0.4 },
+      crit: { freq: 1400, type: 'sine', duration: 0.15, decay: 0.1, vol: 0.2, sweep: 0.9 },
+      roundComplete: { freq: 600, type: 'sine', duration: 0.6, decay: 0.5, vol: 0.3, sweep: 0.7 },
+      death: { freq: 220, type: 'sine', duration: 0.55, decay: 0.5, vol: 0.2, sweep: -0.45 },
+      droneSpawn: { freq: 400, type: 'sine', duration: 0.45, decay: 0.38, vol: 0.22, sweep: 0.55 },
     };
 
     const def = defs[name];
@@ -69,7 +123,6 @@ export class AudioManager {
       osc.start(t);
       osc.stop(t + def.duration + 0.01);
 
-      // Noise layer for explosions
       if (def.noise) {
         const bufferSize = ctx.sampleRate * def.duration;
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
@@ -85,25 +138,21 @@ export class AudioManager {
         noise.start(t);
         noise.stop(t + def.duration);
       }
-    } catch (e) {
-      // Ignore audio errors silently
-    }
+    } catch (_) {}
   }
 
-  // Play background music from a file path
   playMusic(trackName, loop = true) {
     if (trackName === this._currentTrack) return;
     this._currentTrack = trackName;
-    // Music file support is optional - just set up the infrastructure
-    // Files would go in public/audio/
     if (this._musicEl) {
       this._musicEl.pause();
     }
-    const path = `./audio/${trackName}.mp3`;
+    const file = MUSIC_BY_KEY[trackName] ?? `${trackName}.mp3`;
+    const path = urlPublicAudio(file);
     const audio = new Audio(path);
     audio.loop = loop;
     audio.volume = this._muted ? 0 : this._musicVolume;
-    audio.play().catch(() => {}); // Ignore autoplay restrictions
+    audio.play().catch(() => {});
     this._musicEl = audio;
   }
 
@@ -123,5 +172,7 @@ export class AudioManager {
     return this._muted;
   }
 
-  get muted() { return this._muted; }
+  get muted() {
+    return this._muted;
+  }
 }

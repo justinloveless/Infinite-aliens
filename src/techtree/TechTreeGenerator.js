@@ -29,6 +29,17 @@ function pickRandom(arr, rng) {
   return arr[Math.floor(rng() * arr.length)];
 }
 
+// Tier 0 is a single root node: only scrap drops reliably before mid-game (see EnemyFactory).
+function isScrapOnlyTemplate(template) {
+  const keys = Object.keys(template.baseCost);
+  return keys.length > 0 && keys.every((k) => k === 'scrapMetal');
+}
+
+function filterTier0TemplatePool(pool) {
+  const scrapOnly = pool.filter(isScrapOnlyTemplate);
+  return scrapOnly.length > 0 ? scrapOnly : pool;
+}
+
 export class TechTreeGenerator {
   constructor(baseSeed) {
     this._baseSeed = baseSeed;
@@ -95,10 +106,17 @@ export class TechTreeGenerator {
       const category = weightedPick(weights, rng);
 
       // Pick template (avoid duplicates within this tier)
-      const pool = NODE_TEMPLATES[category].filter(t => !usedTemplateIds.has(t.id));
+      let pool = NODE_TEMPLATES[category].filter(t => !usedTemplateIds.has(t.id));
+      if (tier === 0) {
+        pool = filterTier0TemplatePool(pool);
+      }
       if (pool.length === 0) {
         // Fall back to any template
-        const fallback = pickRandom(NODE_TEMPLATES[category], rng);
+        let fallbacks = NODE_TEMPLATES[category];
+        if (tier === 0) {
+          fallbacks = filterTier0TemplatePool(fallbacks);
+        }
+        const fallback = pickRandom(fallbacks.length > 0 ? fallbacks : NODE_TEMPLATES[category], rng);
         this._createNode(tier, idx, fallback, category, rng, prevTier, tierNodes, unlockedCounts);
         usedTemplateIds.add(fallback.id);
       } else {

@@ -70,7 +70,10 @@ export class CombatSystem {
             computed.isHoming ? target : null
           );
         }
-        if (audioManager) audioManager.play('laser');
+        if (audioManager) {
+          const w = computed.projectileType;
+          audioManager.play(w === 'missile' ? 'missile' : w === 'plasma' ? 'plasma' : 'laser');
+        }
         eventBus.emit(EVENTS.PROJECTILE_FIRED);
       }
     }
@@ -102,9 +105,13 @@ export class CombatSystem {
           eventBus.emit(EVENTS.PLAYER_HEALED, { amount: healAmt });
         }
         eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
-        if (audioManager) audioManager.play('explosion');
+        if (audioManager) {
+          audioManager.play(enemy.type === 'boss' ? 'bossExplosion' : 'explosion');
+        }
       } else {
-        if (audioManager) audioManager.play('hit');
+        if (audioManager) {
+          audioManager.play(isCrit ? 'crit' : 'hit');
+        }
       }
     }
 
@@ -140,7 +147,9 @@ export class CombatSystem {
         currencyType: loot.currencyType,
         amount: loot.amount,
       });
-      if (audioManager) audioManager.play('pickup');
+      if (audioManager) {
+        audioManager.play(loot.currencyType === 'darkMatter' ? 'rarePickup' : 'pickup');
+      }
     }
   }
 

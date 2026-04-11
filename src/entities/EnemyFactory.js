@@ -14,7 +14,12 @@ const ENEMY_DEFS = {
     behavior: 'charge',
     eyeZ: 0.35,
     scale: 1,
-    loot: [{ currency: 'scrapMetal', min: 2, max: 5 }],
+    loot: [
+      { currency: 'scrapMetal', min: 2, max: 5 },
+      // Occasional early drops so tech nodes aren’t hard-locked before swarm/sniper rounds
+      { currency: 'plasmaCrystals', min: 0, max: 1 },
+      { currency: 'bioEssence', min: 0, max: 1 },
+    ],
     spawnWeight: 40,
   },
   tank: {

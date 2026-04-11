@@ -119,6 +119,8 @@ class Game {
     });
 
     eventBus.on(EVENTS.PLAYER_DIED, () => {
+      this.audio.stopMusic();
+      this.audio.play('death');
       this.state.round.phase = 'dead';
       this.ui.hide('hud');
       this.ui.showDeath(() => {
@@ -229,6 +231,11 @@ class Game {
     );
   }
 
+  _combatMusicKey() {
+    const r = this.state?.round?.current ?? 1;
+    return r > 0 && r % 5 === 0 ? 'boss' : 'combat';
+  }
+
   _rebuildComputed() {
     this.computed = this.upgrade.compute(this.state, this.techTree);
     this.state._computed = this.computed;
@@ -260,7 +267,7 @@ class Game {
       // Resume combat
       this.state.round.phase = 'combat';
       this.ui.show('hud');
-      this.audio.playMusic('combat');
+      this.audio.playMusic(this._combatMusicKey());
     } else {
       // Still in upgrade — keep HUD visible but show Launch button
       this.ui.show('hud');
@@ -279,7 +286,7 @@ class Game {
     this.combat.setEnemies(this.round.enemies);
     this.combat.setLootDrops(this.round.lootDrops);
 
-    this.audio.playMusic('combat');
+    this.audio.playMusic(this._combatMusicKey());
   }
 
   _onRoundComplete(round, loot) {
@@ -317,10 +324,12 @@ class Game {
     // Update post-processing uniforms
     this._updateShaders(delta);
 
-    // Combat phase
-    if (phase === 'combat') {
-      // Update enemies + loot + explosions
+    // Combat + end-of-round vacuum (loot/explosions) + transition cleanup
+    if (phase === 'combat' || phase === 'vacuum' || phase === 'transition') {
       this.round.update(delta, this.computed);
+    }
+
+    if (phase === 'combat') {
       this.combat.setEnemies(this.round.enemies);
       this.combat.setLootDrops(this.round.lootDrops);
 
@@ -336,6 +345,11 @@ class Game {
       );
 
       // HUD update
+      this.hud.update(this.state, this.computed);
+    }
+
+    if (phase === 'vacuum') {
+      this.combat.setLootDrops(this.round.lootDrops);
       this.hud.update(this.state, this.computed);
     }
 

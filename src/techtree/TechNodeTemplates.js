@@ -4,6 +4,15 @@
 export const NODE_TEMPLATES = {
   weapon: [
     {
+      id: 'kinetic_damage',
+      name: 'Kinetic Mass Drivers',
+      description: 'Solid slug throwers boost impact damage. Paid in scrap only.',
+      icon: '⬡',
+      maxLevel: 10,
+      effects: [{ type: 'multiply', stat: 'damage', value: 1.09, statLabel: 'Damage' }],
+      baseCost: { scrapMetal: 11 },
+    },
+    {
       id: 'damage_up',
       name: 'Plasma Cannons',
       description: 'Reinforced energy weapons deal more damage per shot.',
@@ -15,11 +24,11 @@ export const NODE_TEMPLATES = {
     {
       id: 'attack_speed',
       name: 'Fire Control',
-      description: 'Advanced targeting computers increase fire rate.',
+      description: 'Servo-linked triggers and belts increase fire rate.',
       icon: '🎯',
       maxLevel: 8,
       effects: [{ type: 'multiply', stat: 'attackSpeed', value: 1.1, statLabel: 'Fire Rate' }],
-      baseCost: { plasmaCrystals: 10, scrapMetal: 5 },
+      baseCost: { scrapMetal: 14 },
     },
     {
       id: 'multi_shot',
@@ -46,7 +55,7 @@ export const NODE_TEMPLATES = {
       icon: '💥',
       maxLevel: 5,
       effects: [{ type: 'multiply', stat: 'critMultiplier', value: 1.2, statLabel: 'Crit Damage' }],
-      baseCost: { plasmaCrystals: 15 },
+      baseCost: { scrapMetal: 20 },
     },
     {
       id: 'laser_type',
@@ -55,7 +64,7 @@ export const NODE_TEMPLATES = {
       icon: '━',
       maxLevel: 1,
       effects: [{ type: 'set', stat: 'projectileType', value: 'laser', statLabel: 'Plasma Beam' }],
-      baseCost: { plasmaCrystals: 5 },
+      baseCost: { scrapMetal: 8 },
     },
     {
       id: 'missile_type',
@@ -82,7 +91,7 @@ export const NODE_TEMPLATES = {
       icon: '⇒',
       maxLevel: 5,
       effects: [{ type: 'multiply', stat: 'projectileSpeed', value: 1.15, statLabel: 'Projectile Speed' }],
-      baseCost: { scrapMetal: 12, plasmaCrystals: 8 },
+      baseCost: { scrapMetal: 15 },
     },
   ],
 
@@ -136,13 +145,22 @@ export const NODE_TEMPLATES = {
 
   utility: [
     {
+      id: 'salvage_winch',
+      name: 'Salvage Winch',
+      description: 'Mechanical tow lines pull in debris from farther away.',
+      icon: '⊗',
+      maxLevel: 6,
+      effects: [{ type: 'add', stat: 'magnetRange', value: 1.8, statLabel: 'Magnet Range' }],
+      baseCost: { scrapMetal: 13 },
+    },
+    {
       id: 'magnet',
       name: 'Gravity Tether',
       description: 'Increases the range at which loot is auto-collected.',
       icon: '⊕',
       maxLevel: 6,
       effects: [{ type: 'add', stat: 'magnetRange', value: 2.5, statLabel: 'Magnet Range' }],
-      baseCost: { scrapMetal: 10, bioEssence: 5 },
+      baseCost: { scrapMetal: 12, bioEssence: 5 },
     },
     {
       id: 'speed',
@@ -151,7 +169,7 @@ export const NODE_TEMPLATES = {
       icon: '▶',
       maxLevel: 5,
       effects: [{ type: 'multiply', stat: 'speed', value: 1.15, statLabel: 'Speed' }],
-      baseCost: { scrapMetal: 12, plasmaCrystals: 5 },
+      baseCost: { scrapMetal: 14 },
     },
     {
       id: 'loot_mult',

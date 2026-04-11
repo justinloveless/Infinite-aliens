@@ -8,7 +8,7 @@ export function createInitialState() {
     // Round info
     round: {
       current: 1,
-      phase: 'start',          // 'start' | 'combat' | 'transition' | 'upgrade'
+      phase: 'start',          // 'start' | 'combat' | 'vacuum' | 'transition' | 'upgrade'
       enemiesDefeated: 0,
       enemiesRequired: 5,
       totalEnemiesDefeated: 0,
