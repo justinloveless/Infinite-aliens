@@ -125,6 +125,17 @@
     </div>
   </div>
 
+  <script>
+    // Defensive: unregister any stale service worker from a previous project
+    // that may have been cached on this localhost port. Without this, a SW
+    // from e.g. an old CRA/Next.js app can intercept our requests and serve
+    // phantom chunks like `react-vendor-*.js`.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        for (const r of regs) r.unregister();
+      }).catch(() => {});
+    }
+  </script>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>
