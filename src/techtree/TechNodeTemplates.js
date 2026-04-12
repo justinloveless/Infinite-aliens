@@ -127,6 +127,15 @@ export const NODE_TEMPLATES = {
       baseCost: { darkMatter: 2, plasmaCrystals: 20 },
     },
     {
+      id: 'beam_laser',
+      name: 'Continuous Beam Laser',
+      description: 'Mounts a sustained-fire beam laser that locks onto the nearest enemy. Fires for 3 seconds, then recharges for 2 seconds.',
+      icon: '⟿',
+      maxLevel: 1,
+      effects: [{ type: 'add_weapon', value: 'beam', statLabel: 'Beam Laser' }],
+      baseCost: { plasmaCrystals: 25, scrapMetal: 20 },
+    },
+    {
       id: 'proj_speed',
       name: 'Accelerator Coils',
       description: 'Electromagnetic coils increase projectile velocity.',

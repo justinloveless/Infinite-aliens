@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PLAYER } from '../constants.js';
+import { PLAYER, MANUAL_GUN } from '../constants.js';
 import { eventBus, EVENTS } from '../core/EventBus.js';
 
 export class CombatSystem {
@@ -13,6 +13,12 @@ export class CombatSystem {
     this._enemies = [];
     this._lootDrops = [];
     this._stellarNovaTimer = 0;
+
+    // Manual gun heat system
+    this._manualHeat = 0;
+    this._isOverheated = false;
+    this._overheatCooldownTimer = 0;
+    this._manualFireCooldown = 0;
 
     // Handle AoE damage emitted by upgrade triggers
     eventBus.on('trigger:emit_damage', ({ position, amount, radius }) => {
@@ -62,8 +68,54 @@ export class CombatSystem {
     return new THREE.Vector3().subVectors(to, from).normalize();
   }
 
+  /**
+   * Fire the manual cannon straight ahead (-Z). Called from input handlers.
+   * Manages heat resource; no-ops when overheated or in non-combat phase.
+   */
+  fireManualGun(state, computed, ship) {
+    if (!state || state.round.phase !== 'combat') return;
+    if (this._isOverheated || this._manualFireCooldown > 0) return;
+
+    this._manualFireCooldown = MANUAL_GUN.FIRE_COOLDOWN;
+    this._manualHeat += MANUAL_GUN.HEAT_PER_SHOT;
+
+    if (this._manualHeat >= MANUAL_GUN.HEAT_MAX) {
+      this._manualHeat = MANUAL_GUN.HEAT_MAX;
+      this._isOverheated = true;
+      this._overheatCooldownTimer = MANUAL_GUN.OVERHEAT_DURATION;
+    }
+
+    const pos = ship.group.position.clone();
+    pos.z -= 1.0; // muzzle offset
+    const dir = new THREE.Vector3(0, 0, -1);
+    const dmg = computed?.damage ?? PLAYER.BASE_DAMAGE;
+
+    this._pool.spawn(pos, dir, dmg, false, computed?.projectileType ?? 'laser', true, null);
+    eventBus.emit(EVENTS.MANUAL_FIRED);
+  }
+
+  /** Returns current heat state for HUD display. */
+  getHeatState() {
+    return {
+      heat: this._manualHeat,
+      max: MANUAL_GUN.HEAT_MAX,
+      overheated: this._isOverheated,
+    };
+  }
+
   update(delta, state, computed, ship, audioManager) {
     if (!state || state.round.phase !== 'combat') return;
+
+    // ---- Manual gun heat tick (always runs during combat) ----
+    this._manualHeat = Math.max(0, this._manualHeat - MANUAL_GUN.HEAT_COOL_RATE * delta);
+    this._manualFireCooldown = Math.max(0, this._manualFireCooldown - delta);
+    if (this._isOverheated) {
+      this._overheatCooldownTimer -= delta;
+      if (this._overheatCooldownTimer <= 0) {
+        this._isOverheated = false;
+        this._manualHeat = 0;
+      }
+    }
 
     const playerPos = ship.group.position;
     const fireRate = 1 / computed.attackSpeed;
@@ -130,6 +182,7 @@ export class CombatSystem {
     // ---- Extra weapons (laser_type / missile_type / plasma_type nodes) ----
     if (target && computed.extraWeapons && computed.extraWeapons.length > 0) {
       for (const weaponType of computed.extraWeapons) {
+        if (weaponType === 'beam') continue; // handled by BeamLaserSystem
         const rateMultiplier = CombatSystem.EXTRA_WEAPON_RATE[weaponType] ?? 2.0;
         const extraFireRate = fireRate * rateMultiplier;
         if (this._extraWeaponTimers[weaponType] >= extraFireRate) {
@@ -230,22 +283,4 @@ export class CombatSystem {
     }
   }
 
-  // Called on mouse click
-  handleClick(mouseX, mouseY, state, computed, ship, camera) {
-    if (!state || state.round.phase !== 'combat') return;
-    if (this._clickCooldown > 0) return;
-
-    const target = this._findNearestEnemy(ship.group.position);
-    if (!target) return;
-
-    this._clickCooldown = PLAYER.CLICK_COOLDOWN;
-    const { damage, isCrit } = this._calcDamage(computed);
-    const dir = this._getDirection(ship.group.position, target.group.position);
-
-    this._pool.spawn(
-      ship.group.position.clone().add(new THREE.Vector3(0, 0, -0.5)),
-      dir, damage, isCrit, computed.projectileType, true, null
-    );
-    eventBus.emit(EVENTS.PROJECTILE_FIRED);
-  }
 }

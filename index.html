@@ -11,6 +11,12 @@
 <body>
   <canvas id="game-canvas"></canvas>
 
+  <div id="pause-overlay" class="pause-screen hidden" aria-hidden="true">
+    <div class="pause-title">PAUSED</div>
+    <p class="pause-hint">Press <kbd class="pause-kbd">P</kbd> to resume</p>
+    <button type="button" id="pause-resume-btn" class="neon-btn launch">RESUME</button>
+  </div>
+
   <!-- HUD: always visible during combat -->
   <div id="hud" class="hidden">
     <div id="hud-top-left">
@@ -24,6 +30,12 @@
         <div class="bar-label">SHIELD</div>
         <div class="bar-track">
           <div id="shield-bar" class="bar shield-bar"></div>
+        </div>
+      </div>
+      <div id="heat-container">
+        <div class="bar-label">CANNON</div>
+        <div class="bar-track">
+          <div id="heat-bar" class="bar"></div>
         </div>
       </div>
     </div>
@@ -50,6 +62,7 @@
     </div>
 
     <div id="hud-top-right">
+      <button type="button" id="pause-btn" class="neon-btn small" title="Pause (P)">⏸</button>
       <button id="tech-tree-btn" class="neon-btn">TECH TREE</button>
       <button id="mute-btn" class="neon-btn small">♪</button>
       <button id="settings-btn" class="neon-btn small">⚙</button>
@@ -125,8 +138,8 @@
     </div>
   </div>
 
-  <!-- Debug (Ctrl+Shift+D) -->
-  <div id="debug-menu-screen" class="overlay hidden"></div>
+  <!-- Debug (Ctrl+Shift+D): full-screen hit-none layer; panel is draggable -->
+  <div id="debug-menu-screen" class="hidden"></div>
 
   <!-- Settings Screen -->
   <div id="settings-screen" class="overlay hidden"></div>

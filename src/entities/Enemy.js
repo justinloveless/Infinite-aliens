@@ -121,7 +121,7 @@ export class Enemy {
     else this._hpBarMat.color.setHex(0xff2200);
   }
 
-  update(delta, playerPos) {
+  update(delta, playerPos, speedScale = 1) {
     if (!this.active) return;
 
     this._behaviorTimer += delta;
@@ -129,19 +129,20 @@ export class Enemy {
     const dx = playerPos.x - this.group.position.x;
     const dz = playerPos.z - this.group.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
+    const spd = this.speed * speedScale;
 
     switch (this.behaviorType) {
       case 'charge':
         if (dist > 0.1) {
-          this.group.position.x += (dx / dist) * this.speed * delta;
-          this.group.position.z += (dz / dist) * this.speed * delta;
+          this.group.position.x += (dx / dist) * spd * delta;
+          this.group.position.z += (dz / dist) * spd * delta;
         }
         break;
 
       case 'steady':
         if (dist > 0.1) {
-          this.group.position.x += (dx / dist) * this.speed * delta;
-          this.group.position.z += (dz / dist) * this.speed * delta;
+          this.group.position.x += (dx / dist) * spd * delta;
+          this.group.position.z += (dz / dist) * spd * delta;
         }
         break;
 
@@ -151,19 +152,19 @@ export class Enemy {
           this._zigzagDir *= -1;
         }
         if (dist > 0.1) {
-          this.group.position.x += ((dx / dist) * this.speed + this._zigzagDir * this.speed * 0.8) * delta;
-          this.group.position.z += (dz / dist) * this.speed * delta;
+          this.group.position.x += ((dx / dist) * spd + this._zigzagDir * spd * 0.8) * delta;
+          this.group.position.z += (dz / dist) * spd * delta;
         }
         break;
       }
 
       case 'keepRange':
         if (dist < this._keepRangeDist) {
-          this.group.position.x -= (dx / dist) * this.speed * delta * 0.5;
-          this.group.position.z -= (dz / dist) * this.speed * delta * 0.5;
+          this.group.position.x -= (dx / dist) * spd * delta * 0.5;
+          this.group.position.z -= (dz / dist) * spd * delta * 0.5;
         } else if (dist > this._keepRangeDist + 4) {
-          this.group.position.x += (dx / dist) * this.speed * delta;
-          this.group.position.z += (dz / dist) * this.speed * delta;
+          this.group.position.x += (dx / dist) * spd * delta;
+          this.group.position.z += (dz / dist) * spd * delta;
         }
         break;
 
@@ -171,19 +172,19 @@ export class Enemy {
         const phase = Math.floor(this._behaviorTimer / 4) % 3;
         if (phase === 0) {
           if (dist > 0.1) {
-            this.group.position.x += (dx / dist) * this.speed * delta;
-            this.group.position.z += (dz / dist) * this.speed * delta;
+            this.group.position.x += (dx / dist) * spd * delta;
+            this.group.position.z += (dz / dist) * spd * delta;
           }
         } else if (phase === 1) {
-          this.group.position.x += Math.sin(this._behaviorTimer * 2) * this.speed * 1.5 * delta;
-          this.group.position.z += (dz / dist) * this.speed * 0.3 * delta;
+          this.group.position.x += Math.sin(this._behaviorTimer * 2) * spd * 1.5 * delta;
+          this.group.position.z += (dz / dist) * spd * 0.3 * delta;
         } else {
           if (dist < 8) {
-            this.group.position.x -= (dx / dist) * this.speed * 0.5 * delta;
-            this.group.position.z -= (dz / dist) * this.speed * 0.5 * delta;
+            this.group.position.x -= (dx / dist) * spd * 0.5 * delta;
+            this.group.position.z -= (dz / dist) * spd * 0.5 * delta;
           } else {
-            this.group.position.x += (dx / dist) * this.speed * delta;
-            this.group.position.z += (dz / dist) * this.speed * delta;
+            this.group.position.x += (dx / dist) * spd * delta;
+            this.group.position.z += (dz / dist) * spd * delta;
           }
         }
         // Boss spin

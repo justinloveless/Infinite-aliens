@@ -1,4 +1,4 @@
-import { RUN } from '../constants.js';
+import { RUN, PLAYER } from '../constants.js';
 import { eventBus, EVENTS } from '../core/EventBus.js';
 import { EnemyFactory } from '../entities/EnemyFactory.js';
 import { LootDrop } from '../entities/LootDrop.js';
@@ -16,9 +16,6 @@ export class RoundSystem {
     this._state = null;
     this._onRoundStart = null;
     this._unsubEnemyKilled = null;
-    this._lastPlayerX = 0;
-    this._lastPlayerZ = 0;
-    this._hasPlayerAnchor = false;
     this._bossSpawnPending = false;
   }
 
@@ -44,7 +41,6 @@ export class RoundSystem {
     }
     this._explosions.length = 0;
     this._spawnTimer = 0;
-    this._hasPlayerAnchor = false;
     this._bossSpawnPending = false;
   }
 
@@ -58,7 +54,6 @@ export class RoundSystem {
     state.roundLoot = {};
     this._spawnTimer = 0;
     this._clearLoot();
-    this._hasPlayerAnchor = false;
     eventBus.emit(EVENTS.ROUND_STARTED, { round: state.round.current });
     if (this._onRoundStart) this._onRoundStart(state.round.current);
   }
@@ -79,19 +74,9 @@ export class RoundSystem {
     }
   }
 
-  _accumulateDistance(playerPos) {
-    const state = this._state;
-    const px = playerPos.x;
-    const pz = playerPos.z;
-    if (this._hasPlayerAnchor) {
-      const dx = px - this._lastPlayerX;
-      const dz = pz - this._lastPlayerZ;
-      state.round.distanceTraveled += Math.hypot(dx, dz);
-    } else {
-      this._hasPlayerAnchor = true;
-    }
-    this._lastPlayerX = px;
-    this._lastPlayerZ = pz;
+  _accumulateDistance(delta, computed) {
+    const speed = computed?.speed ?? PLAYER.BASE_SPEED;
+    this._state.round.distanceTraveled += speed * delta;
     this._syncTierFromDistance();
     this._syncBossSpawnPending();
   }
@@ -170,7 +155,7 @@ export class RoundSystem {
     const playerPos =
       this._scene.groups.player.children[0]?.position || { x: 0, z: 0 };
 
-    this._accumulateDistance(playerPos);
+    this._accumulateDistance(delta, computed);
 
     const magnetRange = computed?.magnetRange ?? 4;
     for (const loot of this._lootDrops) {
@@ -181,13 +166,14 @@ export class RoundSystem {
       if (!this._lootDrops[i].active) this._lootDrops.splice(i, 1);
     }
 
+    const speedScale = (computed?.speed ?? PLAYER.BASE_SPEED) / PLAYER.BASE_SPEED;
     for (let i = this._enemies.length - 1; i >= 0; i--) {
       const e = this._enemies[i];
       if (!e.active) {
         this._enemies.splice(i, 1);
         continue;
       }
-      e.update(delta, playerPos);
+      e.update(delta, playerPos, speedScale);
     }
 
     const tier = state.round.current;

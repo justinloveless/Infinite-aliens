@@ -22,6 +22,13 @@ import { eventBus, EVENTS } from '../core/EventBus.js';
 
 const ENEMY_TYPES = ['all', 'scout', 'tank', 'swarm', 'sniper', 'boss'];
 
+/** Odd count so multi-shot spread keeps a center projectile aimed at the target (see CombatSystem). */
+function clampProjectileCountOdd(n) {
+  let x = Math.max(1, Math.floor(n));
+  if (x % 2 === 0) x += 1;
+  return x;
+}
+
 function makeEnemyModifiers() {
   const mods = {};
   for (const type of ENEMY_TYPES) {
@@ -86,7 +93,10 @@ export class UpgradeSystem {
       stellarNovaRadius: 0,
     };
 
-    if (!techTreeState) return computed;
+    if (!techTreeState) {
+      computed.projectileCount = clampProjectileCountOdd(computed.projectileCount);
+      return computed;
+    }
 
     const nodes = techTreeState.getVisibleNodes();
     const unlocked = nodes.filter(n => n.isUnlocked);
@@ -133,7 +143,7 @@ export class UpgradeSystem {
 
     // --- Post-clamp ---
     computed.critChance = Math.min(0.95, computed.critChance);
-    computed.projectileCount = Math.max(1, Math.floor(computed.projectileCount));
+    computed.projectileCount = clampProjectileCountOdd(computed.projectileCount);
     computed.maxShieldHp = Math.max(0, Math.floor(computed.maxShieldHp));
     computed.armor = Math.max(0, Math.floor(computed.armor));
     computed.magnetRange = Math.max(1, computed.magnetRange);

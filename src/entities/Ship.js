@@ -76,6 +76,7 @@ const TURRET_LOCAL = {
   laser:   new THREE.Vector3(-1.5,  0.05,  0.1),  // left wing tip
   missile: new THREE.Vector3( 1.5,  0.05,  0.1),  // right wing tip
   plasma:  new THREE.Vector3( 0,   -0.25, -0.5),  // belly/nose mount
+  beam:    new THREE.Vector3( 0,    0.3,  -0.8),  // top-center, forward
 };
 
 // Local-space anchor points for visual attachments
@@ -93,6 +94,7 @@ const TURRET_CFG = {
   laser:   { color: 0x00f5ff, emissive: 0x006688, lightColor: 0x00f5ff },
   missile: { color: 0xff8800, emissive: 0x884400, lightColor: 0xff8800 },
   plasma:  { color: 0xff00ff, emissive: 0x880088, lightColor: 0xff00ff },
+  beam:    { color: 0xff1133, emissive: 0x880011, lightColor: 0xff1133 },
 };
 
 export class Ship {

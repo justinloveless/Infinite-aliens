@@ -5,6 +5,7 @@ export class HUD {
   constructor() {
     this._hpBar = document.getElementById('hp-bar');
     this._shieldBar = document.getElementById('shield-bar');
+    this._heatBar = document.getElementById('heat-bar');
     this._roundNum = document.getElementById('round-number');
     this._distanceVal = document.getElementById('distance-value');
     this._bossBar = document.getElementById('boss-progress-bar');
@@ -30,7 +31,7 @@ export class HUD {
   show() { document.getElementById('hud').classList.remove('hidden'); }
   hide() { document.getElementById('hud').classList.add('hidden'); }
 
-  update(state, computed) {
+  update(state, computed, heatState) {
     if (!state) return;
     const p = state.player;
 
@@ -45,6 +46,24 @@ export class HUD {
       this._hpBar.style.background = 'linear-gradient(90deg, #ffaa00, #ff6600)';
     } else {
       this._hpBar.style.background = 'linear-gradient(90deg, #ff2200, #ff0055)';
+    }
+
+    if (this._heatBar && heatState) {
+      const pct = (heatState.heat / heatState.max) * 100;
+      this._heatBar.style.width = `${Math.min(100, pct)}%`;
+      if (heatState.overheated) {
+        this._heatBar.style.background = 'linear-gradient(90deg, #ff0000, #ff4400)';
+        this._heatBar.style.opacity = Math.sin(Date.now() * 0.012) * 0.4 + 0.6;
+      } else if (pct > 70) {
+        this._heatBar.style.background = 'linear-gradient(90deg, #ff4400, #ffaa00)';
+        this._heatBar.style.opacity = 1;
+      } else if (pct > 40) {
+        this._heatBar.style.background = 'linear-gradient(90deg, #ffaa00, #ffee00)';
+        this._heatBar.style.opacity = 1;
+      } else {
+        this._heatBar.style.background = 'linear-gradient(90deg, #00ff88, #00f5ff)';
+        this._heatBar.style.opacity = 1;
+      }
     }
 
     if (computed && computed.maxShieldHp > 0) {

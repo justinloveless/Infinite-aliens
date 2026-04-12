@@ -164,6 +164,16 @@ export class AudioManager {
     this._currentTrack = null;
   }
 
+  pauseMusic() {
+    if (this._musicEl) this._musicEl.pause();
+  }
+
+  resumeMusic() {
+    if (this._musicEl) {
+      this._musicEl.play().catch(() => {});
+    }
+  }
+
   setMusicVolume(v) {
     this._musicVolume = Math.max(0, Math.min(1, v));
     if (this._musicEl) {

@@ -24,7 +24,7 @@ export const ROUND = RUN;
 export const PLAYER = {
   BASE_HP: 100,
   BASE_DAMAGE: 12,
-  BASE_ATTACK_SPEED: 1.2,     // shots per second
+  BASE_ATTACK_SPEED: 0.6,     // shots per second
   BASE_PROJECTILE_COUNT: 1,
   BASE_PROJECTILE_SPEED: 25,
   BASE_CRIT_CHANCE: 0.05,
@@ -99,16 +99,16 @@ export const TECH_TREE = {
 
 export const SCENE = {
   FOG_NEAR: 40, FOG_FAR: 85,
-  FOG_COLOR: 0x000011,
-  AMBIENT_COLOR: 0x223344,
-  AMBIENT_INTENSITY: 0.5,
+  FOG_COLOR: 0x3e2f6f,
+  AMBIENT_COLOR: 0x2f4f6f,
+  AMBIENT_INTENSITY: 0.7,
   DIR_COLOR: 0xffffff,
-  DIR_INTENSITY: 0.9,
+  DIR_INTENSITY: 2.13,
 };
 
 export const BLOOM = {
-  STRENGTH: 0.7,
-  RADIUS: 0.4,
+  STRENGTH: 0.45,
+  RADIUS: 0.74,
   THRESHOLD: 0.65,
 };
 
@@ -182,4 +182,23 @@ export const RARITY_META = {
   rare:      { color: '#4488ff', glowColor: '#0044ff', borderAnim: 'pulse'  },
   epic:      { color: '#cc44ff', glowColor: '#8800cc', borderAnim: 'pulse'  },
   legendary: { color: '#ffd700', glowColor: '#ff8800', borderAnim: 'rotate' },
+};
+
+export const MANUAL_GUN = {
+  HEAT_PER_SHOT:     20,
+  HEAT_MAX:         100,
+  HEAT_COOL_RATE:    25,   // units per second
+  OVERHEAT_DURATION:  2.0, // seconds locked after overheating
+  FIRE_COOLDOWN:      0.12, // minimum seconds between shots
+};
+
+export const ASTEROID = {
+  SPAWN_INTERVAL: 5.0, // seconds between large asteroid spawns
+};
+
+export const BEAM_LASER = {
+  ON_DURATION:  1.0,  // seconds the beam fires continuously
+  OFF_DURATION: 2.0,  // seconds recharging between bursts
+  TICK_RATE:    0.05, // damage applied every 50 ms (20 ticks/sec)
+  DAMAGE_RATIO: 0.02, // fraction of player.damage per tick
 };

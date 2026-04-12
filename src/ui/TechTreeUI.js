@@ -305,24 +305,23 @@ export class TechTreeUI {
     const tx = tc.cx;
     const ty = tc.cy;
 
-    const bothUnlocked = from.isUnlocked && to.isUnlocked;
-    const eitherUnlocked = from.isUnlocked || to.isUnlocked;
-
     ctx.beginPath();
     ctx.moveTo(fx, fy);
     ctx.lineTo(tx, ty);
 
-    if (bothUnlocked) {
+    // `from` is the prerequisite node, `to` is the dependent.
+    if (from.isUnlocked && to.isUnlocked) {
       ctx.strokeStyle = 'rgba(0, 245, 255, 0.75)';
       ctx.lineWidth = 2.2;
-    } else if (eitherUnlocked) {
+      ctx.setLineDash([]);
+    } else if (from.isUnlocked) {
       ctx.strokeStyle = 'rgba(0, 245, 255, 0.35)';
       ctx.lineWidth = 1.6;
       ctx.setLineDash([6, 4]);
     } else {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 6]);
+      ctx.strokeStyle = 'rgba(130, 130, 140, 0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
     }
     ctx.stroke();
     ctx.setLineDash([]);

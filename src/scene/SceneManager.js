@@ -36,7 +36,7 @@ export class SceneManager {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 1.28;
 
     window.addEventListener('resize', () => this._onResize());
   }
@@ -55,20 +55,22 @@ export class SceneManager {
   _setupLighting() {
     const ambient = new THREE.AmbientLight(SCENE.AMBIENT_COLOR, SCENE.AMBIENT_INTENSITY);
     this.scene.add(ambient);
+    this.ambientLight = ambient;
 
     const dir = new THREE.DirectionalLight(SCENE.DIR_COLOR, SCENE.DIR_INTENSITY);
     dir.position.set(5, 10, 5);
     this.scene.add(dir);
+    this.directionalLight = dir;
 
-    // Subtle fill from below (blue-purple)
-    const fill = new THREE.DirectionalLight(0x220044, 0.4);
+    const fill = new THREE.DirectionalLight(0x220044, 1.5);
     fill.position.set(-5, -5, 5);
     this.scene.add(fill);
+    this.fillLight = fill;
   }
 
   _setupFog() {
     this.scene.fog = new THREE.Fog(SCENE.FOG_COLOR, SCENE.FOG_NEAR, SCENE.FOG_FAR);
-    this.scene.background = new THREE.Color(0x050015);
+    this.scene.background = new THREE.Color(0x3e2f6f);
   }
 
   _addGroups() {

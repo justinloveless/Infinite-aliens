@@ -44,4 +44,7 @@ export const EVENTS = {
   STATS_UPDATED:       'stats:updated',
   GAME_SAVED:          'game:saved',
   STELLAR_NOVA:        'stellar:nova',
+  MANUAL_FIRED:        'manual:fired',
+  ASTEROID_BROKEN:     'asteroid:broken',    // { position }
+  ASTEROID_HIT_ENEMY:  'asteroid:hitEnemy',  // { position, damage }
 };

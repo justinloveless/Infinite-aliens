@@ -35,6 +35,43 @@ html, body {
   display: block;
 }
 
+/* Pause (z-index above HUD so input is blocked until resume) */
+.pause-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(5, 0, 18, 0.78);
+  backdrop-filter: blur(3px);
+}
+.pause-title {
+  font-family: var(--font-main);
+  font-size: clamp(1.8rem, 6vw, 3rem);
+  font-weight: 900;
+  letter-spacing: 0.35em;
+  color: var(--pink);
+  text-shadow: var(--glow-pink);
+}
+.pause-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.12em;
+}
+.pause-kbd {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid rgba(0, 245, 255, 0.45);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--cyan);
+}
+
 /* ===== UTILITY ===== */
 .hidden { display: none !important; }
 
@@ -418,20 +455,32 @@ html, body {
 
 /* ===== DEBUG MENU (Ctrl+Shift+D) ===== */
 #debug-menu-screen {
-  background: rgba(5, 0, 18, 0.88);
-  backdrop-filter: blur(4px);
+  position: fixed;
+  inset: 0;
   z-index: 55;
+  pointer-events: none;
+  background: transparent;
 }
 
 #debug-menu-panel {
-  background: var(--panel);
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  right: auto;
+  margin: 0;
+  pointer-events: auto;
+  background: rgba(10, 0, 32, 0.82);
   border: 1px solid rgba(255, 100, 150, 0.35);
-  box-shadow: 0 0 32px rgba(255, 100, 150, 0.12);
-  width: min(440px, 94vw);
-  max-height: 88vh;
+  box-shadow:
+    0 0 32px rgba(255, 100, 150, 0.12),
+    0 8px 40px rgba(0, 0, 0, 0.45);
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(88vh, calc(100vh - 32px));
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  backdrop-filter: blur(6px);
 }
 
 .debug-menu-header {
@@ -440,6 +489,13 @@ html, body {
   align-items: center;
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+}
+
+.debug-menu-header:active {
+  cursor: grabbing;
 }
 
 .debug-menu-title {
@@ -513,6 +569,71 @@ html, body {
   gap: 10px;
   padding: 14px 18px 18px;
   border-top: 1px solid rgba(0, 245, 255, 0.08);
+}
+
+.debug-menu-section-title {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: rgba(255, 100, 150, 0.75);
+  padding: 16px 18px 6px;
+  margin: 0;
+}
+
+.debug-menu-section-title:first-child {
+  padding-top: 8px;
+}
+
+.debug-menu-visual {
+  border-bottom: 1px solid rgba(0, 245, 255, 0.1);
+}
+
+.debug-menu-slider-row {
+  align-items: center;
+}
+
+.debug-slider-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  max-width: 280px;
+  justify-content: flex-end;
+}
+
+.debug-menu-range {
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  accent-color: var(--cyan);
+}
+
+.debug-slider-value {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: rgba(0, 245, 255, 0.85);
+  width: 3.2rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.debug-color-input {
+  width: 44px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.debug-menu-visual-actions {
+  padding: 10px 18px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* ===== SETTINGS PANEL ===== */
