@@ -164,15 +164,30 @@ export class AudioManager {
     this._currentTrack = null;
   }
 
-  toggleMute() {
-    this._muted = !this._muted;
+  setMusicVolume(v) {
+    this._musicVolume = Math.max(0, Math.min(1, v));
     if (this._musicEl) {
       this._musicEl.volume = this._muted ? 0 : this._musicVolume;
     }
+  }
+
+  setSfxVolume(v) {
+    this._sfxVolume = Math.max(0, Math.min(1, v));
+  }
+
+  setMuted(v) {
+    this._muted = !!v;
+    if (this._musicEl) {
+      this._musicEl.volume = this._muted ? 0 : this._musicVolume;
+    }
+  }
+
+  toggleMute() {
+    this.setMuted(!this._muted);
     return this._muted;
   }
 
-  get muted() {
-    return this._muted;
-  }
+  get muted()       { return this._muted; }
+  get musicVolume() { return this._musicVolume; }
+  get sfxVolume()   { return this._sfxVolume; }
 }

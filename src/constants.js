@@ -8,7 +8,7 @@ export const GAME = {
 };
 
 export const ROUND = {
-  BASE_ENEMIES: 5,
+  BASE_ENEMIES: 10,
   ENEMY_SCALING: 1.08,        // enemies = floor(BASE * SCALING^(round-1))
   TRANSITION_DURATION: 2500,  // ms before opening tech tree
   MAX_CONCURRENT_ENEMIES: 15,
@@ -34,6 +34,14 @@ export const PLAYER = {
   STELLAR_DUST_RATE: 0,       // per second, unlocked via tree
   CLICK_COOLDOWN: 0.2,        // seconds
   COLLISION_RADIUS: 1.0,
+  // Stellar Nova (stellar_burst): AoE interval shrinks per upgrade level
+  STELLAR_NOVA_BASE_INTERVAL: 8,
+  STELLAR_NOVA_INTERVAL_PER_LEVEL: 1.25,
+  STELLAR_NOVA_MIN_INTERVAL: 3.5,
+  STELLAR_NOVA_BASE_DAMAGE: 32,
+  STELLAR_NOVA_DAMAGE_PER_LEVEL: 16,
+  STELLAR_NOVA_BASE_RADIUS: 4.5,
+  STELLAR_NOVA_RADIUS_PER_LEVEL: 0.65,
 };
 
 export const ENEMY = {
@@ -88,4 +96,76 @@ export const BLOOM = {
   STRENGTH: 0.7,
   RADIUS: 0.4,
   THRESHOLD: 0.65,
+};
+
+// ===== UPGRADE GRAMMAR ENUMS =====
+
+export const EFFECT_OPERATORS = {
+  MULTIPLY:   'multiply',
+  ADD:        'add',
+  SET:        'set',
+  ADD_WEAPON: 'add_weapon',
+  SPECIAL:    'special',
+  MIN:        'min',       // stat = Math.max(stat, value) — floor
+  MAX:        'max',       // stat = Math.min(stat, value) — cap
+  APPEND:     'append',    // push string into a named array
+  TOGGLE:     'toggle',    // stat = !stat
+  ADD_FLAT:   'add_flat',  // stat += value (no level scaling)
+};
+
+export const SCALE_MODES = {
+  LINEAR:      'linear',       // value * level
+  EXPONENTIAL: 'exponential',  // value ^ level
+  FIXED:       'fixed',        // value (level ignored)
+  DIMINISHING: 'diminishing',  // diminishing returns per level
+};
+
+export const EFFECT_TARGETS = {
+  PLAYER:   'player',   // modifies computed player stats (default)
+  ENEMY:    'enemy',    // modifies enemyModifiers (applied at spawn)
+  CURRENCY: 'currency', // modifies loot rates or passive rates
+  ROUND:    'round',    // modifies round spawn parameters
+};
+
+export const CONDITION_TYPES = {
+  STAT_GTE:   'stat_gte',    // computed[stat] >= threshold
+  STAT_LTE:   'stat_lte',    // computed[stat] <= threshold
+  ROUND_GTE:  'round_gte',   // state.round.current >= threshold
+  ROUND_LTE:  'round_lte',   // state.round.current <= threshold
+  PHASE_IS:   'phase_is',    // state.round.phase === value
+  NODE_OWNED: 'node_owned',  // templateId is unlocked
+  LEVEL_GTE:  'level_gte',   // this node's currentLevel >= threshold
+};
+
+export const TRIGGER_EVENTS = {
+  ON_KILL:         'enemy:killed',
+  ON_HIT:          'enemy:damaged',
+  ON_DAMAGE_TAKEN: 'player:damaged',
+  ON_HEAL:         'player:healed',
+  ON_ROUND_START:  'round:started',
+  ON_ROUND_END:    'round:complete',
+  ON_LOOT_COLLECT: 'loot:collected',
+};
+
+export const TRIGGER_ACTIONS = {
+  HEAL_PLAYER:  'heal_player',
+  BOOST_STAT:   'boost_stat',
+  EMIT_DAMAGE:  'emit_damage',
+  ADD_CURRENCY: 'add_currency',
+};
+
+export const RARITY_TIERS = {
+  COMMON:    'common',
+  UNCOMMON:  'uncommon',
+  RARE:      'rare',
+  EPIC:      'epic',
+  LEGENDARY: 'legendary',
+};
+
+export const RARITY_META = {
+  common:    { color: '#aaaaaa', glowColor: '#888888', borderAnim: 'none'   },
+  uncommon:  { color: '#44ff88', glowColor: '#00aa44', borderAnim: 'none'   },
+  rare:      { color: '#4488ff', glowColor: '#0044ff', borderAnim: 'pulse'  },
+  epic:      { color: '#cc44ff', glowColor: '#8800cc', borderAnim: 'pulse'  },
+  legendary: { color: '#ffd700', glowColor: '#ff8800', borderAnim: 'rotate' },
 };

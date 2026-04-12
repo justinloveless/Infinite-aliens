@@ -102,28 +102,28 @@ export const NODE_TEMPLATES = {
     {
       id: 'laser_type',
       name: 'Plasma Beam',
-      description: 'Switches weapons to fast-moving plasma beams.',
+      description: 'Mounts a secondary plasma beam cannon that fires independently from your main weapon.',
       icon: '━',
       maxLevel: 1,
-      effects: [{ type: 'set', stat: 'projectileType', value: 'laser', statLabel: 'Plasma Beam' }],
+      effects: [{ type: 'add_weapon', value: 'laser', statLabel: 'Plasma Beam' }],
       baseCost: { scrapMetal: 8 },
     },
     {
       id: 'missile_type',
       name: 'Homing Missiles',
-      description: 'Slower but homing missiles track their targets.',
+      description: 'Adds a homing missile launcher that fires independently from your main weapon.',
       icon: '🚀',
       maxLevel: 1,
-      effects: [{ type: 'set', stat: 'projectileType', value: 'missile', statLabel: 'Homing Missiles' }],
+      effects: [{ type: 'add_weapon', value: 'missile', statLabel: 'Homing Missiles' }],
       baseCost: { scrapMetal: 25, plasmaCrystals: 10 },
     },
     {
       id: 'plasma_type',
       name: 'Dark Plasma',
-      description: 'Volatile plasma orbs deal massive damage.',
+      description: 'Adds a dark plasma cannon that fires independently from your main weapon.',
       icon: '◉',
       maxLevel: 1,
-      effects: [{ type: 'set', stat: 'projectileType', value: 'plasma', statLabel: 'Dark Plasma' }],
+      effects: [{ type: 'add_weapon', value: 'plasma', statLabel: 'Dark Plasma' }],
       baseCost: { darkMatter: 2, plasmaCrystals: 20 },
     },
     {
@@ -267,11 +267,45 @@ export const NODE_TEMPLATES = {
     {
       id: 'drone',
       name: 'Drone Companion',
-      description: 'A loyal combat drone fights alongside your ship.',
+      description: 'A loyal combat drone orbits your ship and assists in battle.',
       icon: '🤖',
       maxLevel: 1,
       effects: [{ type: 'special', stat: 'hasDrone', value: true, specialDesc: 'Unlocks combat drone' }],
       baseCost: { darkMatter: 2, scrapMetal: 40, plasmaCrystals: 20 },
+      synergies: [
+        {
+          requires: ['drone', 'vampire'],
+          label: 'Drone Vampire',
+          desc: 'Drone kills also trigger vampiric healing.',
+          effects: [{ type: 'add', stat: 'hpRegen', value: 0.5, scaleMode: 'fixed', statLabel: 'HP/sec (Drone Vamp)' }],
+        },
+      ],
+      presentation: {
+        rarity: 'epic',
+        badge: 'DRN',
+        flavorText: 'It was lonely out here. Not anymore.',
+        synergyHints: ['vampire'],
+      },
+      visual: {
+        attachments: [
+          {
+            id: 'drone_companion',
+            anchor: 'ship',
+            orbit: { radius: 2.5, speed: 1.2, tilt: 0.3 },
+            mesh: {
+              geometry: { type: 'octahedron', params: [0.3] },
+              material: { type: 'standard', color: '#0088ff', emissive: '#0044aa', emissiveIntensity: 1.2, metalness: 0.6, roughness: 0.3 },
+              light: { color: '#0088ff', intensity: 0.8, distance: 3.0 },
+              children: [
+                {
+                  geometry: { type: 'sphere', params: [0.08, 6, 6] },
+                  material: { type: 'basic', color: '#aaffff' },
+                },
+              ],
+            },
+          },
+        ],
+      },
     },
     {
       id: 'overcharge',
@@ -285,11 +319,27 @@ export const NODE_TEMPLATES = {
     {
       id: 'vampire',
       name: 'Vampiric Rounds',
-      description: 'Each shot heals the ship for 2% of damage dealt.',
+      description: 'On-kill: restore hull integrity equal to 3% of the enemy\'s max HP. Bonus heal at low hull.',
       icon: '♥',
-      maxLevel: 1,
-      effects: [{ type: 'special', stat: 'hasVampire', value: true, specialDesc: 'Heal 2% of damage dealt' }],
+      maxLevel: 3,
+      effects: [{ type: 'special', stat: 'hasVampire', value: true, scaleMode: 'fixed', specialDesc: 'On-kill: heal 3% of enemy max HP' }],
       baseCost: { darkMatter: 1, bioEssence: 35 },
+      triggers: [
+        {
+          event: 'enemy:killed',
+          action: {
+            type: 'heal_player',
+            value: { base: 2, perLevel: 1 },
+          },
+          cooldown: 0,
+        },
+      ],
+      presentation: {
+        rarity: 'rare',
+        badge: 'VMP',
+        flavorText: 'Death feeds the living.',
+        synergyHints: ['drone'],
+      },
     },
     {
       id: 'reflect',
@@ -308,6 +358,236 @@ export const NODE_TEMPLATES = {
       maxLevel: 3,
       effects: [{ type: 'add', stat: 'damage', value: 8, statLabel: 'Damage' }],
       baseCost: { stellarDust: 20, darkMatter: 1 },
+    },
+
+    // ── Showcase nodes demonstrating the full grammar ──────────────────────
+    {
+      id: 'crit_mastery',
+      name: 'Crit Mastery',
+      description: 'Advanced targeting theory pushes critical hit capability to its physical limit.',
+      icon: '◎+',
+      maxLevel: 5,
+      effects: [
+        {
+          type: 'add',
+          stat: 'critChance',
+          value: 0.05,
+          scaleMode: 'diminishing',
+          diminishingBase: 0.18,
+          statLabel: 'Crit Chance',
+        },
+        {
+          type: 'multiply',
+          stat: 'critMultiplier',
+          value: 1.08,
+          scaleMode: 'exponential',
+          statLabel: 'Crit Mult',
+        },
+      ],
+      baseCost: { plasmaCrystals: 25, bioEssence: 10 },
+      synergies: [
+        {
+          requires: ['crit_mastery', 'crit_damage'],
+          label: 'Precision Carnage',
+          desc: 'Crits also trigger a small AoE blast.',
+          effects: [
+            { type: 'add', stat: 'damage', value: 5, scaleMode: 'fixed', statLabel: 'AoE Crit Dmg' },
+          ],
+        },
+      ],
+      presentation: {
+        rarity: 'rare',
+        badge: 'CRT',
+        borderAnim: 'pulse',
+        flavorText: 'Precision is a state of mind.',
+        synergyHints: ['crit_damage'],
+      },
+    },
+    {
+      id: 'anti_scout_doctrine',
+      name: 'Anti-Scout Doctrine',
+      description: 'Scouts move slower and your weapons punch through their thin hulls.',
+      icon: '⊘',
+      maxLevel: 3,
+      effects: [
+        { type: 'multiply', stat: 'scout.speedMult',          value: 0.75, target: 'enemy', scaleMode: 'fixed', statLabel: 'Scout Speed' },
+        { type: 'multiply', stat: 'scout.damageReceivedMult', value: 1.3,  target: 'enemy', scaleMode: 'exponential', statLabel: 'Scout Vuln' },
+      ],
+      baseCost: { scrapMetal: 18, bioEssence: 8 },
+      presentation: {
+        rarity: 'uncommon',
+        badge: 'ASD',
+        flavorText: 'Fast ships die fastest when you know where to aim.',
+      },
+    },
+    {
+      id: 'round_accelerator',
+      name: 'Round Accelerator',
+      description: 'Enemy spawns are faster and more plentiful, but loot pours in proportionally.',
+      icon: '⏩',
+      maxLevel: 3,
+      effects: [
+        { type: 'multiply', stat: 'spawnInterval',  value: 0.85, target: 'round', scaleMode: 'exponential', statLabel: 'Spawn Interval' },
+        { type: 'multiply', stat: 'maxConcurrent',  value: 1.2,  target: 'round', scaleMode: 'exponential', statLabel: 'Max Enemies' },
+        { type: 'multiply', stat: 'lootMultiplier', value: 1.1,  statLabel: 'Loot Mult' },
+      ],
+      baseCost: { darkMatter: 1, stellarDust: 15 },
+      costModifiers: [
+        { type: 'round_scale', factor: 0.12 },
+      ],
+      presentation: {
+        rarity: 'rare',
+        badge: 'ACL',
+        borderAnim: 'pulse',
+        flavorText: 'More targets. More glory. More scrap.',
+      },
+    },
+    {
+      id: 'bio_harvester_mk2',
+      name: 'Bio Harvester Mk II',
+      description: 'Next-generation bio extractors massively increase Bio Essence yields. Synergy discount with Bio Boost.',
+      icon: '✦⬆',
+      maxLevel: 5,
+      effects: [
+        { type: 'multiply', stat: 'loot.bioEssence', value: 1.25, target: 'currency', statLabel: 'Bio Essence Loot' },
+        {
+          type: 'add',
+          stat: 'loot.bioEssence',
+          value: 0.15,
+          target: 'currency',
+          scaleMode: 'linear',
+          condition: { type: 'round_gte', threshold: 10 },
+          statLabel: 'Bio Rate (Round 10+)',
+        },
+      ],
+      baseCost: { bioEssence: 30, plasmaCrystals: 12 },
+      costModifiers: [
+        {
+          type: 'synergy_discount',
+          requires: ['bio_boost'],
+          discount: 0.25,
+          altLabel: '25% off with Bio Boost',
+        },
+      ],
+      presentation: {
+        rarity: 'uncommon',
+        badge: 'BIO',
+        flavorText: 'Life, compressed and monetized.',
+        synergyHints: ['bio_boost'],
+      },
+    },
+    {
+      id: 'nova_core',
+      name: 'Nova Core',
+      description: 'A miniature stellar core that amplifies all combat and triggers powerful on-kill chain reactions.',
+      icon: '✺',
+      maxLevel: 1,
+      effects: [
+        { type: 'multiply', stat: 'damage',              value: 1.35,  scaleMode: 'fixed', statLabel: 'Damage' },
+        { type: 'multiply', stat: 'all.hpMult',          value: 0.8,   target: 'enemy',    scaleMode: 'fixed', statLabel: 'Enemy HP' },
+        { type: 'add',      stat: 'critChance',          value: 0.1,   scaleMode: 'fixed', statLabel: 'Crit Chance' },
+      ],
+      baseCost: { darkMatter: 4, stellarDust: 50, plasmaCrystals: 40 },
+      triggers: [
+        {
+          event: 'enemy:killed',
+          action: {
+            type: 'emit_damage',
+            value: 30,
+            radius: 3.5,
+          },
+          cooldown: 0.4,
+          chance: 0.5,
+        },
+        {
+          event: 'round:started',
+          action: {
+            type: 'add_currency',
+            currency: 'stellarDust',
+            value: 5,
+          },
+        },
+      ],
+      presentation: {
+        rarity: 'legendary',
+        badge: '★',
+        borderAnim: 'rainbow',
+        flavorText: 'You carry a dying star. It is not at peace.',
+      },
+    },
+    {
+      id: 'plasma_core',
+      name: 'Plasma Core',
+      description: 'A supercharged plasma cell amplifies your dark plasma cannon with visibly larger, brighter bolts.',
+      icon: '◉+',
+      maxLevel: 3,
+      effects: [
+        { type: 'multiply', stat: 'damage', value: 1.15, statLabel: 'Damage' },
+      ],
+      baseCost: { plasmaCrystals: 22, darkMatter: 1 },
+      presentation: {
+        rarity: 'rare',
+        badge: 'PLS',
+        flavorText: 'The bolts leave scorch-light even after impact.',
+      },
+      visual: {
+        projectile: {
+          type: 'plasma',
+          geometry: { type: 'sphere', params: [0.22, 8, 8] },
+          color: '#ff00ff',
+          emissive: '#880088',
+          emissiveIntensity: 2.0,
+          scale: 1.5,
+        },
+      },
+    },
+    {
+      id: 'wing_cannons',
+      name: 'Wing Cannons',
+      description: 'Reinforced wing struts mount heavy forward cannons, visibly widening the ship profile.',
+      icon: '⟺',
+      maxLevel: 2,
+      effects: [
+        { type: 'multiply', stat: 'damage', value: 1.12, statLabel: 'Damage' },
+      ],
+      baseCost: { scrapMetal: 35, plasmaCrystals: 15 },
+      presentation: {
+        rarity: 'uncommon',
+        badge: 'WNG',
+        flavorText: 'More wing. More firepower. Simple math.',
+      },
+      visual: {
+        modifiers: [
+          { target: 'wing_left',  property: 'scale_x', op: 'multiply', value: 1.2 },
+          { target: 'wing_right', property: 'scale_x', op: 'multiply', value: 1.2 },
+          { target: 'wing_left',  property: 'emissive', op: 'set', value: '#aa6600' },
+          { target: 'wing_right', property: 'emissive', op: 'set', value: '#aa6600' },
+          { target: 'wing_left',  property: 'emissiveIntensity', op: 'set', value: 0.9 },
+          { target: 'wing_right', property: 'emissiveIntensity', op: 'set', value: 0.9 },
+        ],
+        attachments: [
+          {
+            id: 'wing_cannon_left',
+            anchor: 'wing_left',
+            offset: { x: -0.3, y: 0, z: -0.2 },
+            mesh: {
+              geometry: { type: 'cylinder', params: [0.06, 0.06, 0.55, 6] },
+              material: { type: 'standard', color: '#886633', emissive: '#ff8800', emissiveIntensity: 0.6, metalness: 0.7, roughness: 0.3 },
+              rotation: { x: Math.PI / 2, y: 0, z: 0 },
+            },
+          },
+          {
+            id: 'wing_cannon_right',
+            anchor: 'wing_right',
+            offset: { x: 0.3, y: 0, z: -0.2 },
+            mesh: {
+              geometry: { type: 'cylinder', params: [0.06, 0.06, 0.55, 6] },
+              material: { type: 'standard', color: '#886633', emissive: '#ff8800', emissiveIntensity: 0.6, metalness: 0.7, roughness: 0.3 },
+              rotation: { x: Math.PI / 2, y: 0, z: 0 },
+            },
+          },
+        ],
+      },
     },
   ],
 };

@@ -1,3 +1,6 @@
+import { SettingsManager } from './core/SettingsManager.js';
+import { SettingsUI } from './ui/SettingsUI.js';
+import { DebugMenuUI } from './ui/DebugMenuUI.js';
 import { SceneManager } from './scene/SceneManager.js';
 import { Starfield } from './scene/Starfield.js';
 import { SynthGrid } from './scene/SynthGrid.js';
@@ -37,6 +40,7 @@ class Game {
     // Core
     this.loop = new GameLoop();
     this.saveManager = new SaveManager();
+    this.settings = new SettingsManager();
     this.audio = new AudioManager();
 
     // Scene
@@ -53,8 +57,13 @@ class Game {
     this._composer = composer;
     this._grainTime = 0;
 
+    // Apply saved audio settings before anything plays
+    this.audio.setMusicVolume(this.settings.musicVolume);
+    this.audio.setSfxVolume(this.settings.sfxVolume);
+    this.audio.setMuted(this.settings.muted);
+
     // Entities
-    this.ship = new Ship(this.scene);
+    this.ship = new Ship(this.scene, this.settings);
     this.projectilePool = new ProjectilePool(this.scene);
 
     // Systems
@@ -69,6 +78,8 @@ class Game {
     this.hud = new HUD();
     this.transition = new RoundTransition();
     this.damageNumbers = new DamageNumbers();
+    this.settingsUI = new SettingsUI(this.settings, this.audio);
+    this.debugMenu = new DebugMenuUI(this);
 
     // These get set up after state is loaded
     this.techTree = null;
@@ -76,6 +87,8 @@ class Game {
 
     this._setupEventListeners();
     this._setupClickHandling();
+    this._setupSettingsButton();
+    this._setupDebugMenuHotkey();
   }
 
   _setupEventListeners() {
@@ -143,6 +156,85 @@ class Game {
     eventBus.on(EVENTS.CURRENCY_CHANGED, () => {
       if (this.techTreeUI) this.techTreeUI.updateCurrencyBar(this.state);
     });
+  }
+
+  _setupSettingsButton() {
+    const btn = document.getElementById('settings-btn');
+    if (btn) {
+      btn.onclick = () => {
+        if (this.settingsUI.isOpen) this.settingsUI.close();
+        else this.settingsUI.open();
+      };
+    }
+    // Also allow Escape to close
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Escape' && this.settingsUI.isOpen) {
+        this.settingsUI.close();
+      }
+      if (e.code === 'Escape' && this.debugMenu.isOpen) {
+        this.debugMenu.close();
+      }
+    });
+  }
+
+  _setupDebugMenuHotkey() {
+    window.addEventListener('keydown', e => {
+      if (!e.ctrlKey || !e.shiftKey || e.code !== 'KeyD') return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      this.debugMenu.toggle();
+    });
+  }
+
+  _debugGrantCurrencies(amounts) {
+    if (!this.state || !amounts) return;
+    for (const [type, amount] of Object.entries(amounts)) {
+      if (this.state.currencies[type] === undefined) continue;
+      this.currency.add(type, amount);
+    }
+  }
+
+  _debugResetGame() {
+    this.transition.hide();
+    this.ui.hide('death');
+    this.ui.hide('welcome');
+    this.settingsUI.close();
+    document.getElementById('start-screen')?.classList.add('hidden');
+
+    if (this.state) {
+      this.round.purgeCombatWorld();
+      this.projectilePool.clear();
+      this.combat.setEnemies(this.round.enemies);
+      this.combat.setLootDrops(this.round.lootDrops);
+    }
+
+    this.saveManager.clearSave();
+    this.state = createInitialState();
+    this.techTree = new TechTreeState(this.state.seed);
+    this._rebuildComputed();
+    this.currency.init(this.state);
+
+    if (this.techTreeUI) {
+      this.techTreeUI.setTree(this.techTree);
+      this.round.init(
+        this.state, this.scene,
+        (round, loot) => this._onRoundComplete(round, loot),
+        (round) => this._onRoundStart(round)
+      );
+    } else {
+      this._setupTechTreeUI();
+    }
+
+    this.state.player.hp = this.computed.maxHp;
+    this.state.player.shieldHp = 0;
+    this.ship.setShieldVisible(this.computed.maxShieldHp > 0 && this.state.player.shieldHp > 0);
+
+    this.ui.hide('hud');
+    this.ui.hide('techTree');
+    this.techTreeUI.close();
+    this.audio.stopMusic();
+    this._openTechTree();
   }
 
   _setupClickHandling() {
@@ -222,7 +314,7 @@ class Game {
       () => this._launchRound()
     );
 
-    this.ui.bindMuteButton(this.audio);
+    this.ui.bindMuteButton(this.audio, this.settings);
 
     this.round.init(
       this.state, this.scene,
@@ -244,6 +336,9 @@ class Game {
     p.hp = Math.min(p.hp, this.computed.maxHp);
     p.shieldHp = Math.min(p.shieldHp, this.computed.maxShieldHp);
     this.ship.setShieldVisible(this.computed.maxShieldHp > 0 && p.shieldHp > 0);
+    this.ship.syncTurrets(this.computed.extraWeapons || []);
+    this.ship.syncVisualModifiers(this.computed.visualModifiers || []);
+    this.projectilePool.applyProjectileVisual(this.computed.projectileVisuals || new Map());
     eventBus.emit(EVENTS.STATS_UPDATED, this.computed);
   }
 
@@ -307,7 +402,8 @@ class Game {
       this.starfield.update(delta);
       this.synthGrid.update(delta);
       this.camera.update(delta);
-      this.ship.update(delta);
+      this.ship.update(delta, null);
+      this.ship.syncAttachments(null, delta);
       this._updateShaders(delta);
       this.scene.render();
       return;
@@ -316,7 +412,9 @@ class Game {
     const phase = this.state.round.phase;
 
     // Always update ship visuals
-    this.ship.update(delta);
+    this.ship.update(delta, this.computed, phase);
+    this.ship.syncAttachments(this.computed?.attachments, delta);
+    this.upgrade.tickTriggers(delta);
     this.starfield.update(delta);
     this.synthGrid.update(delta);
     this.camera.update(delta);

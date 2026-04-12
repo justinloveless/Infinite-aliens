@@ -1,0 +1,293 @@
+import { KEYBIND_ACTIONS } from '../core/SettingsManager.js';
+
+// Human-readable label for a KeyboardEvent.code string
+function codeLabel(code) {
+  if (!code) return '—';
+  if (code.startsWith('Key'))    return code.slice(3);           // KeyA -> A
+  if (code.startsWith('Digit'))  return code.slice(5);           // Digit1 -> 1
+  if (code === 'ArrowUp')    return '↑';
+  if (code === 'ArrowDown')  return '↓';
+  if (code === 'ArrowLeft')  return '←';
+  if (code === 'ArrowRight') return '→';
+  if (code === 'Space')      return 'Space';
+  if (code === 'ShiftLeft')  return 'L.Shift';
+  if (code === 'ShiftRight') return 'R.Shift';
+  if (code === 'ControlLeft') return 'L.Ctrl';
+  if (code === 'ControlRight') return 'R.Ctrl';
+  return code;
+}
+
+export class SettingsUI {
+  /**
+   * @param {import('../core/SettingsManager.js').SettingsManager} settings
+   * @param {import('../core/AudioManager.js').AudioManager} audio
+   */
+  constructor(settings, audio) {
+    this._settings = settings;
+    this._audio    = audio;
+    this._panel    = document.getElementById('settings-screen');
+    this._capturingAction = null; // keybind action currently listening for a key
+    this._captureHandler  = null; // active keydown listener
+    this._built = false;
+  }
+
+  open() {
+    if (!this._built) this._build();
+    this._sync();
+    this._panel.classList.remove('hidden');
+  }
+
+  close() {
+    this._cancelCapture();
+    this._panel.classList.add('hidden');
+  }
+
+  get isOpen() { return !this._panel.classList.contains('hidden'); }
+
+  // ---- Build DOM ----
+
+  _build() {
+    this._built = true;
+    this._panel.innerHTML = '';
+
+    // ---- Wrapper ----
+    const wrap = document.createElement('div');
+    wrap.id = 'settings-panel';
+    this._panel.appendChild(wrap);
+
+    // ---- Header ----
+    const header = document.createElement('div');
+    header.className = 'settings-header';
+    header.innerHTML = `<span class="settings-title">SETTINGS</span>`;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'neon-btn small';
+    closeBtn.textContent = '✕';
+    closeBtn.onclick = () => this.close();
+    header.appendChild(closeBtn);
+    wrap.appendChild(header);
+
+    // ---- Audio section ----
+    wrap.appendChild(this._buildSection('AUDIO', this._buildAudio()));
+
+    // ---- Controls section ----
+    wrap.appendChild(this._buildSection('CONTROLS', this._buildControls()));
+
+    // ---- Footer ----
+    const footer = document.createElement('div');
+    footer.className = 'settings-footer';
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'neon-btn small';
+    resetBtn.textContent = 'RESET TO DEFAULTS';
+    resetBtn.onclick = () => {
+      this._settings.resetDefaults();
+      this._audio.setMusicVolume(this._settings.musicVolume);
+      this._audio.setSfxVolume(this._settings.sfxVolume);
+      this._audio.setMuted(this._settings.muted);
+      this._sync();
+    };
+    footer.appendChild(resetBtn);
+    wrap.appendChild(footer);
+
+    // Close on backdrop click
+    this._panel.addEventListener('click', e => {
+      if (e.target === this._panel) this.close();
+    });
+  }
+
+  _buildSection(title, content) {
+    const section = document.createElement('div');
+    section.className = 'settings-section';
+    const h = document.createElement('div');
+    h.className = 'settings-section-title';
+    h.textContent = title;
+    section.appendChild(h);
+    section.appendChild(content);
+    return section;
+  }
+
+  // ---- Audio controls ----
+
+  _buildAudio() {
+    const el = document.createElement('div');
+    el.className = 'settings-audio';
+
+    el.appendChild(this._buildSlider(
+      'music-vol', 'MUSIC VOLUME',
+      () => this._settings.musicVolume,
+      v => {
+        this._settings.setMusicVolume(v);
+        this._audio.setMusicVolume(v);
+      }
+    ));
+
+    el.appendChild(this._buildSlider(
+      'sfx-vol', 'SFX VOLUME',
+      () => this._settings.sfxVolume,
+      v => {
+        this._settings.setSfxVolume(v);
+        this._audio.setSfxVolume(v);
+        this._audio.play('pickup'); // preview the sfx
+      }
+    ));
+
+    // Mute toggle row
+    const muteRow = document.createElement('div');
+    muteRow.className = 'settings-row';
+    const muteLabel = document.createElement('span');
+    muteLabel.className = 'settings-label';
+    muteLabel.textContent = 'MUTE ALL';
+    this._muteBtn = document.createElement('button');
+    this._muteBtn.className = 'neon-btn small';
+    this._muteBtn.onclick = () => {
+      const next = !this._settings.muted;
+      this._settings.setMuted(next);
+      this._audio.setMuted(next);
+      this._syncMuteBtn();
+    };
+    muteRow.appendChild(muteLabel);
+    muteRow.appendChild(this._muteBtn);
+    el.appendChild(muteRow);
+
+    return el;
+  }
+
+  _buildSlider(id, label, getter, setter) {
+    const row = document.createElement('div');
+    row.className = 'settings-row settings-slider-row';
+
+    const lbl = document.createElement('span');
+    lbl.className = 'settings-label';
+    lbl.textContent = label;
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = '1';
+    slider.step = '0.01';
+    slider.className = 'settings-slider';
+    slider.dataset.id = id;
+
+    const pct = document.createElement('span');
+    pct.className = 'settings-slider-pct';
+    pct.dataset.id = id;
+
+    const update = v => {
+      pct.textContent = `${Math.round(v * 100)}%`;
+      slider.value = v;
+    };
+
+    slider.oninput = () => {
+      const v = parseFloat(slider.value);
+      update(v);
+      setter(v);
+    };
+
+    row.appendChild(lbl);
+    row.appendChild(slider);
+    row.appendChild(pct);
+    return row;
+  }
+
+  // ---- Keybind controls ----
+
+  _buildControls() {
+    const el = document.createElement('div');
+    el.className = 'settings-controls';
+
+    for (const action of KEYBIND_ACTIONS) {
+      const row = document.createElement('div');
+      row.className = 'settings-row';
+
+      const lbl = document.createElement('span');
+      lbl.className = 'settings-label';
+      lbl.textContent = action.label;
+
+      const btn = document.createElement('button');
+      btn.className = 'keybind-btn';
+      btn.dataset.action = action.id;
+      btn.onclick = () => this._startCapture(action.id, btn);
+
+      row.appendChild(lbl);
+      row.appendChild(btn);
+      el.appendChild(row);
+    }
+
+    const hint = document.createElement('p');
+    hint.className = 'settings-hint';
+    hint.textContent = 'Arrow keys always work as alternates.';
+    el.appendChild(hint);
+
+    return el;
+  }
+
+  // ---- Keybind capture ----
+
+  _startCapture(action, btn) {
+    this._cancelCapture();
+    this._capturingAction = action;
+    btn.classList.add('capturing');
+    btn.textContent = 'Press a key…';
+
+    this._captureHandler = e => {
+      e.preventDefault();
+      // Ignore modifier-only presses
+      if (['Shift','Control','Alt','Meta'].includes(e.key)) return;
+      // Escape cancels
+      if (e.code === 'Escape') { this._cancelCapture(); return; }
+
+      this._settings.setKeybind(action, e.code);
+      this._cancelCapture();
+      this._syncKeybinds();
+    };
+    window.addEventListener('keydown', this._captureHandler);
+  }
+
+  _cancelCapture() {
+    if (this._captureHandler) {
+      window.removeEventListener('keydown', this._captureHandler);
+      this._captureHandler = null;
+    }
+    this._capturingAction = null;
+    // Restore all buttons to their current label
+    this._syncKeybinds();
+  }
+
+  // ---- Sync UI state from settings ----
+
+  _sync() {
+    this._syncSliders();
+    this._syncMuteBtn();
+    this._syncKeybinds();
+  }
+
+  _syncSliders() {
+    for (const slider of this._panel.querySelectorAll('.settings-slider')) {
+      const id = slider.dataset.id;
+      const v = id === 'music-vol' ? this._settings.musicVolume : this._settings.sfxVolume;
+      slider.value = v;
+    }
+    for (const pct of this._panel.querySelectorAll('.settings-slider-pct')) {
+      const id = pct.dataset.id;
+      const v = id === 'music-vol' ? this._settings.musicVolume : this._settings.sfxVolume;
+      pct.textContent = `${Math.round(v * 100)}%`;
+    }
+  }
+
+  _syncMuteBtn() {
+    if (this._muteBtn) {
+      const m = this._settings.muted;
+      this._muteBtn.textContent = m ? 'UNMUTE' : 'MUTE';
+      this._muteBtn.style.borderColor = m ? 'var(--pink)' : '';
+      this._muteBtn.style.color       = m ? 'var(--pink)' : '';
+    }
+  }
+
+  _syncKeybinds() {
+    for (const btn of this._panel.querySelectorAll('.keybind-btn')) {
+      if (btn.dataset.action === this._capturingAction) continue;
+      const code = this._settings.getKeybind(btn.dataset.action);
+      btn.textContent = codeLabel(code);
+      btn.classList.remove('capturing');
+    }
+  }
+}

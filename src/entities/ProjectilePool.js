@@ -4,6 +4,7 @@ export class ProjectilePool {
   constructor(scene, size = 200) {
     this._pool = [];
     this._active = [];
+    this._visualOverrides = new Map(); // type -> ProjectileVisual spec
     const group = scene.groups.projectiles;
 
     for (let i = 0; i < size; i++) {
@@ -19,9 +20,20 @@ export class ProjectilePool {
       // Expand pool if needed
       proj = new Projectile();
     }
-    proj.activate(pos, dir, damage, isCrit, type, isPlayer, target);
+    // Resolve visual override: exact type match, or 'all' fallback
+    const override = this._visualOverrides.get(type) || this._visualOverrides.get('all') || null;
+    proj.activate(pos, dir, damage, isCrit, type, isPlayer, target, isPlayer ? override : null);
     this._active.push(proj);
     return proj;
+  }
+
+  // Called from _rebuildComputed() when upgrades change
+  applyProjectileVisual(visuals) {
+    this._visualOverrides.clear();
+    if (!visuals) return;
+    for (const [type, spec] of visuals) {
+      this._visualOverrides.set(type, spec);
+    }
   }
 
   update(delta) {

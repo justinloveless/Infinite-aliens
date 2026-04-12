@@ -44,12 +44,14 @@ export class CurrencySystem {
     return true;
   }
 
-  // Generate loot from an enemy kill
-  generateLoot(enemy, lootMultiplier = 1.0) {
+  // Generate loot from an enemy kill.
+  // lootRates: optional per-currency multiplier map from computed.lootRates
+  generateLoot(enemy, lootMultiplier = 1.0, lootRates = null) {
     const drops = [];
     for (const entry of enemy.lootTable) {
       const base = entry.min + Math.floor(Math.random() * (entry.max - entry.min + 1));
-      const amount = Math.ceil(base * lootMultiplier);
+      const currencyRate = lootRates?.[entry.currency] ?? 1.0;
+      const amount = Math.ceil(base * lootMultiplier * currencyRate);
       if (amount > 0) {
         drops.push({ currency: entry.currency, amount });
       }

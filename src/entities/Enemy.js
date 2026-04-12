@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export class Enemy {
-  constructor(def, round, scene) {
+  constructor(def, round, scene, computed = null) {
     this.type = def.type;
     this.id = `enemy_${Date.now()}_${Math.random()}`;
     this.collisionRadius = def.collisionRadius;
@@ -11,10 +11,24 @@ export class Enemy {
     // Scale stats with round
     const hpScale = Math.pow(1.12, round - 1);
     const dmgScale = Math.pow(1.05, round - 1);
-    this.maxHp = Math.ceil(def.baseHp * hpScale);
-    this.hp = this.maxHp;
-    this.damage = Math.ceil(def.baseDamage * dmgScale);
-    this.speed = def.baseSpeed * (1 + round * 0.004);
+    const rawHp  = Math.ceil(def.baseHp   * hpScale);
+    const rawDmg = Math.ceil(def.baseDamage * dmgScale);
+    const rawSpd = def.baseSpeed * (1 + round * 0.004);
+
+    // Apply upgrade-driven enemy modifiers
+    const allMod  = computed?.enemyModifiers?.all      || {};
+    const typeMod = computed?.enemyModifiers?.[def.type] || {};
+    const hpMult  = (allMod.hpMult  ?? 1) * (typeMod.hpMult  ?? 1);
+    const dmgMult = (allMod.damageMult ?? 1) * (typeMod.damageMult ?? 1);
+    const spdMult = (allMod.speedMult ?? 1) * (typeMod.speedMult ?? 1);
+
+    this.maxHp = Math.max(1, Math.ceil(rawHp  * hpMult));
+    this.hp    = this.maxHp;
+    this.damage = Math.max(1, Math.ceil(rawDmg * dmgMult));
+    this.speed  = rawSpd * spdMult;
+    // damageReceivedMult amplifies damage this enemy receives (>1 = takes more)
+    this.damageReceivedMult =
+      (allMod.damageReceivedMult ?? 1) * (typeMod.damageReceivedMult ?? 1);
     this.contactDamage = def.baseDamage;
     this.attackSpeed = def.attackSpeed || 0;
     this._attackTimer = 0;

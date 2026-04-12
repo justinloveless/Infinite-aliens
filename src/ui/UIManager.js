@@ -69,11 +69,22 @@ export class UIManager {
     document.getElementById('launch-btn').onclick = onLaunch;
   }
 
-  bindMuteButton(audioManager) {
+  bindMuteButton(audioManager, settingsManager) {
     const btn = document.getElementById('mute-btn');
+    // Sync initial label
+    btn.textContent = audioManager.muted ? '🔇' : '♪';
     btn.onclick = () => {
       const muted = audioManager.toggleMute();
+      if (settingsManager) settingsManager.setMuted(muted);
       btn.textContent = muted ? '🔇' : '♪';
     };
+    // Keep label in sync when settings panel changes the mute state
+    if (settingsManager) {
+      settingsManager.onChange((key) => {
+        if (key === 'muted' || key === 'reset') {
+          btn.textContent = audioManager.muted ? '🔇' : '♪';
+        }
+      });
+    }
   }
 }

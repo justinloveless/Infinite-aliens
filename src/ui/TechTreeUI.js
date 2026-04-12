@@ -1,4 +1,4 @@
-import { TECH_TREE, CURRENCIES } from '../constants.js';
+import { TECH_TREE, CURRENCIES, RARITY_META } from '../constants.js';
 import { CATEGORY_META } from '../techtree/TechNodeTemplates.js';
 import { eventBus, EVENTS } from '../core/EventBus.js';
 
@@ -133,6 +133,15 @@ export class TechTreeUI {
   close() {
     this._visible = false;
     this._hideTooltip();
+  }
+
+  /** Swap tree state after a full game reset without creating a second UI instance. */
+  setTree(techTreeState) {
+    this._tree = techTreeState;
+    if (this._visible) {
+      this._centerOnFrontier();
+      this.render();
+    }
   }
 
   _updateCurrencyBar(state) {
@@ -302,7 +311,13 @@ export class TechTreeUI {
 
   _drawNode(ctx, node) {
     const { x, y } = node.position;
-    const meta = CATEGORY_META[node.category] || CATEGORY_META.weapon;
+    const catMeta = CATEGORY_META[node.category] || CATEGORY_META.weapon;
+    const pres = node.presentation || {};
+    const rarityMeta = pres.rarity ? (RARITY_META[pres.rarity] || {}) : {};
+
+    // Resolved node color: presentation.color > rarity color > category color
+    const nodeColor = pres.color || rarityMeta.color || catMeta.color;
+
     const isHovered = this._hoveredNode?.id === node.id;
     const isAvailable = this._tree.isAvailable(node.id);
     const canAfford = isAvailable && this._currency.canAfford(node.getCostForNextLevel());
@@ -313,38 +328,56 @@ export class TechTreeUI {
     this._roundRect(ctx, x, y, NODE_W, NODE_H, CORNER_R);
 
     if (isMaxed) {
-      ctx.fillStyle = `${meta.color}33`;
+      ctx.fillStyle = `${nodeColor}33`;
     } else if (isUnlocked) {
-      ctx.fillStyle = `${meta.color}22`;
+      ctx.fillStyle = `${nodeColor}22`;
     } else if (canAfford) {
-      ctx.fillStyle = isHovered ? `${meta.color}22` : `${meta.color}11`;
+      ctx.fillStyle = isHovered ? `${nodeColor}22` : `${nodeColor}11`;
     } else {
       ctx.fillStyle = 'rgba(20, 10, 40, 0.8)';
     }
     ctx.fill();
 
-    // Border
+    // Border — driven by borderAnim if set
     this._roundRect(ctx, x, y, NODE_W, NODE_H, CORNER_R);
+    const anim = pres.borderAnim || (canAfford ? 'pulse' : rarityMeta.borderAnim || 'none');
+
     if (isMaxed) {
-      ctx.strokeStyle = meta.color;
+      ctx.strokeStyle = nodeColor;
       ctx.lineWidth = 2.5;
-    } else if (canAfford) {
-      const pulse = Math.sin(Date.now() / 400) * 0.5 + 0.5;
-      const alpha = (0.5 + pulse * 0.5).toFixed(2);
-      ctx.strokeStyle = `${meta.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
+      ctx.setLineDash([]);
+    } else if (anim === 'rainbow') {
+      const hue = (this._animTime * 60) % 360;
+      ctx.strokeStyle = `hsl(${hue}, 100%, 65%)`;
       ctx.lineWidth = isHovered ? 2.5 : 1.8;
+      ctx.setLineDash([]);
+    } else if (anim === 'rotate') {
+      // Dashed border with animated offset for "rotating" effect
+      ctx.strokeStyle = nodeColor;
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([8, 4]);
+      ctx.lineDashOffset = -(this._animTime * 20);
+    } else if (anim === 'pulse' || canAfford) {
+      const pulse = Math.sin(this._animTime * 2.5) * 0.5 + 0.5;
+      const alpha = Math.floor((0.5 + pulse * 0.5) * 255).toString(16).padStart(2, '0');
+      ctx.strokeStyle = `${nodeColor}${alpha}`;
+      ctx.lineWidth = isHovered ? 2.5 : 1.8;
+      ctx.setLineDash([]);
     } else if (isUnlocked) {
-      ctx.strokeStyle = `${meta.color}88`;
+      ctx.strokeStyle = `${nodeColor}88`;
       ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
     } else {
       ctx.strokeStyle = 'rgba(255,255,255,0.15)';
       ctx.lineWidth = 1;
+      ctx.setLineDash([]);
     }
     ctx.stroke();
+    ctx.setLineDash([]);
 
     // Icon
     ctx.font = `14px 'Share Tech Mono', monospace`;
-    ctx.fillStyle = isUnlocked || canAfford ? meta.color : 'rgba(255,255,255,0.3)';
+    ctx.fillStyle = isUnlocked || canAfford ? nodeColor : 'rgba(255,255,255,0.3)';
     ctx.fillText(node.icon || '', x + 10, y + 18);
 
     // Name
@@ -355,8 +388,8 @@ export class TechTreeUI {
 
     // Category label
     ctx.font = `8px 'Share Tech Mono', monospace`;
-    ctx.fillStyle = isUnlocked || canAfford ? meta.color : 'rgba(255,255,255,0.2)';
-    ctx.fillText(meta.label.toUpperCase(), x + 28, y + 29);
+    ctx.fillStyle = isUnlocked || canAfford ? nodeColor : 'rgba(255,255,255,0.2)';
+    ctx.fillText(catMeta.label.toUpperCase(), x + 28, y + 29);
 
     // Level dots
     if (node.maxLevel > 1) {
@@ -367,11 +400,7 @@ export class TechTreeUI {
       for (let i = 0; i < totalDots; i++) {
         ctx.beginPath();
         ctx.arc(startX + i * dotSpacing, y + NODE_H - 10, dotR, 0, Math.PI * 2);
-        if (i < node.currentLevel) {
-          ctx.fillStyle = meta.color;
-        } else {
-          ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        }
+        ctx.fillStyle = i < node.currentLevel ? nodeColor : 'rgba(255,255,255,0.2)';
         ctx.fill();
       }
     }
@@ -379,7 +408,7 @@ export class TechTreeUI {
     // Maxed checkmark
     if (isMaxed) {
       ctx.font = `bold 12px sans-serif`;
-      ctx.fillStyle = meta.color;
+      ctx.fillStyle = nodeColor;
       ctx.fillText('✓', x + NODE_W - 18, y + 18);
     }
 
@@ -388,6 +417,24 @@ export class TechTreeUI {
       ctx.font = `12px sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.fillText('🔒', x + NODE_W - 20, y + NODE_H - 8);
+    }
+
+    // Badge (top-right corner)
+    if (pres.badge) {
+      const bx = x + NODE_W - 6;
+      const by = y + 6;
+      const bColor = pres.badgeColor || nodeColor;
+      ctx.beginPath();
+      ctx.arc(bx, by, 8, 0, Math.PI * 2);
+      ctx.fillStyle = bColor + 'cc';
+      ctx.fill();
+      ctx.font = `bold 7px 'Orbitron', monospace`;
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pres.badge.slice(0, 3), bx, by);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
     }
   }
 
@@ -405,13 +452,29 @@ export class TechTreeUI {
     ctx.closePath();
   }
 
+  _isTemplateUnlocked(templateId) {
+    for (const n of this._tree.getVisibleNodes()) {
+      if ((n.templateId || n.id) === templateId && n.isUnlocked) return true;
+    }
+    return false;
+  }
+
   _showTooltip(node, screenX, screenY) {
     const el = this._tooltip;
     const isAvailable = this._tree.isAvailable(node.id);
-    const canAfford = isAvailable && this._currency.canAfford(node.getCostForNextLevel());
     const meta = CATEGORY_META[node.category] || {};
+    const pres = node.presentation || {};
+    const rarityMeta = pres.rarity ? (RARITY_META[pres.rarity] || {}) : null;
+    const nodeColor = pres.color || rarityMeta?.color || meta.color;
 
-    let html = `<div class="tooltip-name" style="color:${meta.color}">${node.icon || ''} ${node.name}</div>`;
+    let html = `<div class="tooltip-name" style="color:${nodeColor}">${node.icon || ''} ${node.name}</div>`;
+
+    // Rarity label
+    if (pres.rarity) {
+      const rColor = rarityMeta?.color || '#aaaaaa';
+      html += `<div class="tooltip-rarity" style="color:${rColor};font-style:italic;font-size:10px;margin-bottom:4px">${pres.rarity.toUpperCase()}</div>`;
+    }
+
     html += `<div class="tooltip-desc">${node.description}</div>`;
 
     if (node.currentLevel > 0) {
@@ -421,6 +484,7 @@ export class TechTreeUI {
     if (!node.isMaxed) {
       html += `<div class="tooltip-effect">→ ${node.getNextLevelDescription()}</div>`;
 
+      // Cost display
       const cost = node.getCostForNextLevel();
       html += `<div class="tooltip-cost">`;
       for (const [type, amount] of Object.entries(cost)) {
@@ -431,6 +495,16 @@ export class TechTreeUI {
       }
       html += `</div>`;
 
+      // Alternative cost hint
+      const altMod = node.costModifiers?.find(m => m.type === 'alternative');
+      if (altMod?.altCost && altMod?.altLabel) {
+        const altParts = Object.entries(altMod.altCost).map(([t, v]) => {
+          const cm = CURRENCIES[t];
+          return `${cm?.icon || ''} ${v} ${cm?.label || t}`;
+        }).join(' + ');
+        html += `<div style="font-size:9px;color:#aaa;margin-top:2px">Alt: ${altParts} (${altMod.altLabel})</div>`;
+      }
+
       if (!isAvailable) {
         const prereqNames = node.prerequisites.map(id => {
           const n = this._tree.generator.getNode(id);
@@ -440,6 +514,46 @@ export class TechTreeUI {
       }
     } else {
       html += `<div class="tooltip-level" style="color:#39ff14">MAXED OUT ✓</div>`;
+    }
+
+    // Synergy section
+    if (node.synergies?.length) {
+      html += `<div style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.15);padding-top:4px;font-size:9px">`;
+      for (const syn of node.synergies) {
+        const allMet = syn.requires?.every(id => this._isTemplateUnlocked(id));
+        const check = allMet ? '<span style="color:#39ff14">✓</span>' : '<span style="color:#888">○</span>';
+        html += `<div style="margin-bottom:2px">${check} <span style="color:#ccc">${syn.label}</span></div>`;
+        if (!allMet && syn.requires) {
+          const missing = syn.requires.filter(id => !this._isTemplateUnlocked(id));
+          const missingNames = missing.map(id => {
+            const n = this._tree.generator.getNode(id);
+            return n ? n.name : id;
+          });
+          html += `<div style="color:#666;margin-left:12px;font-size:8px">Needs: ${missingNames.join(', ')}</div>`;
+        }
+      }
+      html += `</div>`;
+    }
+
+    // Synergy hints from presentation (nodes this one has synergy with)
+    if (pres.synergyHints?.length) {
+      const unlockedHints = pres.synergyHints.filter(id => this._isTemplateUnlocked(id));
+      const lockedHints   = pres.synergyHints.filter(id => !this._isTemplateUnlocked(id));
+      if (pres.synergyHints.length > 0) {
+        html += `<div style="font-size:9px;color:#888;margin-top:4px">Synergizes with: `;
+        html += pres.synergyHints.map(id => {
+          const n = this._tree.generator.getNode(id);
+          const name = n ? n.name : id;
+          const active = this._isTemplateUnlocked(id);
+          return `<span style="color:${active ? '#39ff14' : '#666'}">${name}</span>`;
+        }).join(', ');
+        html += `</div>`;
+      }
+    }
+
+    // Flavor text
+    if (pres.flavorText) {
+      html += `<div style="font-style:italic;color:#888;font-size:9px;margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:4px">"${pres.flavorText}"</div>`;
     }
 
     el.innerHTML = html;

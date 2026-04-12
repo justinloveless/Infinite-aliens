@@ -43,4 +43,5 @@ export const EVENTS = {
   PLAYER_DIED:         'player:died',
   STATS_UPDATED:       'stats:updated',
   GAME_SAVED:          'game:saved',
+  STELLAR_NOVA:        'stellar:nova',
 };

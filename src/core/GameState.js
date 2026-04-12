@@ -1,4 +1,4 @@
-import { PLAYER, GAME } from '../constants.js';
+import { PLAYER, GAME, ROUND } from '../constants.js';
 
 export function createInitialState() {
   return {
@@ -10,7 +10,7 @@ export function createInitialState() {
       current: 1,
       phase: 'start',          // 'start' | 'combat' | 'vacuum' | 'transition' | 'upgrade'
       enemiesDefeated: 0,
-      enemiesRequired: 5,
+      enemiesRequired: ROUND.BASE_ENEMIES,
       totalEnemiesDefeated: 0,
     },
 

@@ -111,20 +111,39 @@ function weightedPick(types, rng) {
 }
 
 export class EnemyFactory {
-  create(typeName, round, scene) {
+  create(typeName, round, scene, computed = null) {
     const def = ENEMY_DEFS[typeName];
     if (!def) throw new Error(`Unknown enemy type: ${typeName}`);
-    return new Enemy(def, round, scene);
+    return new Enemy(def, round, scene, computed);
   }
 
-  spawnRandom(round, scene) {
+  spawnRandom(round, scene, computed = null) {
     const types = getAvailableTypes(round);
     const def = weightedPick(types, Math.random);
+    return this._spawnFromDef(def, round, scene, computed);
+  }
 
+  /**
+   * Like spawnRandom but only picks enemy types whose pack size (spawnCount) fits the cap.
+   * Used on boss rounds so the final spawn slot can always be the boss (swarm would skip it).
+   */
+  spawnRandomCapped(round, scene, maxPackSize, computed = null) {
+    const cap = Math.max(1, maxPackSize);
+    const types = getAvailableTypes(round).filter(
+      (t) => (ENEMY_DEFS[t].spawnCount || 1) <= cap
+    );
+    if (types.length === 0) {
+      return this._spawnFromDef(ENEMY_DEFS.scout, round, scene, computed);
+    }
+    const def = weightedPick(types, Math.random);
+    return this._spawnFromDef(def, round, scene, computed);
+  }
+
+  _spawnFromDef(def, round, scene, computed = null) {
     const enemies = [];
     const count = def.spawnCount || 1;
     for (let i = 0; i < count; i++) {
-      const enemy = new Enemy(def, round, scene);
+      const enemy = new Enemy(def, round, scene, computed);
       if (count > 1) {
         enemy.group.position.x += (i - 1) * 2.5;
       }
@@ -133,7 +152,7 @@ export class EnemyFactory {
     return enemies;
   }
 
-  spawnBoss(round, scene) {
-    return [new Enemy(ENEMY_DEFS.boss, round, scene)];
+  spawnBoss(round, scene, computed = null) {
+    return [new Enemy(ENEMY_DEFS.boss, round, scene, computed)];
   }
 }

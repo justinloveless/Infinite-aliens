@@ -22,17 +22,35 @@ export class RoundSystem {
     this._onRoundComplete = null;
     this._onRoundStart = null;
     this._vacuumTimer = 0;
+    this._unsubEnemyKilled = null;
   }
 
   init(state, scene, onRoundComplete, onRoundStart) {
+    if (this._unsubEnemyKilled) {
+      this._unsubEnemyKilled();
+      this._unsubEnemyKilled = null;
+    }
     this._state = state;
     this._scene = scene;
     this._onRoundComplete = onRoundComplete;
     this._onRoundStart = onRoundStart;
 
-    eventBus.on(EVENTS.ENEMY_KILLED, ({ enemy }) => {
-      this._onEnemyKilled(enemy);
-    });
+    const onKilled = ({ enemy }) => this._onEnemyKilled(enemy);
+    this._unsubEnemyKilled = eventBus.on(EVENTS.ENEMY_KILLED, onKilled);
+  }
+
+  /** Remove combat entities from the scene without awarding loot (e.g. debug reset). */
+  purgeCombatWorld() {
+    this._clearEnemies();
+    this._clearLoot();
+    for (const exp of this._explosions) {
+      exp.destroy();
+    }
+    this._explosions.length = 0;
+    this._spawnTimer = 0;
+    this._spawnedThisRound = 0;
+    this._vacuumTimer = 0;
+    this._transitionTimer = 0;
   }
 
   startRound(round) {
@@ -54,12 +72,16 @@ export class RoundSystem {
     return Math.floor(ROUND.BASE_ENEMIES * Math.pow(ROUND.ENEMY_SCALING, round - 1));
   }
 
-  _calcMaxConcurrent(round) {
-    return Math.min(5 + Math.floor(round / 4), ROUND.MAX_CONCURRENT_ENEMIES);
+  _calcMaxConcurrent(round, computed) {
+    const base = Math.min(5 + Math.floor(round / 4), ROUND.MAX_CONCURRENT_ENEMIES);
+    const mult = computed?.roundModifiers?.maxConcurrent ?? 1.0;
+    return Math.round(base * mult);
   }
 
-  _calcSpawnInterval(round) {
-    return Math.max(ROUND.SPAWN_INTERVAL_MIN, ROUND.SPAWN_INTERVAL_BASE - round * 0.05);
+  _calcSpawnInterval(round, computed) {
+    const base = Math.max(ROUND.SPAWN_INTERVAL_MIN, ROUND.SPAWN_INTERVAL_BASE - round * 0.05);
+    const mult = computed?.roundModifiers?.spawnInterval ?? 1.0;
+    return Math.max(ROUND.SPAWN_INTERVAL_MIN, base * mult);
   }
 
   _isBossRound(round) {
@@ -70,9 +92,10 @@ export class RoundSystem {
     const state = this._state;
     if (state.round.phase !== 'combat') return;
 
-    // Loot
+    // Loot — apply global multiplier and per-currency loot rates
     const lootMult = this._state._computed?.lootMultiplier || 1.0;
-    const drops = this._currency.generateLoot(enemy, lootMult);
+    const lootRates = this._state._computed?.lootRates || null;
+    const drops = this._currency.generateLoot(enemy, lootMult, lootRates);
     for (const drop of drops) {
       const loot = new LootDrop(
         enemy.group.position.clone(),
@@ -205,8 +228,8 @@ export class RoundSystem {
 
     // Spawn logic
     const required = state.round.enemiesRequired;
-    const maxConcurrent = this._calcMaxConcurrent(state.round.current);
-    const spawnInterval = this._calcSpawnInterval(state.round.current);
+    const maxConcurrent = this._calcMaxConcurrent(state.round.current, computed);
+    const spawnInterval = this._calcSpawnInterval(state.round.current, computed);
     const isBoss = this._isBossRound(state.round.current);
 
     if (this._spawnedThisRound < required && this._enemies.length < maxConcurrent) {
@@ -215,11 +238,19 @@ export class RoundSystem {
         this._spawnTimer = 0;
 
         let newEnemies;
-        // Spawn boss on the last enemy of a boss round
-        if (isBoss && this._spawnedThisRound === required - 1) {
-          newEnemies = this._factory.spawnBoss(state.round.current, this._scene);
+        const remaining = required - this._spawnedThisRound;
+        // Boss must be the last spawn; swarm packs can skip spawned === required-1 otherwise.
+        if (isBoss && remaining === 1) {
+          newEnemies = this._factory.spawnBoss(state.round.current, this._scene, computed);
+        } else if (isBoss && remaining > 1) {
+          newEnemies = this._factory.spawnRandomCapped(
+            state.round.current,
+            this._scene,
+            remaining - 1,
+            computed
+          );
         } else {
-          newEnemies = this._factory.spawnRandom(state.round.current, this._scene);
+          newEnemies = this._factory.spawnRandom(state.round.current, this._scene, computed);
         }
         this._enemies.push(...newEnemies);
         this._spawnedThisRound += newEnemies.length;

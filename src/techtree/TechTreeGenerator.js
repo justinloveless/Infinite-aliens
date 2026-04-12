@@ -15,8 +15,8 @@ function makePRNG(seed) {
 
 function weightedPick(weights, rng) {
   const entries = Object.entries(weights).filter(([, w]) => w > 0);
+  if (entries.length === 0) return null; // all weights zero — caller must handle
   const total = entries.reduce((s, [, w]) => s + w, 0);
-  if (total === 0) return entries[0][0];
   let r = rng() * total;
   for (const [k, w] of entries) {
     r -= w;
@@ -68,6 +68,7 @@ export class TechTreeGenerator {
     this._generatedNodes = {}; // nodeId -> TechNode
     this._tiers = [];          // tiers[ring] = [nodeId, ...]
     this._angles = {};         // nodeId -> angle on its ring
+    this._usedTemplateIds = new Set(); // globally track which templates have been placed
   }
 
   // Generate all rings up to (and including) the given ring
@@ -98,24 +99,37 @@ export class TechTreeGenerator {
     const prevRing = this._tiers[ring - 1] || [];
     const ringNodes = [];
     const ringAngles = [];
-    const usedTemplateIds = new Set();
 
     // First pass: create nodes with template + position
     for (let i = 0; i < count; i++) {
       const angle = angleOffset + (i / count) * Math.PI * 2;
 
-      // Pick category with sector bias
-      const category = this._pickCategoryForAngle(angle, ring, rng, unlockedCounts, ringNodes);
+      // Build available template pools per category (globally unused templates only)
+      const availPools = {};
+      for (const [cat, templates] of Object.entries(NODE_TEMPLATES)) {
+        let pool = templates.filter(t => !this._usedTemplateIds.has(t.id));
+        // Ring 1 is the first paid ring and only scrap drops reliably that early,
+        // so prefer scrap-only templates there.
+        if (ring === 1) pool = filterScrapOnlyPool(pool);
+        availPools[cat] = pool;
+      }
 
-      // Pick template (avoid duplicates within this ring)
-      let pool = NODE_TEMPLATES[category].filter(t => !usedTemplateIds.has(t.id));
-      // Ring 1 is the first paid ring and only scrap drops reliably that early,
-      // so prefer scrap-only templates there.
-      if (ring === 1) pool = filterScrapOnlyPool(pool);
-      const template = pool.length > 0
-        ? pickRandom(pool, rng)
-        : pickRandom(NODE_TEMPLATES[category], rng);
-      usedTemplateIds.add(template.id);
+      // Skip this slot if all templates across all categories are exhausted
+      const anyAvailable = Object.values(availPools).some(p => p.length > 0);
+      if (!anyAvailable) break;
+
+      // Pick category with sector bias (zero-weight exhausted categories)
+      const category = this._pickCategoryForAngle(angle, ring, rng, unlockedCounts, ringNodes, availPools);
+
+      // No valid category available (e.g. only specials remain but ring < 4) — skip slot
+      if (!category) break;
+
+      // Pick template from the available pool for that category
+      let pool = availPools[category];
+      if (pool.length === 0) pool = NODE_TEMPLATES[category].filter(t => !this._usedTemplateIds.has(t.id));
+      if (pool.length === 0) pool = NODE_TEMPLATES[category]; // absolute fallback (shouldn't happen)
+      const template = pickRandom(pool, rng);
+      this._usedTemplateIds.add(template.id);
 
       const position = this._polarToPosition(radius, angle);
       const node = this._createNode(ring, i, template, category, position);
@@ -175,6 +189,7 @@ export class TechTreeGenerator {
 
       const node = new TechNode({
         id,
+        templateId: template.id,
         tier: 0,
         name: template.name,
         description: template.description,
@@ -186,6 +201,11 @@ export class TechTreeGenerator {
         prerequisites: [],                   // always available
         position,
         icon: template.icon,
+        triggers: template.triggers || [],
+        synergies: template.synergies || [],
+        presentation: template.presentation || null,
+        costModifiers: template.costModifiers || [],
+        visual: template.visual || null,
       });
 
       this._generatedNodes[id] = node;
@@ -215,7 +235,7 @@ export class TechTreeGenerator {
 
   // Category bias: each cardinal sector prefers a category
   // weapon near top (-π/2), defense near right (0), utility near bottom (π/2), passive near left (π)
-  _pickCategoryForAngle(angle, ring, rng, unlockedCounts, ringSoFar) {
+  _pickCategoryForAngle(angle, ring, rng, unlockedCounts, ringSoFar, availPools = null) {
     const baseWeights = getCategoryWeights(ring, unlockedCounts);
 
     const sectorPref = this._categoryForSector(angle);
@@ -226,6 +246,15 @@ export class TechTreeGenerator {
     // Limit specials to 1 per ring
     const hasSpecial = ringSoFar.some(id => this._generatedNodes[id]?.category === 'special');
     if (hasSpecial) baseWeights.special = 0;
+
+    // Zero out categories whose templates are all used up
+    if (availPools) {
+      for (const cat of Object.keys(baseWeights)) {
+        if (!availPools[cat] || availPools[cat].length === 0) {
+          baseWeights[cat] = 0;
+        }
+      }
+    }
 
     return weightedPick(baseWeights, rng);
   }
@@ -264,9 +293,13 @@ export class TechTreeGenerator {
       Object.entries(template.baseCost).map(([k, v]) => [k, Math.ceil(v * costScale)])
     );
 
+    // Operators that should not be scaled by ring depth (discrete / fixed-value)
+    const FIXED_OPS = new Set(['min', 'max', 'append', 'toggle', 'add_flat', 'set', 'special', 'add_weapon']);
+
     // Slight effect bonus at deeper rings
     const tierBonus = 1 + TECH_TREE.EFFECT_TIER_BONUS * ring;
     const scaledEffects = template.effects.map(e => {
+      if (FIXED_OPS.has(e.type)) return { ...e };
       if (e.type === 'multiply') {
         const scaledVal = 1 + (e.value - 1) * tierBonus;
         return { ...e, value: parseFloat(scaledVal.toFixed(4)) };
@@ -290,6 +323,7 @@ export class TechTreeGenerator {
 
     const node = new TechNode({
       id,
+      templateId: template.id,
       tier: ring,
       name,
       description,
@@ -301,6 +335,12 @@ export class TechTreeGenerator {
       prerequisites: [],
       position,
       icon: template.icon,
+      // Pass through new grammar fields unchanged (no ring scaling)
+      triggers: template.triggers || [],
+      synergies: template.synergies || [],
+      presentation: template.presentation || null,
+      costModifiers: template.costModifiers || [],
+      visual: template.visual || null,
     });
 
     this._generatedNodes[id] = node;
