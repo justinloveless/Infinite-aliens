@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CURRENCIES } from '../constants.js';
+import { LOOT, PLAYER } from '../constants.js';
 
 const COLORS = {
   scrapMetal:     0xaaaaaa,
@@ -35,7 +35,7 @@ export class LootDrop {
     this._scene = scene;
   }
 
-  update(delta, playerPos, attractionSpeed) {
+  update(delta, playerPos, attraction) {
     if (!this.active) return;
     this._time += delta * 2.5;
 
@@ -45,8 +45,22 @@ export class LootDrop {
       const dz = playerPos.z - this.mesh.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
       if (dist > 0.01) {
-        // Accelerate as it gets closer for a satisfying magnet feel.
-        const speed = (attractionSpeed || 6) * (1 + Math.max(0, 1 - dist / 8));
+        let attractionSpeed;
+        if (typeof attraction === 'number') {
+          attractionSpeed = attraction;
+        } else if (attraction && typeof attraction.magnetRange === 'number') {
+          const mr = attraction.magnetRange;
+          const inMagnet = dist < mr;
+          let mult = 1;
+          if (inMagnet) {
+            const extra = Math.max(0, mr - PLAYER.BASE_MAGNET_RANGE);
+            mult = LOOT.MAGNET_MULT_BASE + extra * LOOT.MAGNET_MULT_PER_RANGE;
+          }
+          attractionSpeed = LOOT.DRIFT_SPEED * mult;
+        } else {
+          attractionSpeed = LOOT.DRIFT_SPEED;
+        }
+        const speed = attractionSpeed * (1 + Math.max(0, 1 - dist / 8));
         const step = Math.min(dist, speed * delta);
         this.mesh.position.x += (dx / dist) * step;
         this.mesh.position.z += (dz / dist) * step;

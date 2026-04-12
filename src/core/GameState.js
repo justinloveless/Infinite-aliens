@@ -1,17 +1,19 @@
-import { PLAYER, GAME, ROUND } from '../constants.js';
+import { PLAYER, GAME } from '../constants.js';
 
 export function createInitialState() {
   return {
     version: GAME.VERSION,
     seed: Math.floor(Math.random() * 0xffffffff),
 
-    // Round info
+    // Run progression (tier in `current` is derived from distance during combat)
     round: {
       current: 1,
-      phase: 'start',          // 'start' | 'combat' | 'vacuum' | 'transition' | 'upgrade'
+      phase: 'start',          // 'start' | 'combat' | 'upgrade' | 'dead'
+      distanceTraveled: 0,
       enemiesDefeated: 0,
-      enemiesRequired: ROUND.BASE_ENEMIES,
       totalEnemiesDefeated: 0,
+      bossesDefeated: 0,
+      bossIsActive: false,
     },
 
     // Player base stats (upgrades modify computedStats, not these)
@@ -53,7 +55,7 @@ export function createInitialState() {
       stellarDust: 0,
     },
 
-    // Loot earned this round (for transition display)
+    // Loot earned this combat session (HUD / debugging)
     roundLoot: {},
 
     // Tech tree

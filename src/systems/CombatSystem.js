@@ -216,7 +216,7 @@ export class CombatSystem {
 
     // ---- Loot collection ----
     const collected = this._collision.checkLootVsPlayer(
-      this._lootDrops, playerPos, computed.magnetRange
+      this._lootDrops, playerPos, PLAYER.COLLISION_RADIUS
     );
     for (const loot of collected) {
       loot.collect();

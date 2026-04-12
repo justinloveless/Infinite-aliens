@@ -79,7 +79,7 @@ export class TechTreeState {
 
   _arePrerequisitesMet(node) {
     // Ring 0 (starter nodes) are always reachable — they're the entry points
-    // into the tree and may have visual lateral connections to other starters.
+    // into the tree (lateral starter links exist in data but are not drawn).
     if (node.tier === 0) return true;
     if (!node.prerequisites || node.prerequisites.length === 0) return true;
     // Path-of-Exile style: available if ANY connected node is unlocked

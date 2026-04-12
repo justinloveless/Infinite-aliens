@@ -107,11 +107,44 @@ html, body {
 .hp-bar { background: linear-gradient(90deg, #39ff14, #00f5ff); box-shadow: 0 0 6px #39ff14; }
 .shield-bar { background: linear-gradient(90deg, #00f5ff, #9b30ff); box-shadow: 0 0 6px #00f5ff; }
 
-#round-display {
+#run-display {
   font-family: var(--font-main);
   font-size: 0.65rem;
   letter-spacing: 0.15em;
   color: rgba(0, 245, 255, 0.6);
+}
+#distance-display {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  color: rgba(0, 245, 255, 0.45);
+  margin-top: 2px;
+}
+#boss-progress-wrap {
+  margin-top: 6px;
+  width: 160px;
+  margin-left: auto;
+  margin-right: auto;
+}
+#boss-progress-wrap .round-label {
+  font-size: 0.5rem;
+  letter-spacing: 0.14em;
+  color: rgba(255, 170, 0, 0.55);
+  margin-bottom: 3px;
+}
+#boss-progress-track {
+  height: 5px;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255, 170, 0, 0.25);
+  overflow: hidden;
+  border-radius: 1px;
+}
+#boss-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ff9500, #ff00aa);
+  box-shadow: 0 0 6px rgba(255, 100, 200, 0.5);
+  transition: width 0.2s ease-out;
 }
 #round-number {
   font-size: 2rem;
@@ -259,7 +292,14 @@ html, body {
   font-weight: 700;
   color: var(--cyan);
   text-shadow: var(--glow-cyan);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+}
+.tooltip-category {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  opacity: 0.88;
+  margin-bottom: 6px;
 }
 .tooltip-desc { color: rgba(255,255,255,0.7); margin-bottom: 8px; }
 .tooltip-effect { color: var(--green); margin-bottom: 4px; font-size: 0.7rem; }

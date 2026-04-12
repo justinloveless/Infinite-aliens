@@ -1,8 +1,21 @@
-import { GAME } from '../constants.js';
+import { GAME, RUN } from '../constants.js';
 import { eventBus, EVENTS } from './EventBus.js';
 import { createInitialState, serializeState, deserializeState } from './GameState.js';
 
 const SAVE_KEY = 'infinite_aliens_save';
+
+function migrateSaveToV3(data) {
+  if (!data.round) return;
+  const r = data.round;
+  if (r.distanceTraveled == null) {
+    r.distanceTraveled = Math.max(0, ((r.current || 1) - 1) * RUN.DISTANCE_PER_TIER);
+  }
+  if (r.bossesDefeated == null) {
+    r.bossesDefeated = Math.max(0, Math.floor(((r.current || 1) - 1) / 5));
+  }
+  r.bossIsActive = false;
+  delete r.enemiesRequired;
+}
 
 export class SaveManager {
   constructor() {
@@ -28,6 +41,10 @@ export class SaveManager {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
       const data = JSON.parse(raw);
+      if (data.version === 2) {
+        migrateSaveToV3(data);
+        data.version = 3;
+      }
       if (data.version !== GAME.VERSION) return null;
       return data;
     } catch {

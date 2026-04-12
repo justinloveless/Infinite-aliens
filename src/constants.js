@@ -1,20 +1,25 @@
 // ===== GAME CONSTANTS =====
 
 export const GAME = {
-  VERSION: 2,
+  VERSION: 3,
   AUTO_SAVE_INTERVAL: 30000,  // ms
   OFFLINE_CAP: 8 * 3600,     // seconds
   OFFLINE_EFFICIENCY: 0.5,
 };
 
-export const ROUND = {
-  BASE_ENEMIES: 10,
-  ENEMY_SCALING: 1.08,        // enemies = floor(BASE * SCALING^(round-1))
-  TRANSITION_DURATION: 2500,  // ms before opening tech tree
+/** Continuous run: difficulty tier from distance; bosses at distance milestones. */
+export const RUN = {
+  DISTANCE_PER_TIER: 38,       // +1 effective tier (enemy scaling / unlocks) per this many units moved
+  BOSS_DISTANCE_INTERVAL: 135, // first boss at this distance, then each +interval after the prior boss dies
   MAX_CONCURRENT_ENEMIES: 15,
-  SPAWN_INTERVAL_BASE: 2.5,   // seconds between spawns
-  SPAWN_INTERVAL_MIN: 0.5,
+  SPAWN_INTERVAL_BASE: 2.35,
+  SPAWN_INTERVAL_MIN: 0.45,
+  /** Seconds between spawns tightens slightly per tier (like old per-round curve). */
+  SPAWN_INTERVAL_PER_TIER: 0.048,
 };
+
+/** @deprecated use RUN — kept for tech-tree copy / tooling that still says "round" */
+export const ROUND = RUN;
 
 export const PLAYER = {
   BASE_HP: 100,
@@ -42,6 +47,15 @@ export const PLAYER = {
   STELLAR_NOVA_DAMAGE_PER_LEVEL: 16,
   STELLAR_NOVA_BASE_RADIUS: 4.5,
   STELLAR_NOVA_RADIUS_PER_LEVEL: 0.65,
+};
+
+/** Dropped currency: drift toward ship; magnet range boosts pull speed (pickup is on contact). */
+export const LOOT = {
+  DRIFT_SPEED: 5,
+  /** Speed multiplier while inside the magnet radius (horizontal dist). */
+  MAGNET_MULT_BASE: 2.15,
+  /** Extra multiplier per unit of magnet range above the player base. */
+  MAGNET_MULT_PER_RANGE: 0.065,
 };
 
 export const ENEMY = {
@@ -130,7 +144,7 @@ export const EFFECT_TARGETS = {
 export const CONDITION_TYPES = {
   STAT_GTE:   'stat_gte',    // computed[stat] >= threshold
   STAT_LTE:   'stat_lte',    // computed[stat] <= threshold
-  ROUND_GTE:  'round_gte',   // state.round.current >= threshold
+  ROUND_GTE:  'round_gte',   // state.round.current (sector from distance) >= threshold
   ROUND_LTE:  'round_lte',   // state.round.current <= threshold
   PHASE_IS:   'phase_is',    // state.round.phase === value
   NODE_OWNED: 'node_owned',  // templateId is unlocked

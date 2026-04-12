@@ -1,8 +1,5 @@
-import { ROUND } from '../constants.js';
+import { RUN } from '../constants.js';
 import { eventBus, EVENTS } from '../core/EventBus.js';
-
-const VACUUM_ATTRACTION = 88;
-const VACUUM_MAX_SEC = 2.0;
 import { EnemyFactory } from '../entities/EnemyFactory.js';
 import { LootDrop } from '../entities/LootDrop.js';
 import { Explosion } from '../entities/Explosion.js';
@@ -15,24 +12,23 @@ export class RoundSystem {
     this._lootDrops = [];
     this._explosions = [];
     this._spawnTimer = 0;
-    this._spawnedThisRound = 0;
-    this._transitionTimer = 0;
     this._scene = null;
     this._state = null;
-    this._onRoundComplete = null;
     this._onRoundStart = null;
-    this._vacuumTimer = 0;
     this._unsubEnemyKilled = null;
+    this._lastPlayerX = 0;
+    this._lastPlayerZ = 0;
+    this._hasPlayerAnchor = false;
+    this._bossSpawnPending = false;
   }
 
-  init(state, scene, onRoundComplete, onRoundStart) {
+  init(state, scene, onRoundStart) {
     if (this._unsubEnemyKilled) {
       this._unsubEnemyKilled();
       this._unsubEnemyKilled = null;
     }
     this._state = state;
     this._scene = scene;
-    this._onRoundComplete = onRoundComplete;
     this._onRoundStart = onRoundStart;
 
     const onKilled = ({ enemy }) => this._onEnemyKilled(enemy);
@@ -48,51 +44,77 @@ export class RoundSystem {
     }
     this._explosions.length = 0;
     this._spawnTimer = 0;
-    this._spawnedThisRound = 0;
-    this._vacuumTimer = 0;
-    this._transitionTimer = 0;
+    this._hasPlayerAnchor = false;
+    this._bossSpawnPending = false;
   }
 
-  startRound(round) {
+  /**
+   * Begin or resume combat. Distance and tier continue across sessions until a new game.
+   */
+  startRound() {
     const state = this._state;
-    state.round.current = round;
+    this._syncTierFromDistance();
     state.round.phase = 'combat';
-    state.round.enemiesDefeated = 0;
-    state.round.enemiesRequired = this._calcRequired(round);
     state.roundLoot = {};
-    this._spawnedThisRound = 0;
     this._spawnTimer = 0;
-    this._vacuumTimer = 0;
     this._clearLoot();
-    eventBus.emit(EVENTS.ROUND_STARTED, { round });
-    if (this._onRoundStart) this._onRoundStart(round);
+    this._hasPlayerAnchor = false;
+    eventBus.emit(EVENTS.ROUND_STARTED, { round: state.round.current });
+    if (this._onRoundStart) this._onRoundStart(state.round.current);
   }
 
-  _calcRequired(round) {
-    return Math.floor(ROUND.BASE_ENEMIES * Math.pow(ROUND.ENEMY_SCALING, round - 1));
+  _syncTierFromDistance() {
+    const d = this._state.round.distanceTraveled || 0;
+    this._state.round.current = Math.max(1, 1 + Math.floor(d / RUN.DISTANCE_PER_TIER));
   }
 
-  _calcMaxConcurrent(round, computed) {
-    const base = Math.min(5 + Math.floor(round / 4), ROUND.MAX_CONCURRENT_ENEMIES);
+  _syncBossSpawnPending() {
+    const state = this._state;
+    const r = state.round;
+    const hasBoss = this._enemies.some(e => e.active && e.type === 'boss');
+    r.bossIsActive = hasBoss;
+    const nextAt = (r.bossesDefeated + 1) * RUN.BOSS_DISTANCE_INTERVAL;
+    if (r.distanceTraveled >= nextAt && !hasBoss) {
+      this._bossSpawnPending = true;
+    }
+  }
+
+  _accumulateDistance(playerPos) {
+    const state = this._state;
+    const px = playerPos.x;
+    const pz = playerPos.z;
+    if (this._hasPlayerAnchor) {
+      const dx = px - this._lastPlayerX;
+      const dz = pz - this._lastPlayerZ;
+      state.round.distanceTraveled += Math.hypot(dx, dz);
+    } else {
+      this._hasPlayerAnchor = true;
+    }
+    this._lastPlayerX = px;
+    this._lastPlayerZ = pz;
+    this._syncTierFromDistance();
+    this._syncBossSpawnPending();
+  }
+
+  _calcMaxConcurrent(tier, computed) {
+    const base = Math.min(5 + Math.floor(tier / 4), RUN.MAX_CONCURRENT_ENEMIES);
     const mult = computed?.roundModifiers?.maxConcurrent ?? 1.0;
     return Math.round(base * mult);
   }
 
-  _calcSpawnInterval(round, computed) {
-    const base = Math.max(ROUND.SPAWN_INTERVAL_MIN, ROUND.SPAWN_INTERVAL_BASE - round * 0.05);
+  _calcSpawnInterval(tier, computed) {
+    const base = Math.max(
+      RUN.SPAWN_INTERVAL_MIN,
+      RUN.SPAWN_INTERVAL_BASE - tier * RUN.SPAWN_INTERVAL_PER_TIER
+    );
     const mult = computed?.roundModifiers?.spawnInterval ?? 1.0;
-    return Math.max(ROUND.SPAWN_INTERVAL_MIN, base * mult);
-  }
-
-  _isBossRound(round) {
-    return round % 5 === 0;
+    return Math.max(RUN.SPAWN_INTERVAL_MIN, base * mult);
   }
 
   _onEnemyKilled(enemy) {
     const state = this._state;
     if (state.round.phase !== 'combat') return;
 
-    // Loot — apply global multiplier and per-currency loot rates
     const lootMult = this._state._computed?.lootMultiplier || 1.0;
     const lootRates = this._state._computed?.lootRates || null;
     const drops = this._currency.generateLoot(enemy, lootMult, lootRates);
@@ -106,7 +128,6 @@ export class RoundSystem {
       this._lootDrops.push(loot);
     }
 
-    // Explosion
     const color = enemy.type === 'boss' ? 0xaa00ff : 0xff6600;
     const scale = enemy.type === 'boss' ? 2.5 : (enemy.type === 'tank' ? 1.5 : 1.0);
     const exp = new Explosion(enemy.group.position.clone(), color, scale, this._scene);
@@ -118,28 +139,9 @@ export class RoundSystem {
 
     state.round.enemiesDefeated++;
     state.round.totalEnemiesDefeated++;
-
-    if (state.round.enemiesDefeated >= state.round.enemiesRequired) {
-      this._beginVacuum();
+    if (enemy.type === 'boss') {
+      state.round.bossesDefeated++;
     }
-  }
-
-  _beginVacuum() {
-    const state = this._state;
-    state.round.phase = 'vacuum';
-    this._vacuumTimer = 0;
-    this._clearEnemies();
-  }
-
-  _beginTransition() {
-    const state = this._state;
-    state.round.phase = 'transition';
-    this._transitionTimer = 0;
-    eventBus.emit(EVENTS.ROUND_COMPLETE, {
-      round: state.round.current,
-      loot: { ...state.roundLoot },
-    });
-    if (this._onRoundComplete) this._onRoundComplete(state.round.current, state.roundLoot);
   }
 
   _clearEnemies() {
@@ -158,9 +160,8 @@ export class RoundSystem {
 
   update(delta, computed) {
     const state = this._state;
-    if (!state) return;
+    if (!state || state.round.phase !== 'combat') return;
 
-    // Update explosions
     for (let i = this._explosions.length - 1; i >= 0; i--) {
       this._explosions[i].update(delta);
       if (!this._explosions[i].alive) this._explosions.splice(i, 1);
@@ -169,54 +170,17 @@ export class RoundSystem {
     const playerPos =
       this._scene.groups.player.children[0]?.position || { x: 0, z: 0 };
 
-    const isVacuum = state.round.phase === 'vacuum';
+    this._accumulateDistance(playerPos);
 
+    const magnetRange = computed?.magnetRange ?? 4;
     for (const loot of this._lootDrops) {
-      loot.update(delta, playerPos, isVacuum ? VACUUM_ATTRACTION : undefined);
-    }
-
-    if (isVacuum) {
-      this._vacuumTimer += delta;
-      const collectR = Math.max(computed?.magnetRange ?? 4, 3.5);
-      for (const loot of this._lootDrops) {
-        if (!loot.active) continue;
-        if (loot.position.distanceTo(playerPos) < collectR) {
-          eventBus.emit(EVENTS.LOOT_COLLECTED, {
-            currencyType: loot.currencyType,
-            amount: loot.amount,
-          });
-          loot.collect();
-        }
-      }
+      loot.update(delta, playerPos, { magnetRange });
     }
 
     for (let i = this._lootDrops.length - 1; i >= 0; i--) {
       if (!this._lootDrops[i].active) this._lootDrops.splice(i, 1);
     }
 
-    if (isVacuum) {
-      const timedOut = this._vacuumTimer >= VACUUM_MAX_SEC;
-      if (this._lootDrops.length === 0 || timedOut) {
-        if (timedOut && this._lootDrops.length > 0) {
-          for (const loot of this._lootDrops) {
-            if (!loot.active) continue;
-            eventBus.emit(EVENTS.LOOT_COLLECTED, {
-              currencyType: loot.currencyType,
-              amount: loot.amount,
-            });
-            loot.collect();
-          }
-          this._lootDrops.length = 0;
-        }
-        this._vacuumTimer = 0;
-        this._beginTransition();
-      }
-      return;
-    }
-
-    if (state.round.phase !== 'combat') return;
-
-    // Update enemies
     for (let i = this._enemies.length - 1; i >= 0; i--) {
       const e = this._enemies[i];
       if (!e.active) {
@@ -226,39 +190,32 @@ export class RoundSystem {
       e.update(delta, playerPos);
     }
 
-    // Spawn logic
-    const required = state.round.enemiesRequired;
-    const maxConcurrent = this._calcMaxConcurrent(state.round.current, computed);
-    const spawnInterval = this._calcSpawnInterval(state.round.current, computed);
-    const isBoss = this._isBossRound(state.round.current);
+    const tier = state.round.current;
+    const maxConcurrent = this._calcMaxConcurrent(tier, computed);
+    const spawnInterval = this._calcSpawnInterval(tier, computed);
 
-    if (this._spawnedThisRound < required && this._enemies.length < maxConcurrent) {
-      this._spawnTimer += delta;
-      if (this._spawnTimer >= spawnInterval) {
+    const hasBossAlive = this._enemies.some(e => e.active && e.type === 'boss');
+    state.round.bossIsActive = hasBossAlive;
+
+    this._spawnTimer += delta;
+    if (this._spawnTimer >= spawnInterval) {
+      const room = this._enemies.length < maxConcurrent;
+      let newEnemies = null;
+
+      if (this._bossSpawnPending && !hasBossAlive && room) {
+        newEnemies = this._factory.spawnBoss(tier, this._scene, computed);
+        this._bossSpawnPending = false;
+      } else if (!this._bossSpawnPending && room) {
+        newEnemies = this._factory.spawnRandom(tier, this._scene, computed);
+      }
+
+      if (newEnemies?.length) {
         this._spawnTimer = 0;
-
-        let newEnemies;
-        const remaining = required - this._spawnedThisRound;
-        // Boss must be the last spawn; swarm packs can skip spawned === required-1 otherwise.
-        if (isBoss && remaining === 1) {
-          newEnemies = this._factory.spawnBoss(state.round.current, this._scene, computed);
-        } else if (isBoss && remaining > 1) {
-          newEnemies = this._factory.spawnRandomCapped(
-            state.round.current,
-            this._scene,
-            remaining - 1,
-            computed
-          );
-        } else {
-          newEnemies = this._factory.spawnRandom(state.round.current, this._scene, computed);
-        }
         this._enemies.push(...newEnemies);
-        this._spawnedThisRound += newEnemies.length;
         newEnemies.forEach(e => eventBus.emit(EVENTS.ENEMY_SPAWNED, { enemy: e }));
       }
     }
 
-    // Passive currency
     this._currency.updatePassive(delta, computed);
   }
 

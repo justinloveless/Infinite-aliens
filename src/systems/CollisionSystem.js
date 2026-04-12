@@ -39,13 +39,13 @@ export class CollisionSystem {
     return hits;
   }
 
-  // Check loot vs player (magnet range)
-  checkLootVsPlayer(lootDrops, playerPos, magnetRange) {
+  // Loot is awarded on contact with the ship (magnet only increases approach speed).
+  checkLootVsPlayer(lootDrops, playerPos, playerRadius) {
     const collected = [];
     for (const loot of lootDrops) {
       if (!loot.active) continue;
       const dist = loot.position.distanceTo(playerPos);
-      if (dist < magnetRange) {
+      if (dist < playerRadius + loot.collisionRadius + 0.15) {
         collected.push(loot);
       }
     }

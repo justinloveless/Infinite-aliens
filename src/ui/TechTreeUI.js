@@ -4,7 +4,14 @@ import { eventBus, EVENTS } from '../core/EventBus.js';
 
 const NODE_W = TECH_TREE.NODE_W;
 const NODE_H = TECH_TREE.NODE_H;
-const CORNER_R = 8;
+/** Layout keeps NODE_W×NODE_H cells; nodes render as circles centered in each cell. */
+const NODE_CX = NODE_W / 2;
+const NODE_CY = NODE_H / 2;
+const NODE_MAIN_R = 22;
+const NODE_LEVEL_ARC_R = 29;
+const NODE_LEVEL_ARC_W = 3.25;
+const NODE_LEVEL_GAP_RAD = 0.11;
+const NODE_HIT_R = 34;
 
 export class TechTreeUI {
   constructor(techTreeState, currencySystem, audioManager) {
@@ -188,12 +195,22 @@ export class TechTreeUI {
     };
   }
 
+  _nodeCenter(node) {
+    const { x, y } = node.position;
+    return { cx: x + NODE_CX, cy: y + NODE_CY };
+  }
+
+  /** Ring-0 hub nodes (weapon/defense/utility/passive starters). */
+  _isStarterNode(node) {
+    return node?.tier === 0;
+  }
+
   _hitTest(wx, wy) {
     for (const node of this._tree.getVisibleNodes()) {
-      const { x, y } = node.position;
-      if (wx >= x && wx <= x + NODE_W && wy >= y && wy <= y + NODE_H) {
-        return node;
-      }
+      const { cx, cy } = this._nodeCenter(node);
+      const dx = wx - cx;
+      const dy = wy - cy;
+      if (dx * dx + dy * dy <= NODE_HIT_R * NODE_HIT_R) return node;
     }
     return null;
   }
@@ -239,6 +256,7 @@ export class TechTreeUI {
       for (const prereqId of node.prerequisites) {
         const prereq = nodesMap[prereqId];
         if (!prereq) continue;
+        if (this._isStarterNode(prereq) && this._isStarterNode(node)) continue;
         const key = node.id < prereq.id
           ? `${node.id}|${prereq.id}`
           : `${prereq.id}|${node.id}`;
@@ -280,11 +298,12 @@ export class TechTreeUI {
   }
 
   _drawConnection(ctx, from, to) {
-    // Straight line between node centers (circular layout)
-    const fx = from.position.x + NODE_W / 2;
-    const fy = from.position.y + NODE_H / 2;
-    const tx = to.position.x + NODE_W / 2;
-    const ty = to.position.y + NODE_H / 2;
+    const fc = this._nodeCenter(from);
+    const tc = this._nodeCenter(to);
+    const fx = fc.cx;
+    const fy = fc.cy;
+    const tx = tc.cx;
+    const ty = tc.cy;
 
     const bothUnlocked = from.isUnlocked && to.isUnlocked;
     const eitherUnlocked = from.isUnlocked || to.isUnlocked;
@@ -309,13 +328,40 @@ export class TechTreeUI {
     ctx.setLineDash([]);
   }
 
+  _drawNodeLevelArcs(ctx, cx, cy, node, nodeColor) {
+    const max = node.maxLevel;
+    if (max <= 1) return;
+
+    const totalGap = NODE_LEVEL_GAP_RAD * max;
+    const segArc = (Math.PI * 2 - totalGap) / max;
+    let a = -Math.PI / 2 + NODE_LEVEL_GAP_RAD / 2;
+
+    ctx.lineWidth = NODE_LEVEL_ARC_W;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < max; i++) {
+      const a0 = a;
+      const a1 = a + segArc;
+      ctx.beginPath();
+      ctx.arc(cx, cy, NODE_LEVEL_ARC_R, a0, a1);
+      if (i < node.currentLevel) {
+        ctx.strokeStyle = nodeColor;
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+        ctx.globalAlpha = 0.95;
+      }
+      ctx.stroke();
+      a = a1 + NODE_LEVEL_GAP_RAD;
+    }
+    ctx.globalAlpha = 1;
+  }
+
   _drawNode(ctx, node) {
-    const { x, y } = node.position;
+    const { cx, cy } = this._nodeCenter(node);
     const catMeta = CATEGORY_META[node.category] || CATEGORY_META.weapon;
     const pres = node.presentation || {};
     const rarityMeta = pres.rarity ? (RARITY_META[pres.rarity] || {}) : {};
 
-    // Resolved node color: presentation.color > rarity color > category color
     const nodeColor = pres.color || rarityMeta.color || catMeta.color;
 
     const isHovered = this._hoveredNode?.id === node.id;
@@ -324,22 +370,22 @@ export class TechTreeUI {
     const isUnlocked = node.isUnlocked;
     const isMaxed = node.isMaxed;
 
-    // Node background
-    this._roundRect(ctx, x, y, NODE_W, NODE_H, CORNER_R);
+    ctx.beginPath();
+    ctx.arc(cx, cy, NODE_MAIN_R, 0, Math.PI * 2);
 
     if (isMaxed) {
-      ctx.fillStyle = `${nodeColor}33`;
+      ctx.fillStyle = `${nodeColor}55`;
     } else if (isUnlocked) {
-      ctx.fillStyle = `${nodeColor}22`;
+      ctx.fillStyle = `${nodeColor}44`;
     } else if (canAfford) {
-      ctx.fillStyle = isHovered ? `${nodeColor}22` : `${nodeColor}11`;
+      ctx.fillStyle = isHovered ? `${nodeColor}38` : `${nodeColor}28`;
     } else {
-      ctx.fillStyle = 'rgba(20, 10, 40, 0.8)';
+      ctx.fillStyle = 'rgba(20, 10, 40, 0.92)';
     }
     ctx.fill();
 
-    // Border — driven by borderAnim if set
-    this._roundRect(ctx, x, y, NODE_W, NODE_H, CORNER_R);
+    ctx.beginPath();
+    ctx.arc(cx, cy, NODE_MAIN_R, 0, Math.PI * 2);
     const anim = pres.borderAnim || (canAfford ? 'pulse' : rarityMeta.borderAnim || 'none');
 
     if (isMaxed) {
@@ -352,11 +398,10 @@ export class TechTreeUI {
       ctx.lineWidth = isHovered ? 2.5 : 1.8;
       ctx.setLineDash([]);
     } else if (anim === 'rotate') {
-      // Dashed border with animated offset for "rotating" effect
       ctx.strokeStyle = nodeColor;
       ctx.lineWidth = 1.8;
-      ctx.setLineDash([8, 4]);
-      ctx.lineDashOffset = -(this._animTime * 20);
+      ctx.setLineDash([5, 4]);
+      ctx.lineDashOffset = -(this._animTime * 18);
     } else if (anim === 'pulse' || canAfford) {
       const pulse = Math.sin(this._animTime * 2.5) * 0.5 + 0.5;
       const alpha = Math.floor((0.5 + pulse * 0.5) * 255).toString(16).padStart(2, '0');
@@ -364,65 +409,52 @@ export class TechTreeUI {
       ctx.lineWidth = isHovered ? 2.5 : 1.8;
       ctx.setLineDash([]);
     } else if (isUnlocked) {
-      ctx.strokeStyle = `${nodeColor}88`;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = `${nodeColor}aa`;
+      ctx.lineWidth = 1.6;
       ctx.setLineDash([]);
     } else {
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
     }
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
 
-    // Icon
-    ctx.font = `14px 'Share Tech Mono', monospace`;
-    ctx.fillStyle = isUnlocked || canAfford ? nodeColor : 'rgba(255,255,255,0.3)';
-    ctx.fillText(node.icon || '', x + 10, y + 18);
+    this._drawNodeLevelArcs(ctx, cx, cy, node, nodeColor);
 
-    // Name
-    ctx.font = `bold 10px 'Orbitron', monospace`;
-    ctx.fillStyle = isUnlocked || canAfford ? '#ffffff' : 'rgba(255,255,255,0.3)';
-    const shortName = node.name.length > 14 ? node.name.slice(0, 13) + '…' : node.name;
-    ctx.fillText(shortName, x + 28, y + 18);
+    const iconBright = isUnlocked || canAfford;
+    ctx.font = `${Math.round(NODE_MAIN_R * 0.95)}px 'Share Tech Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = iconBright ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.28)';
+    ctx.fillText(node.icon || '', cx, cy);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
 
-    // Category label
-    ctx.font = `8px 'Share Tech Mono', monospace`;
-    ctx.fillStyle = isUnlocked || canAfford ? nodeColor : 'rgba(255,255,255,0.2)';
-    ctx.fillText(catMeta.label.toUpperCase(), x + 28, y + 29);
-
-    // Level dots
-    if (node.maxLevel > 1) {
-      const dotR = 3;
-      const dotSpacing = 8;
-      const totalDots = Math.min(node.maxLevel, 8);
-      const startX = x + NODE_W / 2 - (totalDots * dotSpacing) / 2 + dotR;
-      for (let i = 0; i < totalDots; i++) {
-        ctx.beginPath();
-        ctx.arc(startX + i * dotSpacing, y + NODE_H - 10, dotR, 0, Math.PI * 2);
-        ctx.fillStyle = i < node.currentLevel ? nodeColor : 'rgba(255,255,255,0.2)';
-        ctx.fill();
-      }
-    }
-
-    // Maxed checkmark
     if (isMaxed) {
-      ctx.font = `bold 12px sans-serif`;
-      ctx.fillStyle = nodeColor;
-      ctx.fillText('✓', x + NODE_W - 18, y + 18);
+      ctx.font = `bold 11px sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('✓', cx + NODE_MAIN_R - 7, cy - NODE_MAIN_R + 8);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
     }
 
-    // Locked indicator
     if (!isAvailable && !isUnlocked) {
-      ctx.font = `12px sans-serif`;
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillText('🔒', x + NODE_W - 20, y + NODE_H - 8);
+      ctx.font = `11px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillText('🔒', cx, cy + NODE_MAIN_R + 10);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
     }
 
-    // Badge (top-right corner)
     if (pres.badge) {
-      const bx = x + NODE_W - 6;
-      const by = y + 6;
+      const bx = cx + NODE_MAIN_R * 0.62;
+      const by = cy - NODE_MAIN_R * 0.62;
       const bColor = pres.badgeColor || nodeColor;
       ctx.beginPath();
       ctx.arc(bx, by, 8, 0, Math.PI * 2);
@@ -436,20 +468,6 @@ export class TechTreeUI {
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
     }
-  }
-
-  _roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
   }
 
   _isTemplateUnlocked(templateId) {
@@ -468,6 +486,7 @@ export class TechTreeUI {
     const nodeColor = pres.color || rarityMeta?.color || meta.color;
 
     let html = `<div class="tooltip-name" style="color:${nodeColor}">${node.icon || ''} ${node.name}</div>`;
+    html += `<div class="tooltip-category" style="color:${nodeColor}">${(meta.label || node.category || '').toUpperCase()}</div>`;
 
     // Rarity label
     if (pres.rarity) {

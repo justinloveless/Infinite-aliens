@@ -29,15 +29,23 @@
     </div>
 
     <div id="hud-top-center">
-      <div id="round-display">
-        <span class="round-label">ROUND</span>
+      <div id="run-display">
+        <span class="round-label">SECTOR</span>
         <span id="round-number">1</span>
+      </div>
+      <div id="distance-display">
+        <span class="round-label">DIST </span>
+        <span id="distance-value">0</span>
+      </div>
+      <div id="boss-progress-wrap">
+        <div class="round-label">NEXT BOSS</div>
+        <div id="boss-progress-track">
+          <div id="boss-progress-bar"></div>
+        </div>
       </div>
       <div id="enemies-display">
         <span id="enemies-defeated">0</span>
-        <span class="round-label"> / </span>
-        <span id="enemies-required">5</span>
-        <span class="round-label"> DEFEATED</span>
+        <span class="round-label"> KILLS</span>
       </div>
     </div>
 
@@ -86,7 +94,7 @@
     <canvas id="tech-tree-canvas"></canvas>
     <div id="node-tooltip" class="hidden"></div>
     <div id="tech-tree-footer">
-      <button id="launch-btn" class="neon-btn launch">▶ LAUNCH ROUND</button>
+      <button id="launch-btn" class="neon-btn launch">▶ ENGAGE</button>
     </div>
   </div>
 

@@ -84,6 +84,7 @@ class Game {
     // These get set up after state is loaded
     this.techTree = null;
     this.techTreeUI = null;
+    this._prevBossMusicActive = false;
 
     this._setupEventListeners();
     this._setupClickHandling();
@@ -217,11 +218,7 @@ class Game {
 
     if (this.techTreeUI) {
       this.techTreeUI.setTree(this.techTree);
-      this.round.init(
-        this.state, this.scene,
-        (round, loot) => this._onRoundComplete(round, loot),
-        (round) => this._onRoundStart(round)
-      );
+      this.round.init(this.state, this.scene, (round) => this._onRoundStart(round));
     } else {
       this._setupTechTreeUI();
     }
@@ -316,16 +313,11 @@ class Game {
 
     this.ui.bindMuteButton(this.audio, this.settings);
 
-    this.round.init(
-      this.state, this.scene,
-      (round, loot) => this._onRoundComplete(round, loot),
-      (round) => this._onRoundStart(round)
-    );
+    this.round.init(this.state, this.scene, (round) => this._onRoundStart(round));
   }
 
   _combatMusicKey() {
-    const r = this.state?.round?.current ?? 1;
-    return r > 0 && r % 5 === 0 ? 'boss' : 'combat';
+    return this.state?.round?.bossIsActive ? 'boss' : 'combat';
   }
 
   _rebuildComputed() {
@@ -362,6 +354,7 @@ class Game {
       // Resume combat
       this.state.round.phase = 'combat';
       this.ui.show('hud');
+      this._prevBossMusicActive = !!this.state.round.bossIsActive;
       this.audio.playMusic(this._combatMusicKey());
     } else {
       // Still in upgrade — keep HUD visible but show Launch button
@@ -375,21 +368,13 @@ class Game {
     this.ui.show('hud');
     this.audio.play('launch');
 
-    const nextRound = this.state.round.current;
     this.projectilePool.clear();
-    this.round.startRound(nextRound);
+    this.round.startRound();
     this.combat.setEnemies(this.round.enemies);
     this.combat.setLootDrops(this.round.lootDrops);
 
+    this._prevBossMusicActive = !!this.state.round.bossIsActive;
     this.audio.playMusic(this._combatMusicKey());
-  }
-
-  _onRoundComplete(round, loot) {
-    this.audio.play('roundComplete');
-    this.transition.show(round, loot, () => {
-      this.state.round.current++;
-      this._openTechTree();
-    });
   }
 
   _onRoundStart(round) {
@@ -422,14 +407,16 @@ class Game {
     // Update post-processing uniforms
     this._updateShaders(delta);
 
-    // Combat + end-of-round vacuum (loot/explosions) + transition cleanup
-    if (phase === 'combat' || phase === 'vacuum' || phase === 'transition') {
-      this.round.update(delta, this.computed);
-    }
-
     if (phase === 'combat') {
+      this.round.update(delta, this.computed);
       this.combat.setEnemies(this.round.enemies);
       this.combat.setLootDrops(this.round.lootDrops);
+
+      const bossNow = !!this.state.round.bossIsActive;
+      if (bossNow !== this._prevBossMusicActive) {
+        this._prevBossMusicActive = bossNow;
+        this.audio.playMusic(this._combatMusicKey());
+      }
 
       // Auto-attack + collision
       this.combat.update(delta, this.state, this.computed, this.ship, this.audio);
@@ -443,11 +430,6 @@ class Game {
       );
 
       // HUD update
-      this.hud.update(this.state, this.computed);
-    }
-
-    if (phase === 'vacuum') {
-      this.combat.setLootDrops(this.round.lootDrops);
       this.hud.update(this.state, this.computed);
     }
 

@@ -335,7 +335,7 @@ export class Ship {
   }
 
   // speed: units/sec from computed stats (optional, defaults to 3)
-  // phase: when set, magnet field shows only during combat / vacuum
+  // phase: when set, magnet field shows only during combat
   update(delta, computed, phase) {
     this._time += delta;
 
@@ -381,8 +381,7 @@ export class Ship {
       this._magnetMesh.position.y = this.group.position.y + 0.06;
       this._magnetMesh.position.z = this.group.position.z;
       this._magnetMesh.scale.setScalar(range);
-      const show =
-        !!computed && (phase === 'combat' || phase === 'vacuum');
+      const show = !!computed && phase === 'combat';
       this._magnetMesh.visible = show;
     }
 
