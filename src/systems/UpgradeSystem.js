@@ -65,11 +65,14 @@ export class UpgradeSystem {
       armor: base.armor,
       speed: base.speed,
       magnetRange: base.magnetRange,
+      visionRange: base.visionRange,
+      targetingRange: base.targetingRange,
       lootMultiplier: base.lootMultiplier,
       stellarDustRate: base.stellarDustRate,
       projectileType: base.projectileType,
       extraWeapons: [],
       hasDrone: base.hasDrone,
+      hasAutoFire: !!base.hasAutoFire,
       hasVampire: base.hasVampire,
       hasDamageReflect: base.hasDamageReflect,
       hasOvercharge: base.hasOvercharge,
@@ -91,6 +94,19 @@ export class UpgradeSystem {
       stellarNovaInterval: 0,
       stellarNovaDamage: 0,
       stellarNovaRadius: 0,
+
+      // New mechanics
+      projectilePierces: 0,
+      resonanceFieldLevel: 0,
+      corrosiveAuraDps: 0,
+      momentumEngineActive: false,
+      gravityWellActive: false,
+      interestRate: 0,
+      manualTargetFocusEnabled: false,
+      /** Multiplier on nose-cannon heat per shot (lower = less heat). */
+      manualGunHeatPerShotMult: 1,
+      /** Multiplier on overheat lockout duration (lower = faster recovery). */
+      manualGunOverheatDurationMult: 1,
     };
 
     if (!techTreeState) {
@@ -147,8 +163,15 @@ export class UpgradeSystem {
     computed.maxShieldHp = Math.max(0, Math.floor(computed.maxShieldHp));
     computed.armor = Math.max(0, Math.floor(computed.armor));
     computed.magnetRange = Math.max(1, computed.magnetRange);
+    computed.visionRange = Math.max(20, computed.visionRange);
+    computed.targetingRange = Math.max(10, computed.targetingRange);
     computed.lootMultiplier = Math.max(1, computed.lootMultiplier);
     computed.isHoming = computed.projectileType === 'missile';
+    computed.manualGunHeatPerShotMult = Math.max(0.12, Math.min(1, computed.manualGunHeatPerShotMult));
+    computed.manualGunOverheatDurationMult = Math.max(
+      0.18,
+      Math.min(1, computed.manualGunOverheatDurationMult)
+    );
 
     // Clamp enemy modifier multipliers
     for (const type of ENEMY_TYPES) {
@@ -159,6 +182,11 @@ export class UpgradeSystem {
     }
 
     applyStellarNovaFromTree(computed, unlocked);
+
+    // --- Momentum Engine: stellarDustRate scales with current speed ---
+    if (computed.momentumEngineActive) {
+      computed.stellarDustRate *= computed.speed / PLAYER.BASE_SPEED;
+    }
 
     // --- Register triggers ---
     this._unregisterTriggers();
@@ -318,8 +346,13 @@ export class UpgradeSystem {
             if (rem > 0) return;
             this._triggerCooldowns.set(cooldownKey, trigger.cooldown);
           }
-          // Chance check
-          if (trigger.chance !== undefined && Math.random() > trigger.chance) return;
+          // Chance check (supports number or { base, perLevel } object)
+          if (trigger.chance !== undefined) {
+            const chance = (typeof trigger.chance === 'object')
+              ? Math.min(1, trigger.chance.base + trigger.chance.perLevel * (level - 1))
+              : trigger.chance;
+            if (Math.random() > chance) return;
+          }
           // Condition check
           if (trigger.condition) {
             // Special: isCrit comes from eventData
@@ -362,7 +395,8 @@ export class UpgradeSystem {
         break;
       }
       case 'emit_damage': {
-        const pos = eventData?.enemy?.group?.position;
+        // Use enemy position if available, else fall back to player world position
+        const pos = eventData?.enemy?.group?.position ?? this._state?._playerWorldPos;
         if (pos) {
           eventBus.emit('trigger:emit_damage', {
             position: pos.clone(),
@@ -370,6 +404,18 @@ export class UpgradeSystem {
             radius: action.radius || 3,
           });
         }
+        break;
+      }
+      case 'apply_status': {
+        const enemy = eventData?.enemy;
+        if (!enemy?.active) break;
+        const dps = (typeof action.dps === 'object')
+          ? action.dps.base + action.dps.perLevel * (level - 1)
+          : (action.dps || 0);
+        const slowMult = (typeof action.slowMult === 'object')
+          ? action.slowMult.base + action.slowMult.perLevel * (level - 1)
+          : (action.slowMult ?? 1);
+        enemy.applyStatus(action.statusType, { dps, mult: slowMult, duration: action.duration || 3 });
         break;
       }
       case 'add_currency': {
@@ -399,6 +445,9 @@ export class UpgradeSystem {
     const p = state.player;
     if (computed.hpRegen > 0 && p.hp < computed.maxHp) {
       p.hp = Math.min(computed.maxHp, p.hp + computed.hpRegen * delta);
+    } else if (computed.hpRegen < 0 && p.hp > 1) {
+      // HP drain — never kills outright (floor at 1 HP)
+      p.hp = Math.max(1, p.hp + computed.hpRegen * delta);
     }
     if (computed.shieldRegen > 0 && p.shieldHp < computed.maxShieldHp) {
       p.shieldHp = Math.min(computed.maxShieldHp, p.shieldHp + computed.shieldRegen * delta);

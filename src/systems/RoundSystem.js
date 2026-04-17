@@ -32,8 +32,24 @@ export class RoundSystem {
     this._unsubEnemyKilled = eventBus.on(EVENTS.ENEMY_KILLED, onKilled);
   }
 
+  /**
+   * Debug menu: spawn a pack of `typeName` at current tier. Returns spawned list, or `null` if not in combat.
+   */
+  debugSpawn(typeName, computed = null) {
+    const state = this._state;
+    if (!state || state.round.phase !== 'combat') return null;
+    const tier = state.round.current;
+    const newEnemies = this._factory.spawnByType(typeName, tier, this._scene, computed);
+    for (const e of newEnemies) {
+      this._enemies.push(e);
+      eventBus.emit(EVENTS.ENEMY_SPAWNED, { enemy: e });
+    }
+    return newEnemies;
+  }
+
   /** Remove combat entities from the scene without awarding loot (e.g. debug reset). */
   purgeCombatWorld() {
+    if (this._state?.round) this._state.round.manualFocusEnemyId = null;
     this._clearEnemies();
     this._clearLoot();
     for (const exp of this._explosions) {
@@ -51,6 +67,7 @@ export class RoundSystem {
     const state = this._state;
     this._syncTierFromDistance();
     state.round.phase = 'combat';
+    state.round.manualFocusEnemyId = null;
     state.roundLoot = {};
     this._spawnTimer = 0;
     this._clearLoot();
@@ -123,7 +140,7 @@ export class RoundSystem {
     if (idx !== -1) this._enemies.splice(idx, 1);
 
     state.round.enemiesDefeated++;
-    state.round.totalEnemiesDefeated++;
+    state.round.killsThisRun++;
     if (enemy.type === 'boss') {
       state.round.bossesDefeated++;
     }
@@ -167,13 +184,14 @@ export class RoundSystem {
     }
 
     const speedScale = (computed?.speed ?? PLAYER.BASE_SPEED) / PLAYER.BASE_SPEED;
+    const visionRange = computed?.visionRange ?? Infinity;
     for (let i = this._enemies.length - 1; i >= 0; i--) {
       const e = this._enemies[i];
       if (!e.active) {
         this._enemies.splice(i, 1);
         continue;
       }
-      e.update(delta, playerPos, speedScale);
+      e.update(delta, playerPos, speedScale, visionRange, this._scene.camera);
     }
 
     const tier = state.round.current;

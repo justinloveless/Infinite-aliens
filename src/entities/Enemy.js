@@ -1,4 +1,12 @@
 import * as THREE from 'three';
+import { eventBus, EVENTS } from '../core/EventBus.js';
+
+/** Base orientation offsets — modified by DebugMenuUI. */
+export const reticleDebug = {
+  offsetX: Math.PI / 2,
+  offsetY: 0,
+  offsetZ: 0,
+};
 
 export class Enemy {
   constructor(def, round, scene, computed = null) {
@@ -31,15 +39,22 @@ export class Enemy {
       (allMod.damageReceivedMult ?? 1) * (typeMod.damageReceivedMult ?? 1);
     this.contactDamage = def.baseDamage;
     this.attackSpeed = def.attackSpeed || 0;
-    this._attackTimer = 0;
+    // Desync ranged volleys (shots/sec → random phase in [0, interval))
+    this._attackTimer =
+      this.attackSpeed > 0 ? Math.random() / this.attackSpeed : 0;
     this._behaviorTimer = 0;
     this._zigzagDir = 1;
     this._keepRangeDist = def.keepRangeDist || 12;
 
     this.active = true;
+    this.statusEffects = []; // [{ type, remaining, dps?, mult? }]
+    this._burnTickTimer = 0;
     this.group = new THREE.Group();
+    this._spinGroup = new THREE.Group();
+    this.group.add(this._spinGroup);
     this._buildMesh(def);
     this._buildHpBar();
+    this._buildTargetReticle(def.collisionRadius, def.scale || 1);
     scene.groups.enemies.add(this.group);
 
     // Random spawn position
@@ -59,7 +74,7 @@ export class Enemy {
     });
 
     const mesh = new THREE.Mesh(def.geometry.clone(), mat);
-    this.group.add(mesh);
+    this._spinGroup.add(mesh);
     this._bodyMesh = mesh;
 
     // Eyes
@@ -69,12 +84,53 @@ export class Enemy {
       [-0.15, 0.15].forEach(x => {
         const eye = new THREE.Mesh(eyeGeo, eyeMat);
         eye.position.set(x, 0.15, -def.eyeZ || -0.3);
-        this.group.add(eye);
+        this._spinGroup.add(eye);
       });
     }
 
     // Scale
     this.group.scale.setScalar(def.scale || 1);
+  }
+
+  _buildTargetReticle(collisionRadius, scale) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0x00f5ff });
+    this._reticle = new THREE.Group();
+    this._reticleAngle = 0;
+
+    // Local-space radius (un-do parent scale so world size is consistent)
+    const r = (collisionRadius / scale) * 1.35;
+    const armLen = r * 0.45;
+    const thick = 0.055 / scale;
+
+    const corners = [
+      { cx:  r, cz:  r },
+      { cx: -r, cz:  r },
+      { cx:  r, cz: -r },
+      { cx: -r, cz: -r },
+    ];
+
+    for (const c of corners) {
+      const sgnX = Math.sign(c.cx);
+      const sgnZ = Math.sign(c.cz);
+
+      // Arm along X pointing outward
+      const hMesh = new THREE.Mesh(new THREE.BoxGeometry(armLen, thick, thick), mat);
+      hMesh.position.set(c.cx + sgnX * armLen / 2, 0, c.cz);
+      this._reticle.add(hMesh);
+
+      // Arm along Z pointing outward
+      const vMesh = new THREE.Mesh(new THREE.BoxGeometry(thick, thick, armLen), mat);
+      vMesh.position.set(c.cx, 0, c.cz + sgnZ * armLen / 2);
+      this._reticle.add(vMesh);
+    }
+
+    this._reticle.position.y = 0.25 / scale;
+    this._reticle.visible = false;
+    this.group.add(this._reticle);
+  }
+
+  setTargeted(val) {
+    if (this._reticle) this._reticle.visible = !!val;
   }
 
   _buildHpBar() {
@@ -112,6 +168,18 @@ export class Enemy {
     return false;
   }
 
+  /** Apply or refresh a status effect. type: 'burn' | 'slow' */
+  applyStatus(type, { dps = 0, mult = 1, duration = 3 } = {}) {
+    const existing = this.statusEffects.find(s => s.type === type);
+    if (existing) {
+      existing.remaining = duration;
+      if (type === 'burn') existing.dps = Math.max(existing.dps, dps);
+      if (type === 'slow') existing.mult = Math.min(existing.mult, mult);
+    } else {
+      this.statusEffects.push({ type, remaining: duration, dps, mult });
+    }
+  }
+
   _updateHpBar() {
     const ratio = this.hp / this.maxHp;
     this._hpBar.scale.x = Math.max(0.01, ratio);
@@ -121,15 +189,46 @@ export class Enemy {
     else this._hpBarMat.color.setHex(0xff2200);
   }
 
-  update(delta, playerPos, speedScale = 1) {
+  update(delta, playerPos, speedScale = 1, visionRange = Infinity, camera = null) {
     if (!this.active) return;
+
+    // Vision range: hide group when enemy is beyond sensor range
+    const dx0 = this.group.position.x - playerPos.x;
+    const dz0 = this.group.position.z - (playerPos.z ?? 0);
+    const distSq = dx0 * dx0 + dz0 * dz0;
+    this.group.visible = distSq <= visionRange * visionRange;
+
+    // Target reticle: fixed offsets + constant Y-axis auto-spin (independent of body).
+    if (this._reticle?.visible) {
+      this._reticleAngle += delta * 1.1;
+      this._reticle.rotation.x = reticleDebug.offsetX;
+      this._reticle.rotation.y = reticleDebug.offsetY + this._reticleAngle;
+      this._reticle.rotation.z = reticleDebug.offsetZ;
+    }
+
+    // ---- Tick status effects ----
+    let slowMult = 1;
+    this._burnTickTimer += delta;
+    for (let i = this.statusEffects.length - 1; i >= 0; i--) {
+      const s = this.statusEffects[i];
+      s.remaining -= delta;
+      if (s.remaining <= 0) { this.statusEffects.splice(i, 1); continue; }
+      if (s.type === 'slow') slowMult = Math.min(slowMult, s.mult);
+      if (s.type === 'burn' && this._burnTickTimer >= 0.5) {
+        const burnDmg = Math.max(1, Math.ceil(s.dps * 0.5));
+        const died = this.takeDamage(burnDmg);
+        eventBus.emit(EVENTS.ENEMY_DAMAGED, { enemy: this, damage: burnDmg, isCrit: false });
+        if (died) { eventBus.emit(EVENTS.ENEMY_KILLED, { enemy: this }); return; }
+      }
+    }
+    if (this._burnTickTimer >= 0.5) this._burnTickTimer -= 0.5;
 
     this._behaviorTimer += delta;
 
     const dx = playerPos.x - this.group.position.x;
     const dz = playerPos.z - this.group.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    const spd = this.speed * speedScale;
+    const spd = this.speed * speedScale * slowMult;
 
     switch (this.behaviorType) {
       case 'charge':
@@ -187,19 +286,21 @@ export class Enemy {
             this.group.position.z += (dz / dist) * spd * delta;
           }
         }
-        // Boss spin
-        this.group.rotation.y += delta * 0.8;
+        // Boss spin (body only — reticle / HP stay outside _spinGroup)
+        this._spinGroup.rotation.y += delta * 0.8;
         break;
       }
     }
 
-    // Billboard HP bar to camera
-    this._hpTrack.rotation.copy(this.group.parent.parent ?
-      this.group.parent.parent.rotation : new THREE.Euler());
+    // HP bar: match camera orientation (no roll from enemy body)
+    if (camera) {
+      this._hpTrack.quaternion.copy(camera.quaternion);
+      this._hpBar.quaternion.copy(camera.quaternion);
+    }
 
-    // Slow rotation for variety
+    // Slow rotation for variety (body mesh + eyes only)
     if (this.type !== 'boss') {
-      this.group.rotation.y += delta * 0.6;
+      this._spinGroup.rotation.y += delta * 0.6;
     }
   }
 

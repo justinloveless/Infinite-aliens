@@ -43,13 +43,15 @@ export class Starfield {
     });
   }
 
-  update(delta) {
+  /** @param {number} speedScale - 1 = base run speed; matches player stat `speed` / BASE_SPEED during combat */
+  update(delta, speedScale = 1) {
+    const s = Math.max(0, speedScale);
     this.layers.forEach(layer => {
       const { points, def, positions } = layer;
       const posAttr = points.geometry.getAttribute('position');
 
       for (let i = 0; i < positions.length / 3; i++) {
-        positions[i * 3 + 2] += def.speed * delta;
+        positions[i * 3 + 2] += def.speed * delta * s;
         // Recycle stars that pass the camera
         if (positions[i * 3 + 2] > 15) {
           positions[i * 3]     = (Math.random() - 0.5) * 80;

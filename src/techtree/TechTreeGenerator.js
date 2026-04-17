@@ -1,57 +1,6 @@
 import { TechNode } from './TechNode.js';
-import { NODE_TEMPLATES, STARTER_NODES, getCategoryWeights } from './TechNodeTemplates.js';
+import upgradesData from '../data/upgrades.json';
 import { TECH_TREE } from '../constants.js';
-
-// Mulberry32 seeded PRNG - fast, deterministic
-function makePRNG(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s |= 0; s = (s + 0x6D2B79F5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function weightedPick(weights, rng) {
-  const entries = Object.entries(weights).filter(([, w]) => w > 0);
-  if (entries.length === 0) return null; // all weights zero — caller must handle
-  const total = entries.reduce((s, [, w]) => s + w, 0);
-  let r = rng() * total;
-  for (const [k, w] of entries) {
-    r -= w;
-    if (r <= 0) return k;
-  }
-  return entries[entries.length - 1][0];
-}
-
-function pickRandom(arr, rng) {
-  return arr[Math.floor(rng() * arr.length)];
-}
-
-// Early-game only scrap drops reliably, so we filter ring 1 (the first paid
-// ring) down to scrap-only templates where possible.
-function isScrapOnlyTemplate(template) {
-  const keys = Object.keys(template.baseCost);
-  return keys.length > 0 && keys.every((k) => k === 'scrapMetal');
-}
-
-function filterScrapOnlyPool(pool) {
-  const scrapOnly = pool.filter(isScrapOnlyTemplate);
-  return scrapOnly.length > 0 ? scrapOnly : pool;
-}
-
-// Normalize an angle to [0, 2π)
-function normAngle(a) {
-  const twoPi = Math.PI * 2;
-  return ((a % twoPi) + twoPi) % twoPi;
-}
-
-// Shortest angular distance between two angles (absolute)
-function angularDist(a, b) {
-  const d = Math.abs(normAngle(a) - normAngle(b));
-  return Math.min(d, Math.PI * 2 - d);
-}
 
 // Ring 0 starter anchors: cardinal positions, one per non-special category.
 // Top=weapon, Right=defense, Bottom=utility, Left=passive.
@@ -62,230 +11,187 @@ const STARTER_ANCHORS = [
   { category: 'passive', angle: Math.PI },        // left
 ];
 
+const ADJACENT_PAIR_KEYS = new Set([
+  'weapon|defense', 'defense|weapon',
+  'defense|utility', 'utility|defense',
+  'utility|passive', 'passive|utility',
+  'passive|weapon', 'weapon|passive',
+]);
+
+function areAdjacentCategories(a, b) {
+  return ADJACENT_PAIR_KEYS.has(`${a}|${b}`);
+}
+
+function angleMidpointBetweenCategories(catA, catB) {
+  const ax = STARTER_ANCHORS.find((x) => x.category === catA)?.angle ?? 0;
+  const bx = STARTER_ANCHORS.find((x) => x.category === catB)?.angle ?? 0;
+  const vx = Math.cos(ax) + Math.cos(bx);
+  const vy = Math.sin(ax) + Math.sin(bx);
+  if (Math.abs(vx) < 1e-6 && Math.abs(vy) < 1e-6) return ax;
+  return Math.atan2(vy, vx);
+}
+
+/** Canonical edge keys between adjacent starters (fixed order for placement). */
+const DIAGONAL_KEYS = ['weapon|defense', 'defense|utility', 'utility|passive', 'passive|weapon'];
+
+function canonicalDiagonalKey(catA, catB) {
+  if (!catA || !catB || !areAdjacentCategories(catA, catB)) return null;
+  const pair = `${catA}|${catB}`;
+  const rev = `${catB}|${catA}`;
+  if (DIAGONAL_KEYS.includes(pair)) return pair;
+  if (DIAGONAL_KEYS.includes(rev)) return rev;
+  return null;
+}
+
+/** Mid-angle + branch endpoints for each inter-cardinal gap (special "diagonals"). */
+const DIAGONAL_SPECS = DIAGONAL_KEYS.map((key) => {
+  const [c1, c2] = key.split('|');
+  return {
+    key,
+    c1,
+    c2,
+    angle: angleMidpointBetweenCategories(c1, c2),
+  };
+});
+
+/** Evenly space `count` angles across [anchor − slice/2, anchor + slice/2]. */
+function anglesInBranchSlice(anchorAngle, count, sliceRad) {
+  if (count <= 0) return [];
+  const half = sliceRad / 2;
+  const lo = anchorAngle - half;
+  if (count === 1) return [anchorAngle];
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1);
+    out.push(lo + t * sliceRad);
+  }
+  return out;
+}
+
 export class TechTreeGenerator {
-  constructor(baseSeed) {
-    this._baseSeed = baseSeed;
+  /**
+   * @param {*} _baseSeed   unused (kept for API compat)
+   * @param {object[]|null} customNodes  override the full node list (e.g. with dev extras)
+   */
+  constructor(_baseSeed, customNodes = null) {
+    this._customNodes = customNodes; // null → use upgradesData.nodes
     this._generatedNodes = {}; // nodeId -> TechNode
     this._tiers = [];          // tiers[ring] = [nodeId, ...]
     this._angles = {};         // nodeId -> angle on its ring
-    this._usedTemplateIds = new Set(); // globally track which templates have been placed
+    this._built = false;
   }
 
-  // Generate all rings up to (and including) the given ring
-  generateUpToTier(targetRing, unlockedCounts = {}) {
-    const startRing = this._tiers.length;
-    for (let ring = startRing; ring <= targetRing; ring++) {
-      this._generateRing(ring, unlockedCounts);
+  /** Build all nodes (finite tree). No-op after the first call. */
+  generateUpToTier(_targetRing, _unlockedCounts = {}) {
+    if (!this._built) {
+      this._buildAllNodes();
+      this._built = true;
     }
     return this._generatedNodes;
   }
 
-  _generateRing(ring, unlockedCounts) {
-    const rng = makePRNG(this._baseSeed + ring * TECH_TREE.TIER_PRIME);
+  // ─── Private: two-pass finite builder ──────────────────────────────────────
 
-    if (ring === 0) {
-      this._generateStarterRing();
-      return;
+  _buildAllNodes() {
+    // Flatten all nodes from JSON (or custom override) into a map: id -> { template, category }
+    const sourceNodes = this._customNodes ?? upgradesData.nodes;
+    const flatTemplates = {};
+    for (const node of sourceNodes) {
+      flatTemplates[node.id] = { template: node, category: node.category };
     }
 
-    // Determine node count for this ring
-    const count = TECH_TREE.MIN_NODES_PER_RING +
-      Math.floor(rng() * (TECH_TREE.MAX_NODES_PER_RING - TECH_TREE.MIN_NODES_PER_RING + 1));
+    // Pass 1: compute ring for every template via topological recursion
+    const ringMap = this._computeRings(flatTemplates);
+    const maxRing = Math.max(...Object.values(ringMap));
 
-    const radius = TECH_TREE.CENTER_RADIUS + ring * TECH_TREE.RING_SPACING;
-    // Offset each ring by a fraction of its slot so rings don't form straight radial lines
-    const angleOffset = -Math.PI / 2 + ring * 0.37 + (rng() - 0.5) * 0.3;
+    // Initialize tiers array
+    for (let r = 0; r <= maxRing; r++) {
+      this._tiers.push([]);
+    }
 
-    const prevRing = this._tiers[ring - 1] || [];
-    const ringNodes = [];
-    const ringAngles = [];
+    // Group template IDs by (ring, category)
+    const groups = {}; // groups[ring][category] = [templateId, ...]
+    for (const [id, { category }] of Object.entries(flatTemplates)) {
+      const ring = ringMap[id];
+      if (!groups[ring]) groups[ring] = {};
+      if (!groups[ring][category]) groups[ring][category] = [];
+      groups[ring][category].push(id);
+    }
 
-    // First pass: create nodes with template + position
-    for (let i = 0; i < count; i++) {
-      const angle = angleOffset + (i / count) * Math.PI * 2;
+    // Pass 2: create nodes ring by ring
+    for (let r = 0; r <= maxRing; r++) {
+      const radius = TECH_TREE.CENTER_RADIUS + r * TECH_TREE.RING_SPACING;
+      const sliceRad = TECH_TREE.BRANCH_SLICE_RAD;
 
-      // Build available template pools per category (globally unused templates only)
-      const availPools = {};
-      for (const [cat, templates] of Object.entries(NODE_TEMPLATES)) {
-        let pool = templates.filter(t => !this._usedTemplateIds.has(t.id));
-        // Ring 1 is the first paid ring and only scrap drops reliably that early,
-        // so prefer scrap-only templates there.
-        if (ring === 1) pool = filterScrapOnlyPool(pool);
-        availPools[cat] = pool;
+      // Main branch categories
+      for (const anchor of STARTER_ANCHORS) {
+        const cat = anchor.category;
+        const ids = (groups[r]?.[cat]) || [];
+        const angles = anglesInBranchSlice(anchor.angle, ids.length, sliceRad);
+        ids.forEach((id, s) => {
+          const { template } = flatTemplates[id];
+          const position = this._polarToPosition(radius, angles[s]);
+          this._createNode(r, template, cat, position);
+          this._angles[id] = angles[s];
+        });
       }
 
-      // Skip this slot if all templates across all categories are exhausted
-      const anyAvailable = Object.values(availPools).some(p => p.length > 0);
-      if (!anyAvailable) break;
-
-      // Pick category with sector bias (zero-weight exhausted categories)
-      const category = this._pickCategoryForAngle(angle, ring, rng, unlockedCounts, ringNodes, availPools);
-
-      // No valid category available (e.g. only specials remain but ring < 4) — skip slot
-      if (!category) break;
-
-      // Pick template from the available pool for that category
-      let pool = availPools[category];
-      if (pool.length === 0) pool = NODE_TEMPLATES[category].filter(t => !this._usedTemplateIds.has(t.id));
-      if (pool.length === 0) pool = NODE_TEMPLATES[category]; // absolute fallback (shouldn't happen)
-      const template = pickRandom(pool, rng);
-      this._usedTemplateIds.add(template.id);
-
-      const position = this._polarToPosition(radius, angle);
-      const node = this._createNode(ring, i, template, category, position);
-      this._angles[node.id] = angle;
-      ringNodes.push(node.id);
-      ringAngles.push(angle);
-    }
-
-    // Second pass: assign inward connections (each node to nearest-angle node on prev ring)
-    if (prevRing.length > 0) {
-      const prevAngles = prevRing.map(id => this._angles[id]);
-      for (let i = 0; i < ringNodes.length; i++) {
-        const node = this._generatedNodes[ringNodes[i]];
-        const angle = ringAngles[i];
-
-        // Closest inward neighbor by angular distance
-        const closestIdx = this._closestAngleIndex(angle, prevAngles);
-        node.prerequisites.push(prevRing[closestIdx]);
-
-        // Optional second inward neighbor (creates crossing/branching paths)
-        if (prevRing.length > 1 && rng() < TECH_TREE.CROSS_CONNECT_CHANCE) {
-          const secondIdx = this._closestAngleIndex(angle, prevAngles, closestIdx);
-          if (secondIdx !== closestIdx) {
-            node.prerequisites.push(prevRing[secondIdx]);
-          }
+      // Special nodes: group by diagonal, then spread within that diagonal's arc
+      const specialIds = (groups[r]?.['special']) || [];
+      if (specialIds.length > 0) {
+        // Bucket specials by diagonal key
+        const diagBuckets = {};
+        for (const id of specialIds) {
+          const { template } = flatTemplates[id];
+          const [a, b] = template.betweenCategories || [];
+          const key = canonicalDiagonalKey(a, b);
+          if (!diagBuckets[key]) diagBuckets[key] = [];
+          diagBuckets[key].push(id);
+        }
+        for (const spec of DIAGONAL_SPECS) {
+          const bucket = diagBuckets[spec.key] || [];
+          const angles = anglesInBranchSlice(spec.angle, bucket.length, sliceRad);
+          bucket.forEach((id, s) => {
+            const { template } = flatTemplates[id];
+            const position = this._polarToPosition(radius, angles[s]);
+            this._createNode(r, template, 'special', position);
+            this._angles[id] = angles[s];
+          });
         }
       }
     }
 
-    // Third pass: lateral connections around the ring (bidirectional)
-    if (ringNodes.length > 1) {
-      for (let i = 0; i < ringNodes.length; i++) {
-        if (rng() < TECH_TREE.LATERAL_CONNECT_CHANCE) {
-          const nextI = (i + 1) % ringNodes.length;
-          const a = this._generatedNodes[ringNodes[i]];
-          const b = this._generatedNodes[ringNodes[nextI]];
-          if (!a.prerequisites.includes(b.id)) a.prerequisites.push(b.id);
-          if (!b.prerequisites.includes(a.id)) b.prerequisites.push(a.id);
-        }
+    // Connect neighboring starters laterally (so the hub feels connected)
+    const starterIds = STARTER_ANCHORS.map(a => `starter_${a.category}`);
+    for (let i = 0; i < starterIds.length; i++) {
+      const nextI = (i + 1) % starterIds.length;
+      const a = this._generatedNodes[starterIds[i]];
+      const b = this._generatedNodes[starterIds[nextI]];
+      if (a && b) {
+        if (!a.prerequisites.includes(b.id)) a.prerequisites.push(b.id);
+        if (!b.prerequisites.includes(a.id)) b.prerequisites.push(a.id);
       }
     }
-
-    this._tiers.push(ringNodes);
   }
 
-  _generateStarterRing() {
-    const radius = TECH_TREE.CENTER_RADIUS;
-    const ringNodes = [];
-
-    STARTER_ANCHORS.forEach((anchor, idx) => {
-      const template = STARTER_NODES[anchor.category];
-      if (!template) return;
-
-      const position = this._polarToPosition(radius, anchor.angle);
-      // Starters use their own id namespace so seed collisions can't rename them
-      const id = `starter_${anchor.category}`;
-
-      const node = new TechNode({
-        id,
-        templateId: template.id,
-        tier: 0,
-        name: template.name,
-        description: template.description,
-        category: anchor.category,
-        effects: template.effects.map(e => ({ ...e })),
-        maxLevel: template.maxLevel,
-        currentLevel: 0,
-        baseCost: { ...template.baseCost }, // empty = free
-        prerequisites: [],                   // always available
-        position,
-        icon: template.icon,
-        triggers: template.triggers || [],
-        synergies: template.synergies || [],
-        presentation: template.presentation || null,
-        costModifiers: template.costModifiers || [],
-        visual: template.visual || null,
-      });
-
-      this._generatedNodes[id] = node;
-      this._angles[id] = anchor.angle;
-      ringNodes.push(id);
-    });
-
-    // Connect neighboring starters so the center hub feels connected
-    for (let i = 0; i < ringNodes.length; i++) {
-      const nextI = (i + 1) % ringNodes.length;
-      const a = this._generatedNodes[ringNodes[i]];
-      const b = this._generatedNodes[ringNodes[nextI]];
-      if (!a.prerequisites.includes(b.id)) a.prerequisites.push(b.id);
-      if (!b.prerequisites.includes(a.id)) b.prerequisites.push(a.id);
-    }
-
-    this._tiers.push(ringNodes);
-  }
-
-  // Place a node so its center sits at (cos(angle), sin(angle)) * radius
-  _polarToPosition(radius, angle) {
-    return {
-      x: Math.cos(angle) * radius - TECH_TREE.NODE_W / 2,
-      y: Math.sin(angle) * radius - TECH_TREE.NODE_H / 2,
+  /** Compute ring for every template via memoized topological recursion. */
+  _computeRings(flatTemplates) {
+    const rings = {};
+    const getRing = (id) => {
+      if (id in rings) return rings[id];
+      const entry = flatTemplates[id];
+      const prereqs = entry?.template?.prereqs;
+      if (!prereqs?.length) return (rings[id] = 0);
+      return (rings[id] = Math.max(...prereqs.map(getRing)) + 1);
     };
+    for (const id of Object.keys(flatTemplates)) getRing(id);
+    return rings;
   }
 
-  // Category bias: each cardinal sector prefers a category
-  // weapon near top (-π/2), defense near right (0), utility near bottom (π/2), passive near left (π)
-  _pickCategoryForAngle(angle, ring, rng, unlockedCounts, ringSoFar, availPools = null) {
-    const baseWeights = getCategoryWeights(ring, unlockedCounts);
+  // ─── Node creation ──────────────────────────────────────────────────────────
 
-    const sectorPref = this._categoryForSector(angle);
-    if (sectorPref && baseWeights[sectorPref] != null) {
-      baseWeights[sectorPref] = Math.floor(baseWeights[sectorPref] * 2.5);
-    }
-
-    // Limit specials to 1 per ring
-    const hasSpecial = ringSoFar.some(id => this._generatedNodes[id]?.category === 'special');
-    if (hasSpecial) baseWeights.special = 0;
-
-    // Zero out categories whose templates are all used up
-    if (availPools) {
-      for (const cat of Object.keys(baseWeights)) {
-        if (!availPools[cat] || availPools[cat].length === 0) {
-          baseWeights[cat] = 0;
-        }
-      }
-    }
-
-    return weightedPick(baseWeights, rng);
-  }
-
-  _categoryForSector(angle) {
-    // Divide the circle into 4 quadrants centered on each cardinal anchor.
-    // weapon centered at -π/2, defense at 0, utility at π/2, passive at π.
-    const a = normAngle(angle);
-    // Shift so weapon sector starts at 0
-    const shifted = normAngle(a + Math.PI / 2 + Math.PI / 4); // now weapon is [0, π/2)
-    const sector = Math.floor(shifted / (Math.PI / 2));
-    return ['weapon', 'defense', 'utility', 'passive'][sector];
-  }
-
-  // Find the index in `angles` whose value is closest to `target`, optionally skipping an index
-  _closestAngleIndex(target, angles, skipIdx = -1) {
-    let bestIdx = -1;
-    let bestDist = Infinity;
-    for (let i = 0; i < angles.length; i++) {
-      if (i === skipIdx) continue;
-      const d = angularDist(target, angles[i]);
-      if (d < bestDist) {
-        bestDist = d;
-        bestIdx = i;
-      }
-    }
-    return bestIdx === -1 ? 0 : bestIdx;
-  }
-
-  _createNode(ring, idx, template, category, position) {
-    const id = `node_${ring}_${idx}`;
+  _createNode(ring, template, category, position) {
+    const id = template.id; // stable templateId as node ID
 
     // Scale costs with ring (every 2 rings = 2x more expensive)
     const costScale = Math.pow(TECH_TREE.COST_SCALING_BASE, Math.floor(ring / 2));
@@ -293,7 +199,7 @@ export class TechTreeGenerator {
       Object.entries(template.baseCost).map(([k, v]) => [k, Math.ceil(v * costScale)])
     );
 
-    // Operators that should not be scaled by ring depth (discrete / fixed-value)
+    // Operators that should not be scaled by ring depth
     const FIXED_OPS = new Set(['min', 'max', 'append', 'toggle', 'add_flat', 'set', 'special', 'add_weapon']);
 
     // Slight effect bonus at deeper rings
@@ -309,10 +215,11 @@ export class TechTreeGenerator {
       return { ...e };
     });
 
-    // Milestone: every 10th ring gets a dramatically enhanced first node
+    // Milestone: every 10th ring, weapon-branch center node is dramatically enhanced
     let name = template.name;
     let description = template.description;
-    if (ring > 0 && ring % 10 === 0 && idx === 0) {
+    const isMilestoneSlot = category === 'weapon' && ring > 0 && ring % 10 === 0;
+    if (isMilestoneSlot) {
       name = `⚡ ${name} [ENHANCED]`;
       description = `[MILESTONE] ${description}`;
       scaledEffects.forEach(e => {
@@ -332,10 +239,9 @@ export class TechTreeGenerator {
       maxLevel: template.maxLevel,
       currentLevel: 0,
       baseCost: scaledCost,
-      prerequisites: [],
+      prerequisites: template.prereqs ? [...template.prereqs] : [],
       position,
       icon: template.icon,
-      // Pass through new grammar fields unchanged (no ring scaling)
       triggers: template.triggers || [],
       synergies: template.synergies || [],
       presentation: template.presentation || null,
@@ -344,7 +250,16 @@ export class TechTreeGenerator {
     });
 
     this._generatedNodes[id] = node;
+    this._tiers[ring].push(id);
     return node;
+  }
+
+  // Place a node so its center sits at (cos(angle), sin(angle)) * radius
+  _polarToPosition(radius, angle) {
+    return {
+      x: Math.cos(angle) * radius - TECH_TREE.NODE_W / 2,
+      y: Math.sin(angle) * radius - TECH_TREE.NODE_H / 2,
+    };
   }
 
   // No-op: positions are authoritative at creation time in circular layout
@@ -352,6 +267,7 @@ export class TechTreeGenerator {
 
   get nodes() { return this._generatedNodes; }
   get tiers() { return this._tiers; }
+  get categoryMeta() { return upgradesData.categories; }
 
   getNode(id) { return this._generatedNodes[id]; }
   getNodesForTier(ring) { return (this._tiers[ring] || []).map(id => this._generatedNodes[id]).filter(Boolean); }

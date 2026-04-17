@@ -13,12 +13,15 @@ export class CombatSystem {
     this._enemies = [];
     this._lootDrops = [];
     this._stellarNovaTimer = 0;
+    this._currentTarget = null;
 
     // Manual gun heat system
     this._manualHeat = 0;
     this._isOverheated = false;
     this._overheatCooldownTimer = 0;
     this._manualFireCooldown = 0;
+    this._enemyShotDir = new THREE.Vector3();
+    this._enemyShotSpawn = new THREE.Vector3();
 
     // Handle AoE damage emitted by upgrade triggers
     eventBus.on('trigger:emit_damage', ({ position, amount, radius }) => {
@@ -47,21 +50,68 @@ export class CombatSystem {
   setEnemies(enemies) { this._enemies = enemies; }
   setLootDrops(drops) { this._lootDrops = drops; }
 
-  _findNearestEnemy(playerPos) {
+  _findNearestEnemy(playerPos, targetingRange = Infinity) {
     let nearest = null;
     let minDist = Infinity;
     for (const e of this._enemies) {
       if (!e.active) continue;
       const d = e.group.position.distanceTo(playerPos);
-      if (d < minDist) { minDist = d; nearest = e; }
+      if (d < minDist && d <= targetingRange) { minDist = d; nearest = e; }
     }
     return nearest;
   }
 
-  _calcDamage(computed) {
+  /**
+   * Manual focus (from Priority Designator) overrides nearest-in-range until that enemy dies.
+   * @param {object[]} enemies
+   * @param {THREE.Vector3} playerPos
+   * @param {object} computed
+   * @param {{ manualFocusEnemyId?: string | null }} [round]
+   */
+  static resolveCombatTarget(enemies, playerPos, computed, round) {
+    const range = computed?.targetingRange ?? Infinity;
+    const manualId =
+      computed?.manualTargetFocusEnabled && round?.manualFocusEnemyId
+        ? round.manualFocusEnemyId
+        : null;
+    if (manualId) {
+      const focused = enemies.find(e => e.active && e.id === manualId);
+      if (focused) return focused;
+      if (round) round.manualFocusEnemyId = null;
+    }
+    let nearest = null;
+    let minDist = Infinity;
+    for (const e of enemies) {
+      if (!e.active) continue;
+      const d = e.group.position.distanceTo(playerPos);
+      if (d < minDist && d <= range) { minDist = d; nearest = e; }
+    }
+    return nearest;
+  }
+
+  _updateTarget(newTarget) {
+    if (newTarget === this._currentTarget) return;
+    if (this._currentTarget) this._currentTarget.setTargeted(false);
+    if (newTarget) newTarget.setTargeted(true);
+    this._currentTarget = newTarget;
+  }
+
+  _calcDamage(computed, state) {
+    let dmg = computed.damage;
+
+    // Resonance Field: +5% damage per 10 kills this run, per level
+    if (computed.resonanceFieldLevel > 0 && state?.round) {
+      const stacks = Math.floor((state.round.killsThisRun || 0) / 10);
+      dmg *= 1 + Math.min(0.5, stacks * 0.05 * computed.resonanceFieldLevel);
+    }
+
+    // Active temporary boosts (e.g. Berserker Protocol)
+    for (const boost of (computed.activeBoosts || [])) {
+      if (boost.stat === 'damage') dmg *= boost.multiplier;
+    }
+
     const isCrit = Math.random() < computed.critChance;
-    const dmg = computed.damage * (isCrit ? computed.critMultiplier : 1);
-    return { damage: Math.ceil(dmg), isCrit };
+    return { damage: Math.ceil(dmg * (isCrit ? computed.critMultiplier : 1)), isCrit };
   }
 
   _getDirection(from, to) {
@@ -72,25 +122,37 @@ export class CombatSystem {
    * Fire the manual cannon straight ahead (-Z). Called from input handlers.
    * Manages heat resource; no-ops when overheated or in non-combat phase.
    */
-  fireManualGun(state, computed, ship) {
+  fireManualGun(state, computed, ship, audioManager) {
     if (!state || state.round.phase !== 'combat') return;
     if (this._isOverheated || this._manualFireCooldown > 0) return;
 
     this._manualFireCooldown = MANUAL_GUN.FIRE_COOLDOWN;
-    this._manualHeat += MANUAL_GUN.HEAT_PER_SHOT;
+    const heatMult = computed?.manualGunHeatPerShotMult ?? 1;
+    this._manualHeat += MANUAL_GUN.HEAT_PER_SHOT * heatMult;
+
+    const heatRatio = this._manualHeat / MANUAL_GUN.HEAT_MAX;
+
+    // Play shot sound pitched up based on heat — cool=0.85x, max heat=1.45x
+    if (audioManager) {
+      const pitchRate = 0.85 + heatRatio * 0.6;
+      audioManager.playAtRate('manualShot', pitchRate);
+    }
 
     if (this._manualHeat >= MANUAL_GUN.HEAT_MAX) {
       this._manualHeat = MANUAL_GUN.HEAT_MAX;
       this._isOverheated = true;
-      this._overheatCooldownTimer = MANUAL_GUN.OVERHEAT_DURATION;
+      const ohMult = computed?.manualGunOverheatDurationMult ?? 1;
+      this._overheatCooldownTimer = MANUAL_GUN.OVERHEAT_DURATION * ohMult;
+      if (audioManager) audioManager.play('manualOverheat');
     }
 
     const pos = ship.group.position.clone();
     pos.z -= 1.0; // muzzle offset
     const dir = new THREE.Vector3(0, 0, -1);
     const dmg = computed?.damage ?? PLAYER.BASE_DAMAGE;
+    const pierces = computed?.projectilePierces ?? 0;
 
-    this._pool.spawn(pos, dir, dmg, false, computed?.projectileType ?? 'laser', true, null);
+    this._pool.spawn(pos, dir, dmg, false, 'manual', true, null, pierces, heatRatio);
     eventBus.emit(EVENTS.MANUAL_FIRED);
   }
 
@@ -104,7 +166,10 @@ export class CombatSystem {
   }
 
   update(delta, state, computed, ship, audioManager) {
-    if (!state || state.round.phase !== 'combat') return;
+    if (!state || state.round.phase !== 'combat') {
+      this._updateTarget(null);
+      return;
+    }
 
     // ---- Manual gun heat tick (always runs during combat) ----
     this._manualHeat = Math.max(0, this._manualHeat - MANUAL_GUN.HEAT_COOL_RATE * delta);
@@ -118,19 +183,35 @@ export class CombatSystem {
     }
 
     const playerPos = ship.group.position;
-    const fireRate = 1 / computed.attackSpeed;
+    // Store player world position for trigger actions (e.g. reactive_plating emit_damage)
+    state._playerWorldPos = playerPos;
 
-    // ---- Advance all timers ----
-    this._attackTimer += delta;
-    for (const weaponType of (computed.extraWeapons || [])) {
-      if (this._extraWeaponTimers[weaponType] === undefined) {
-        this._extraWeaponTimers[weaponType] = 0;
-      }
-      this._extraWeaponTimers[weaponType] += delta;
+    // Apply attackSpeed activeBoosts to fire rate
+    let fireRate = 1 / computed.attackSpeed;
+    for (const boost of (computed.activeBoosts || [])) {
+      if (boost.stat === 'attackSpeed') fireRate /= boost.multiplier;
     }
 
-    // ---- Find nearest enemy once ----
-    const target = this._findNearestEnemy(playerPos);
+    // (fireRate now declared above with boost application)
+
+    // ---- Advance auto-weapon timers (manual nose cannon is separate) ----
+    if (computed.hasAutoFire) {
+      this._attackTimer += delta;
+      for (const weaponType of (computed.extraWeapons || [])) {
+        if (this._extraWeaponTimers[weaponType] === undefined) {
+          this._extraWeaponTimers[weaponType] = 0;
+        }
+        this._extraWeaponTimers[weaponType] += delta;
+      }
+    }
+
+    const target = CombatSystem.resolveCombatTarget(
+      this._enemies,
+      playerPos,
+      computed,
+      state.round
+    );
+    this._updateTarget(target);
 
     // ---- Stellar Nova (periodic AoE + one-shot visuals) ----
     if (computed.stellarNovaLevel > 0 && computed.stellarNovaInterval > 0) {
@@ -147,11 +228,12 @@ export class CombatSystem {
     }
 
     // ---- Primary auto-attack ----
-    if (this._attackTimer >= fireRate) {
+    if (computed.hasAutoFire && this._attackTimer >= fireRate) {
       this._attackTimer = 0;
       if (target) {
+        const pierces = computed.projectilePierces || 0;
         for (let i = 0; i < computed.projectileCount; i++) {
-          const { damage, isCrit } = this._calcDamage(computed);
+          const { damage, isCrit } = this._calcDamage(computed, state);
 
           // Spread for multi-shot
           const baseDir = this._getDirection(playerPos, target.group.position);
@@ -168,7 +250,8 @@ export class CombatSystem {
             isCrit,
             computed.projectileType,
             true,
-            computed.isHoming ? target : null
+            computed.isHoming ? target : null,
+            pierces
           );
         }
         if (audioManager) {
@@ -180,14 +263,14 @@ export class CombatSystem {
     }
 
     // ---- Extra weapons (laser_type / missile_type / plasma_type nodes) ----
-    if (target && computed.extraWeapons && computed.extraWeapons.length > 0) {
+    if (computed.hasAutoFire && target && computed.extraWeapons && computed.extraWeapons.length > 0) {
       for (const weaponType of computed.extraWeapons) {
         if (weaponType === 'beam') continue; // handled by BeamLaserSystem
         const rateMultiplier = CombatSystem.EXTRA_WEAPON_RATE[weaponType] ?? 2.0;
         const extraFireRate = fireRate * rateMultiplier;
         if (this._extraWeaponTimers[weaponType] >= extraFireRate) {
           this._extraWeaponTimers[weaponType] = 0;
-          const { damage, isCrit } = this._calcDamage(computed);
+          const { damage, isCrit } = this._calcDamage(computed, state);
           const spawnPos = ship.getTurretWorldPosition(weaponType);
           const dir = this._getDirection(spawnPos, target.group.position);
           this._pool.spawn(
@@ -211,38 +294,94 @@ export class CombatSystem {
       this._clickCooldown -= delta;
     }
 
+    // ---- Enemy ranged attacks (attackSpeed > 0, e.g. sniper) ----
+    // Same band as Enemy keepRange AI: hold between _keepRangeDist and _keepRangeDist + 4.
+    const KEEP_RANGE_OUTER = 4;
+    for (const enemy of this._enemies) {
+      if (!enemy.active) continue;
+      const asp = enemy.attackSpeed || 0;
+      if (asp <= 0) continue;
+      if (!enemy.group.visible) continue;
+
+      const ex = enemy.group.position.x;
+      const ey = enemy.group.position.y;
+      const ez = enemy.group.position.z;
+      const pz = playerPos.z ?? 0;
+      const dx = playerPos.x - ex;
+      const dz = pz - ez;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const rMin = enemy._keepRangeDist;
+      const rMax = enemy._keepRangeDist + KEEP_RANGE_OUTER;
+      if (dist < rMin || dist > rMax) continue;
+
+      enemy._attackTimer += delta;
+      const interval = 1 / asp;
+      if (enemy._attackTimer < interval) continue;
+      enemy._attackTimer -= interval;
+
+      this._enemyShotDir.set(dx, 0, dz);
+      if (this._enemyShotDir.lengthSq() < 0.0001) continue;
+      this._enemyShotDir.normalize();
+
+      this._enemyShotSpawn.set(ex, ey + 0.2, ez);
+      this._pool.spawn(
+        this._enemyShotSpawn,
+        this._enemyShotDir,
+        enemy.damage,
+        false,
+        'enemy',
+        false,
+        null,
+        0
+      );
+      if (audioManager) audioManager.play('plasma');
+    }
+
     // ---- Collision: player projectiles vs enemies ----
     const hits = this._collision.checkProjectilesVsEnemies(
       this._pool.active, this._enemies
     );
     for (const { projectile, enemy } of hits) {
-      const { damage, isCrit } = { damage: projectile.damage, isCrit: projectile.isCrit };
+      const isCrit = projectile.isCrit;
 
       // Apply armor then per-enemy damage received multiplier (from upgrades)
       const effectiveDmg = Math.max(1, Math.ceil(
-        (damage - (computed.armor || 0)) * (enemy.damageReceivedMult ?? 1)
+        (projectile.damage - (computed.armor || 0)) * (enemy.damageReceivedMult ?? 1)
       ));
 
       const died = enemy.takeDamage(effectiveDmg);
-      projectile.deactivate();
+
+      // Piercing: mark enemy hit and decrement counter; non-piercing: deactivate
+      if (projectile.piercesLeft > 0) {
+        projectile._hitEnemies.add(enemy.id);
+        projectile.piercesLeft--;
+      } else {
+        projectile.deactivate();
+      }
 
       eventBus.emit(EVENTS.ENEMY_DAMAGED, { enemy, damage: effectiveDmg, isCrit });
 
       if (died) {
-        // Vampiric heal
         if (computed.hasVampire) {
-          const healAmt = Math.ceil(effectiveDmg * 0.02);
-          eventBus.emit(EVENTS.PLAYER_HEALED, { amount: healAmt });
+          eventBus.emit(EVENTS.PLAYER_HEALED, { amount: Math.ceil(effectiveDmg * 0.02) });
         }
         eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
-        if (audioManager) {
-          audioManager.play(enemy.type === 'boss' ? 'bossExplosion' : 'explosion');
-        }
+        if (audioManager) audioManager.play(enemy.type === 'boss' ? 'bossExplosion' : 'explosion');
       } else {
-        if (audioManager) {
-          audioManager.play(isCrit ? 'crit' : 'hit');
-        }
+        if (audioManager) audioManager.play(isCrit ? 'crit' : 'hit');
       }
+    }
+
+    // ---- Enemy projectiles vs player ----
+    const enemyProjHits = this._collision.checkEnemyProjectilesVsPlayer(
+      this._pool.active,
+      playerPos,
+      PLAYER.COLLISION_RADIUS
+    );
+    for (const proj of enemyProjHits) {
+      const dmg = Math.max(1, Math.ceil(proj.damage - (computed.armor || 0)));
+      eventBus.emit(EVENTS.PLAYER_DAMAGED, { amount: dmg, source: 'enemyProjectile' });
+      proj.deactivate();
     }
 
     // ---- Contact damage: enemies reaching player ----
@@ -250,20 +389,73 @@ export class CombatSystem {
       this._enemies, playerPos, PLAYER.COLLISION_RADIUS
     );
     for (const enemy of contacts) {
+      if (!enemy.active) continue;
+      // Ranged attackers only hurt via projectiles
+      if ((enemy.attackSpeed || 0) > 0) continue;
+
+      // Melee dies on first hit; bosses keep pulsing contact damage.
+      const meleeSuicide = enemy.type !== 'boss';
+
       const cooldown = this._contactCooldowns.get(enemy.id) || 0;
       if (cooldown <= 0) {
         let dmg = enemy.contactDamage;
-        // Damage reflect
         if (computed.hasDamageReflect) {
           enemy.takeDamage(Math.ceil(dmg * 0.2));
-          if (!enemy.active) eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
+          if (!enemy.active) {
+            eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
+            this._contactCooldowns.delete(enemy.id);
+            continue;
+          }
         }
         dmg = Math.max(1, dmg - computed.armor);
         eventBus.emit(EVENTS.PLAYER_DAMAGED, { amount: dmg, source: 'contact' });
-        this._contactCooldowns.set(enemy.id, 1.0);
         if (audioManager) audioManager.play('playerDamage');
+
+        if (meleeSuicide) {
+          const suicideDmg = enemy.hp;
+          const died = enemy.takeDamage(suicideDmg);
+          if (died) {
+            eventBus.emit(EVENTS.ENEMY_DAMAGED, { enemy, damage: suicideDmg, isCrit: false });
+            if (computed.hasVampire) {
+              eventBus.emit(EVENTS.PLAYER_HEALED, { amount: Math.ceil(suicideDmg * 0.02) });
+            }
+            eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
+            if (audioManager) audioManager.play('explosion');
+          }
+          this._contactCooldowns.delete(enemy.id);
+        } else {
+          this._contactCooldowns.set(enemy.id, 1.0);
+        }
       } else {
         this._contactCooldowns.set(enemy.id, cooldown - delta);
+      }
+    }
+
+    // ---- Corrosive Aura: continuous damage to enemies within magnet range ----
+    if (computed.corrosiveAuraDps > 0) {
+      const auraRadius = computed.magnetRange;
+      for (const enemy of this._enemies) {
+        if (!enemy.active) continue;
+        if (enemy.group.position.distanceTo(playerPos) <= auraRadius) {
+          const dmg = Math.max(1, Math.ceil(computed.corrosiveAuraDps * delta));
+          const died = enemy.takeDamage(dmg);
+          eventBus.emit(EVENTS.ENEMY_DAMAGED, { enemy, damage: dmg, isCrit: false });
+          if (died) {
+            eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
+            if (audioManager) audioManager.play('explosion');
+          }
+        }
+      }
+    }
+
+    // ---- Gravity Well: slow enemies within magnet range ----
+    if (computed.gravityWellActive) {
+      const gwRadius = computed.magnetRange;
+      for (const enemy of this._enemies) {
+        if (!enemy.active) continue;
+        if (enemy.group.position.distanceTo(playerPos) <= gwRadius) {
+          enemy.applyStatus('slow', { mult: 0.45, duration: 0.25 });
+        }
       }
     }
 

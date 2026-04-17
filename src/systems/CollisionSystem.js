@@ -5,7 +5,8 @@ const _b = new THREE.Vector3();
 
 export class CollisionSystem {
   // Check projectile vs enemy collisions
-  // Returns array of { projectile, enemy } hit pairs
+  // Returns array of { projectile, enemy } hit pairs.
+  // Piercing projectiles (piercesLeft > 0) can hit multiple enemies per frame.
   checkProjectilesVsEnemies(projectiles, enemies) {
     const hits = [];
     for (const proj of projectiles) {
@@ -14,12 +15,14 @@ export class CollisionSystem {
 
       for (const enemy of enemies) {
         if (!enemy.active) continue;
+        if (proj._hitEnemies?.has(enemy.id)) continue; // already pierced this enemy
         enemy.group.getWorldPosition(_b);
 
         const dist = _a.distanceTo(_b);
         if (dist < proj.collisionRadius + enemy.collisionRadius) {
           hits.push({ projectile: proj, enemy });
-          break; // one hit per projectile
+          if (proj.piercesLeft <= 0) break; // non-piercing: stop at first hit
+          // piercing: continue checking remaining enemies
         }
       }
     }

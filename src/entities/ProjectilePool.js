@@ -14,7 +14,7 @@ export class ProjectilePool {
     }
   }
 
-  spawn(pos, dir, damage, isCrit, type = 'laser', isPlayer = true, target = null) {
+  spawn(pos, dir, damage, isCrit, type = 'laser', isPlayer = true, target = null, pierces = 0, heatRatio = 0) {
     let proj = this._pool.pop();
     if (!proj) {
       // Expand pool if needed
@@ -22,7 +22,7 @@ export class ProjectilePool {
     }
     // Resolve visual override: exact type match, or 'all' fallback
     const override = this._visualOverrides.get(type) || this._visualOverrides.get('all') || null;
-    proj.activate(pos, dir, damage, isCrit, type, isPlayer, target, isPlayer ? override : null);
+    proj.activate(pos, dir, damage, isCrit, type, isPlayer, target, isPlayer ? override : null, pierces, heatRatio);
     this._active.push(proj);
     return proj;
   }

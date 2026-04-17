@@ -60,6 +60,19 @@ export class TechNode {
     return cost;
   }
 
+  /**
+   * Currency charged when upgrading from (level - 1) to `level` (level >= 1).
+   * Matches `getCostForNextLevel(state)` with currentLevel temporarily set to level - 1.
+   */
+  getHistoricalCostForLevel(level, state = null) {
+    if (level < 1) return {};
+    const saved = this.currentLevel;
+    this.currentLevel = level - 1;
+    const cost = { ...this.getCostForNextLevel(state) };
+    this.currentLevel = saved;
+    return cost;
+  }
+
   // Compute the effective scaled value for an effect at a given level
   _calcScaledValue(effect, level) {
     const { type, value, scaleMode, diminishingBase } = effect;

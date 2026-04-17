@@ -90,6 +90,15 @@ const ENEMY_DEFS = {
   },
 };
 
+/** Labels for debug / dev tools (order = UI order). */
+export const DEBUG_ENEMY_SPAWN_TYPES = [
+  'scout',
+  'tank',
+  'swarm',
+  'sniper',
+  'boss',
+];
+
 // Which enemy types are available per round
 function getAvailableTypes(round) {
   const types = ['scout'];
@@ -154,5 +163,12 @@ export class EnemyFactory {
 
   spawnBoss(round, scene, computed = null) {
     return [new Enemy(ENEMY_DEFS.boss, round, scene, computed)];
+  }
+
+  /** One pack of `typeName` at `round` tier (respects spawnCount, e.g. swarm ×3). */
+  spawnByType(typeName, round, scene, computed = null) {
+    const def = ENEMY_DEFS[typeName];
+    if (!def) throw new Error(`Unknown enemy type: ${typeName}`);
+    return this._spawnFromDef(def, round, scene, computed);
   }
 }

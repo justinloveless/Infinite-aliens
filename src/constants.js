@@ -1,7 +1,7 @@
 // ===== GAME CONSTANTS =====
 
 export const GAME = {
-  VERSION: 3,
+  VERSION: 11,
   AUTO_SAVE_INTERVAL: 30000,  // ms
   OFFLINE_CAP: 8 * 3600,     // seconds
   OFFLINE_EFFICIENCY: 0.5,
@@ -35,6 +35,8 @@ export const PLAYER = {
   BASE_ARMOR: 0,
   BASE_SPEED: 3,
   BASE_MAGNET_RANGE: 4,
+  BASE_VISION_RANGE: 60,
+  BASE_TARGETING_RANGE: 50,
   BASE_LOOT_MULT: 1.0,
   STELLAR_DUST_RATE: 0,       // per second, unlocked via tree
   CLICK_COOLDOWN: 0.2,        // seconds
@@ -82,18 +84,21 @@ export const CURRENCIES = {
 };
 
 export const TECH_TREE = {
-  BASE_SEED: 42,
-  TIER_PRIME: 7919,
-  // Circular layout (Path of Exile style)
+  // Deterministic radial layout: four branches from ring-0 starters + specials on diagonals (see TechTreeGenerator).
   CENTER_RADIUS: 150,            // Radius of ring 0 (the starter ring)
   RING_SPACING: 110,             // Distance between consecutive rings
-  MIN_NODES_PER_RING: 5,         // Minimum nodes per non-starter ring
-  MAX_NODES_PER_RING: 7,         // Maximum nodes per non-starter ring
-  LATERAL_CONNECT_CHANCE: 0.45,  // Chance a node links to the next angular neighbor on same ring
-  CROSS_CONNECT_CHANCE: 0.28,    // Chance a node links to a second (non-closest) inward neighbor
+  /** Angular width of each branch sector (radians). π/4 = 45°. */
+  BRANCH_SLICE_RAD: Math.PI / 4,
+  /** Min / max nodes per main branch per ring (ring ≥ 1); count scales with ring radius (see TechTreeGenerator). */
+  BRANCH_NODES_MIN: 2,
+  BRANCH_NODES_MAX: 12,
+  /** Min center-to-center spacing along the ring ≈ NODE_W * this, in layout px, vs ring radius → angular gap. */
+  BRANCH_NODE_SEPARATION_MULT: 1.12,
   COST_SCALING_BASE: 2.0,        // cost * COST_SCALING^(ring/2)
   EFFECT_TIER_BONUS: 0.05,       // +5% per ring on effect values
   LEVEL_COST_SCALING: 1.4,       // level cost * LEVEL_COST^currentLevel
+  /** Fraction of the original level price returned when selling one level (right-click node). */
+  SELL_REFUND_FRACTION: 0.5,
   NODE_W: 124, NODE_H: 48,
 };
 
@@ -190,6 +195,11 @@ export const MANUAL_GUN = {
   HEAT_COOL_RATE:    25,   // units per second
   OVERHEAT_DURATION:  2.0, // seconds locked after overheating
   FIRE_COOLDOWN:      0.12, // minimum seconds between shots
+};
+
+/** Warp gate system: gates unlock every N tiers reached and allow starting a new run mid-progression. */
+export const WARP = {
+  GATE_TIER_INTERVAL: 10,   // a new gate unlocks every 10 tiers reached
 };
 
 export const ASTEROID = {

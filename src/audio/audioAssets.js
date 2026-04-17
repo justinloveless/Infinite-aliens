@@ -113,6 +113,16 @@ export const SFX_SPECS = {
     prompt:
       'Short warm digital materialization sound effect, soft ascending synth with gentle sparkle, 0.6 seconds, friendly ally appearing, retro-futuristic',
   },
+  manualShot: {
+    file: 'sfx-manual-shot.mp3',
+    prompt:
+      'Single punchy retro cannon blast sound effect, warm analog synth with a hard thud attack and short decay tail, 0.25 seconds, satisfying medium-weight weapon discharge, cozy retro space game, not too high-pitched, not too low — neutral tone that sounds good when pitch-shifted up or down',
+  },
+  manualOverheat: {
+    file: 'sfx-manual-overheat.mp3',
+    prompt:
+      'Short mechanical overheat steam vent sound effect, warm hissing white noise with a descending metallic buzzing tone, 1.5 seconds, retro-futuristic sci-fi weapon cooling down, cozy but with a sense of urgency, analog synth steam release',
+  },
 };
 
 export const SFX_BY_KEY = Object.fromEntries(

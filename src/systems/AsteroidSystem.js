@@ -14,7 +14,7 @@ export class AsteroidSystem {
    * @param {Projectile[]} activeProjectiles - from ProjectilePool.active
    * @param {Enemy[]} activeEnemies - from RoundSystem.enemies
    */
-  update(delta, activeProjectiles, activeEnemies) {
+  update(delta, activeProjectiles, activeEnemies, speedScale = 1) {
     // Spawn timer
     this._spawnTimer += delta;
     if (this._spawnTimer >= ASTEROID.SPAWN_INTERVAL) {
@@ -25,7 +25,7 @@ export class AsteroidSystem {
     // Update existing asteroids; collect dead indices
     for (let i = this._asteroids.length - 1; i >= 0; i--) {
       const ast = this._asteroids[i];
-      ast.update(delta);
+      ast.update(delta, speedScale);
       if (!ast.active) {
         this._scene.remove(ast.mesh);
         this._asteroids.splice(i, 1);

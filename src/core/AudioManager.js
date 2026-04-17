@@ -40,6 +40,11 @@ export class AudioManager {
   }
 
   play(name) {
+    this.playAtRate(name, 1.0);
+  }
+
+  /** Play a buffered SFX at a given playback rate (pitch shift). Falls back to synth. */
+  playAtRate(name, rate = 1.0) {
     if (this._muted || !this._initialized || !this._ctx) return;
 
     const buf = this._sfxBuffers.get(name);
@@ -48,6 +53,7 @@ export class AudioManager {
         const ctx = this._ctx;
         const src = ctx.createBufferSource();
         src.buffer = buf;
+        src.playbackRate.value = rate;
         const g = ctx.createGain();
         g.gain.value = this._sfxVolume;
         src.connect(g);
@@ -57,10 +63,10 @@ export class AudioManager {
       return;
     }
 
-    this._playSynth(name);
+    this._playSynth(name, rate);
   }
 
-  _playSynth(name) {
+  _playSynth(name, rate = 1.0) {
     const defs = {
       laser: { freq: 880, type: 'sawtooth', duration: 0.12, decay: 0.08, vol: 0.15, sweep: 0.3 },
       missile: { freq: 440, type: 'square', duration: 0.25, decay: 0.15, vol: 0.2, sweep: -0.2 },
@@ -95,6 +101,8 @@ export class AudioManager {
       roundComplete: { freq: 600, type: 'sine', duration: 0.6, decay: 0.5, vol: 0.3, sweep: 0.7 },
       death: { freq: 220, type: 'sine', duration: 0.55, decay: 0.5, vol: 0.2, sweep: -0.45 },
       droneSpawn: { freq: 400, type: 'sine', duration: 0.45, decay: 0.38, vol: 0.22, sweep: 0.55 },
+      manualShot: { freq: 320, type: 'sawtooth', duration: 0.2, decay: 0.14, vol: 0.22, sweep: -0.55 },
+      manualOverheat: { freq: 280, type: 'sawtooth', duration: 1.0, decay: 0.9, vol: 0.28, sweep: -0.75, noise: true },
     };
 
     const def = defs[name];
@@ -111,9 +119,9 @@ export class AudioManager {
       gain.connect(ctx.destination);
 
       osc.type = def.type;
-      osc.frequency.setValueAtTime(def.freq, t);
+      osc.frequency.setValueAtTime(def.freq * rate, t);
       osc.frequency.exponentialRampToValueAtTime(
-        Math.max(10, def.freq * (1 + def.sweep)),
+        Math.max(10, def.freq * rate * (1 + def.sweep)),
         t + def.duration
       );
 

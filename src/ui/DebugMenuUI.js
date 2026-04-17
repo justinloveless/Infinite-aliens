@@ -1,4 +1,6 @@
 import { CURRENCIES } from '../constants.js';
+import { reticleDebug } from '../entities/Enemy.js';
+import { DEBUG_ENEMY_SPAWN_TYPES } from '../entities/EnemyFactory.js';
 
 const CURRENCY_KEYS = Object.keys(CURRENCIES);
 const DEBUG_MENU_POS_KEY = 'infinite_aliens_debug_menu_pos';
@@ -99,7 +101,10 @@ export class DebugMenuUI {
     pauseRow.appendChild(pauseBtn);
     wrap.appendChild(pauseRow);
 
+    this._buildSpawnSection(wrap);
+
     this._buildVisualSection(wrap);
+    this._buildTargetingSection(wrap);
 
     const grid = document.createElement('div');
     grid.className = 'debug-menu-grid';
@@ -334,6 +339,48 @@ export class DebugMenuUI {
       const hex = readHex();
       inp.value = `#${hex.toString(16).padStart(6, '0')}`;
     });
+  }
+
+  _buildSpawnSection(wrap) {
+    const sec = document.createElement('div');
+    sec.className = 'debug-menu-visual';
+    this._sectionTitle(sec, 'SPAWN ENEMIES');
+
+    const hint = document.createElement('p');
+    hint.className = 'debug-menu-hint';
+    hint.style.marginTop = '0';
+    hint.textContent =
+      'Uses current sector tier. Swarm spawns a full pack (3). Boss obeys normal boss loot rules when killed.';
+    sec.appendChild(hint);
+
+    const row = document.createElement('div');
+    row.className = 'debug-menu-spawn-btns';
+    for (const id of DEBUG_ENEMY_SPAWN_TYPES) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'neon-btn small';
+      btn.textContent = id.toUpperCase();
+      btn.addEventListener('click', () => this._game._debugSpawnEnemy(id));
+      row.appendChild(btn);
+    }
+    sec.appendChild(row);
+    wrap.appendChild(sec);
+  }
+
+  _buildTargetingSection(wrap) {
+    const PI = Math.PI;
+    const sec = document.createElement('div');
+    sec.className = 'debug-menu-visual';
+    this._sectionTitle(sec, 'TARGETING RETICLE');
+
+    this._addSliderRow(sec, 'Offset X', -PI, PI, 0.01,
+      () => reticleDebug.offsetX, (v) => { reticleDebug.offsetX = v; });
+    this._addSliderRow(sec, 'Offset Y', -PI, PI, 0.01,
+      () => reticleDebug.offsetY, (v) => { reticleDebug.offsetY = v; });
+    this._addSliderRow(sec, 'Offset Z', -PI, PI, 0.01,
+      () => reticleDebug.offsetZ, (v) => { reticleDebug.offsetZ = v; });
+
+    wrap.appendChild(sec);
   }
 
   _buildVisualSection(wrap) {

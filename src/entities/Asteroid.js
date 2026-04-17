@@ -158,9 +158,10 @@ export class Asteroid {
     dPos.needsUpdate = true;
   }
 
-  update(delta) {
+  update(delta, speedScale = 1) {
     const p = this.mesh.position;
-    p.addScaledVector(this.velocity, delta);
+    const s = Math.max(0, speedScale);
+    p.addScaledVector(this.velocity, delta * s);
 
     this._trailHist.unshift(p.clone());
     while (this._trailHist.length > this._trailCap) {

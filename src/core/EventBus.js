@@ -37,6 +37,7 @@ export const EVENTS = {
   ROUND_STARTED:       'round:started',
   ROUND_COMPLETE:      'round:complete',
   UPGRADE_PURCHASED:   'upgrade:purchased',
+  UPGRADE_SOLD:        'upgrade:sold',
   CURRENCY_CHANGED:    'currency:changed',
   PLAYER_DAMAGED:      'player:damaged',
   PLAYER_HEALED:       'player:healed',

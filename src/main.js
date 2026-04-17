@@ -30,7 +30,8 @@ import { HUD } from './ui/HUD.js';
 import { TechTreeUI } from './ui/TechTreeUI.js';
 import { RoundTransition } from './ui/RoundTransition.js';
 import { DamageNumbers } from './ui/DamageNumbers.js';
-import { BLOOM, SCENE } from './constants.js';
+import { BLOOM, PLAYER, RUN, SCENE, WARP } from './constants.js';
+import * as THREE from 'three';
 
 // ============================
 // GAME ORCHESTRATOR
@@ -92,6 +93,12 @@ class Game {
     this.techTreeUI = null;
     this._prevBossMusicActive = false;
     this._paused = false;
+    this._techTreeOpen = false;
+
+    this.upgradeEditor = null;
+
+    this._focusPickRaycaster = new THREE.Raycaster();
+    this._focusPickNdc = new THREE.Vector2();
 
     this._setupEventListeners();
     this._setupClickHandling();
@@ -99,6 +106,9 @@ class Game {
     this._setupSettingsButton();
     this._setupDebugMenuHotkey();
     this._setupPauseControls();
+    if (import.meta.env.DEV) {
+      this._setupUpgradeEditor();
+    }
   }
 
   _setupEventListeners() {
@@ -145,14 +155,33 @@ class Game {
       this.setPaused(false);
       this.audio.stopMusic();
       this.audio.play('death');
+
+      // Capture run stats before resetting anything
       const r = this.state.round;
+      this.state.lastRun = {
+        distance: r.distanceTraveled,
+        tier: r.current,
+        enemiesDefeated: r.enemiesDefeated,
+        bossesDefeated: r.bossesDefeated,
+        loot: { ...this.state.roundLoot },
+      };
+
+      // Update warp gate progress
+      if (!this.state.warpGates) this.state.warpGates = { maxTierReached: 0 };
+      if (r.current > this.state.warpGates.maxTierReached) {
+        this.state.warpGates.maxTierReached = r.current;
+      }
+
       r.phase = 'dead';
-      r.distanceTraveled = 0;
-      r.current = 1;
-      r.enemiesDefeated = 0;
-      r.totalEnemiesDefeated = 0;
-      r.bossesDefeated = 0;
       r.bossIsActive = false;
+
+      // Close tech tree if it was open during combat
+      if (this._techTreeOpen) {
+        this._techTreeOpen = false;
+        this.ui.hide('techTree');
+        if (this.techTreeUI) this.techTreeUI.close();
+      }
+
       this.round.purgeCombatWorld();
       this.projectilePool.clear();
       this.asteroidSystem.clear();
@@ -160,12 +189,12 @@ class Game {
       this.combat.setEnemies(this.round.enemies);
       this.combat.setLootDrops(this.round.lootDrops);
       this.ui.hide('hud');
-      this.ui.showDeath(() => {
-        // Repair ship
-        this.state.player.hp = this.computed.maxHp;
-        this.state.player.shieldHp = 0;
-        this._openTechTree();
-      });
+
+      this.ui.showDeath(
+        this.state.lastRun,
+        () => this._openTechTree(),
+        () => this._showWarpGateAndLaunch()
+      );
     });
 
     eventBus.on(EVENTS.ENEMY_DAMAGED, ({ enemy, damage, isCrit }) => {
@@ -174,6 +203,10 @@ class Game {
     });
 
     eventBus.on(EVENTS.UPGRADE_PURCHASED, () => {
+      this._rebuildComputed();
+    });
+
+    eventBus.on(EVENTS.UPGRADE_SOLD, () => {
       this._rebuildComputed();
     });
 
@@ -268,12 +301,44 @@ class Game {
     });
   }
 
+  async _setupUpgradeEditor() {
+    try {
+      const { UpgradeEditor } = await import('./devtools/UpgradeEditor.js');
+      this.upgradeEditor = new UpgradeEditor(
+        () => this.techTree,
+        () => this.techTreeUI,
+        () => this._rebuildComputed()
+      );
+      window.addEventListener('keydown', e => {
+        if (!e.ctrlKey || !e.shiftKey || e.code !== 'KeyU') return;
+        const t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        e.preventDefault();
+        this.upgradeEditor.toggle();
+      });
+      console.log('[UpgradeEditor] Ready — Ctrl+Shift+U to open');
+    } catch (err) {
+      console.error('[UpgradeEditor] Failed to load:', err);
+    }
+  }
+
   _debugGrantCurrencies(amounts) {
     if (!this.state || !amounts) return;
     for (const [type, amount] of Object.entries(amounts)) {
       if (this.state.currencies[type] === undefined) continue;
       this.currency.add(type, amount);
     }
+  }
+
+  /** Debug menu: spawn enemy pack (swarm spawns 3). Combat phase only. */
+  _debugSpawnEnemy(typeName) {
+    if (!this.state) return;
+    const spawned = this.round.debugSpawn(typeName, this.computed);
+    if (spawned === null) {
+      window.alert('Spawn only works during an active run (combat phase). Launch from the hangar first.');
+      return;
+    }
+    this.combat.setEnemies(this.round.enemies);
   }
 
   _debugResetGame() {
@@ -295,6 +360,7 @@ class Game {
 
     this.saveManager.clearSave();
     this.state = createInitialState();
+    this.state.round.phase = 'dead';
     this.techTree = new TechTreeState(this.state.seed);
     this._rebuildComputed();
     this.currency.init(this.state);
@@ -309,19 +375,61 @@ class Game {
     this.state.player.hp = this.computed.maxHp;
     this.state.player.shieldHp = 0;
     this.ship.setShieldVisible(this.computed.maxShieldHp > 0 && this.state.player.shieldHp > 0);
+    this._techTreeOpen = false;
 
     this.ui.hide('hud');
     this.ui.hide('techTree');
-    this.techTreeUI.close();
+    if (this.techTreeUI) this.techTreeUI.close();
     this.audio.stopMusic();
-    this._openTechTree();
+    this.ui.showDeath(null, () => this._openTechTree(), () => this._startNewRun());
   }
 
   _setupClickHandling() {
-    document.getElementById('game-canvas').addEventListener('click', () => {
+    document.getElementById('game-canvas').addEventListener('click', (ev) => {
       if (this._paused) return;
-      this.combat.fireManualGun(this.state, this.computed, this.ship);
+      if (this._tryPriorityFocusClick(ev)) return;
+      this.combat.fireManualGun(this.state, this.computed, this.ship, this.audio);
     });
+  }
+
+  /**
+   * Priority Designator: click an enemy to lock auto-targeting until it dies.
+   * @returns {boolean} true if the click was consumed as a focus pick (skip nose cannon).
+   */
+  _tryPriorityFocusClick(ev) {
+    if (!this.state || this.state.round.phase !== 'combat') return false;
+    if (!this.computed?.manualTargetFocusEnabled) return false;
+
+    const canvas = document.getElementById('game-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const rw = rect.width;
+    const rh = rect.height;
+    if (rw <= 0 || rh <= 0) return false;
+
+    this._focusPickNdc.x = ((ev.clientX - rect.left) / rw) * 2 - 1;
+    this._focusPickNdc.y = -((ev.clientY - rect.top) / rh) * 2 + 1;
+    this._focusPickRaycaster.setFromCamera(this._focusPickNdc, this.scene.camera);
+
+    const enemies = this.round.enemies;
+    const roots = [];
+    for (const e of enemies) {
+      if (e.active) roots.push(e.group);
+    }
+    if (roots.length === 0) return false;
+
+    const hits = this._focusPickRaycaster.intersectObjects(roots, true);
+    if (hits.length === 0) return false;
+
+    let o = hits[0].object;
+    while (o) {
+      const picked = enemies.find(en => en.active && en.group === o);
+      if (picked) {
+        this.state.round.manualFocusEnemyId = picked.id;
+        return true;
+      }
+      o = o.parent;
+    }
+    return false;
   }
 
   _setupManualGunInput() {
@@ -331,7 +439,7 @@ class Game {
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       e.preventDefault();
-      this.combat.fireManualGun(this.state, this.computed, this.ship);
+      this.combat.fireManualGun(this.state, this.computed, this.ship, this.audio);
     });
   }
 
@@ -370,11 +478,18 @@ class Game {
         this.computed.stellarDustRate
       );
 
+      // Always land in the hangar/dead state after loading
+      this.state.round.phase = 'dead';
+
       this.ui.showWelcome(offline, () => {
         if (offline && offline.earnings.stellarDust > 0) {
           this.currency.add('stellarDust', offline.earnings.stellarDust);
         }
-        this._openTechTree();
+        this.ui.showDeath(
+          this.state.lastRun ?? null,
+          () => this._openTechTree(),
+          () => this._showWarpGateAndLaunch()
+        );
       });
     } else {
       this._newGame();
@@ -385,10 +500,12 @@ class Game {
 
   _newGame() {
     this.state = createInitialState();
+    this.state.round.phase = 'dead';
     this.techTree = new TechTreeState(this.state.seed);
     this._rebuildComputed();
     this._setupTechTreeUI();
-    this._openTechTree(); // Start in upgrade screen
+    // Show hangar screen — no run stats yet
+    this.ui.showDeath(null, () => this._openTechTree(), () => this._showWarpGateAndLaunch());
   }
 
   _setupTechTreeUI() {
@@ -397,8 +514,7 @@ class Game {
 
     this.ui.bindTechTreeButtons(
       () => this._openTechTree(),
-      () => this._closeTechTree(),
-      () => this._launchRound()
+      () => this._closeTechTree()
     );
 
     this.ui.bindMuteButton(this.audio, this.settings);
@@ -418,52 +534,110 @@ class Game {
     p.hp = Math.min(p.hp, this.computed.maxHp);
     p.shieldHp = Math.min(p.shieldHp, this.computed.maxShieldHp);
     this.ship.setShieldVisible(this.computed.maxShieldHp > 0 && p.shieldHp > 0);
-    this.ship.syncTurrets(this.computed.extraWeapons || []);
+    const autoExtras = this.computed.hasAutoFire ? (this.computed.extraWeapons || []) : [];
+    this.ship.syncTurrets(autoExtras);
     this.ship.syncVisualModifiers(this.computed.visualModifiers || []);
     this.projectilePool.applyProjectileVisual(this.computed.projectileVisuals || new Map());
     eventBus.emit(EVENTS.STATS_UPDATED, this.computed);
   }
 
   _openTechTree() {
-    const prevPhase = this.state.round.phase;
-    this._prevPhaseBeforeTree = prevPhase;
-    if (prevPhase !== 'combat') {
-      this.state.round.phase = 'upgrade';
-    }
+    this._techTreeOpen = true;
     this.ui.hide('hud');
+    this.ui.hide('death');
     this.ui.show('techTree');
-    this.techTreeUI.open(this.state);
-    this.audio.playMusic('tech-tree');
+    this.techTreeUI.open(this.state, this.computed);
+    // Only switch to tech-tree music if not actively in combat
+    if (this.state.round.phase !== 'combat') {
+      this.audio.playMusic('tech-tree');
+    }
   }
 
   _closeTechTree() {
+    this._techTreeOpen = false;
     this.ui.hide('techTree');
     this.techTreeUI.close();
-    const prev = this._prevPhaseBeforeTree;
-    if (prev === 'combat') {
-      // Resume combat
-      this.state.round.phase = 'combat';
+    const phase = this.state.round.phase;
+    if (phase === 'combat') {
       this.ui.show('hud');
       this._prevBossMusicActive = !!this.state.round.bossIsActive;
       this.audio.playMusic(this._combatMusicKey());
     } else {
-      // Still in upgrade — keep HUD visible but show Launch button
-      this.ui.show('hud');
+      // Back to the hangar / death screen
+      this.ui.showDeath(
+        this.state.lastRun,
+        () => this._openTechTree(),
+        () => this._showWarpGateAndLaunch()
+      );
     }
   }
 
-  _launchRound() {
+  /** Returns unlocked warp gates as [{gateNum, tier}], empty if none. */
+  _getUnlockedGates() {
+    const maxTier = this.state.warpGates?.maxTierReached || 0;
+    const count = Math.floor(maxTier / WARP.GATE_TIER_INTERVAL);
+    const gates = [];
+    for (let i = 1; i <= count; i++) {
+      gates.push({ gateNum: i, tier: i * WARP.GATE_TIER_INTERVAL });
+    }
+    return gates;
+  }
+
+  /** Show warp gate selection if any are unlocked, otherwise launch immediately. */
+  _showWarpGateAndLaunch() {
+    const gates = this._getUnlockedGates();
+    if (gates.length === 0) {
+      this._startNewRun(1);
+      return;
+    }
+    this.ui.hide('death');
+    this.ui.showWarpGateSelect(gates, (startTier) => {
+      this._startNewRun(startTier);
+    });
+  }
+
+  _startNewRun(startTier = 1) {
+    this._techTreeOpen = false;
     this.ui.hide('techTree');
-    this.techTreeUI.close();
+    this.ui.hide('death');
+    this.ui.hide('warpGate');
+    if (this.techTreeUI) this.techTreeUI.close();
     this.ui.show('hud');
     this.audio.play('launch');
 
+    // Reset per-run stats
+    const r = this.state.round;
+    // Apply interest before resetting currencies
+    if (this.computed.interestRate > 0) {
+      const interest = Math.floor(this.state.currencies.scrapMetal * this.computed.interestRate);
+      if (interest > 0) this.currency.add('scrapMetal', interest);
+    }
+
+    const startDist = startTier > 1 ? (startTier - 1) * RUN.DISTANCE_PER_TIER : 0;
+    r.distanceTraveled = startDist;
+    r.current = startTier;
+    r.enemiesDefeated = 0;
+    // Pre-set bossesDefeated so first boss spawns soon after arrival, not immediately
+    r.bossesDefeated = Math.floor(startDist / RUN.BOSS_DISTANCE_INTERVAL);
+    r.bossIsActive = false;
+    r.killsThisRun = 0;
+    this.state.roundLoot = {};
+
+    // Repair the ship
+    this.state.player.hp = this.computed.maxHp;
+    this.state.player.shieldHp = 0;
+
+    // Clear any leftover combat entities
+    this.round.purgeCombatWorld();
     this.projectilePool.clear();
-    this.round.startRound();
+    this.asteroidSystem.clear();
+    this.beamLaser.clear();
+
+    this.round.startRound(); // sets phase = 'combat'
     this.combat.setEnemies(this.round.enemies);
     this.combat.setLootDrops(this.round.lootDrops);
 
-    this._prevBossMusicActive = !!this.state.round.bossIsActive;
+    this._prevBossMusicActive = !!r.bossIsActive;
     this.audio.playMusic(this._combatMusicKey());
   }
 
@@ -620,13 +794,18 @@ class Game {
     }
   }
 
+  _worldMotionScale() {
+    if (!this.state || this.state.round.phase !== 'combat') return 1;
+    return (this.computed?.speed ?? PLAYER.BASE_SPEED) / PLAYER.BASE_SPEED;
+  }
+
   _tick(delta) {
     const dt = this._paused ? 0 : delta;
 
     if (!this.state) {
       // Just render the scene (start screen visible)
-      this.starfield.update(dt);
-      this.synthGrid.update(dt);
+      this.starfield.update(dt, 1);
+      this.synthGrid.update(dt, 1);
       this.camera.update(dt);
       this.ship.update(dt, null);
       this.ship.syncAttachments(null, dt);
@@ -636,13 +815,14 @@ class Game {
     }
 
     const phase = this.state.round.phase;
+    const worldSpeed = this._worldMotionScale();
 
     // Always update ship visuals
     this.ship.update(dt, this.computed, phase);
     this.ship.syncAttachments(this.computed?.attachments, dt);
     this.upgrade.tickTriggers(dt);
-    this.starfield.update(dt);
-    this.synthGrid.update(dt);
+    this.starfield.update(dt, worldSpeed);
+    this.synthGrid.update(dt, worldSpeed);
     this.camera.update(dt);
 
     // Update post-processing uniforms
@@ -663,11 +843,12 @@ class Game {
       this.combat.update(dt, this.state, this.computed, this.ship, this.audio);
 
       // Asteroids
-      this.asteroidSystem.update(dt, this.projectilePool.active, this.round.enemies);
+      this.asteroidSystem.update(dt, this.projectilePool.active, this.round.enemies, worldSpeed);
 
       // Beam laser turret
-      const beamEquipped = this.computed.extraWeapons?.includes('beam') ?? false;
-      this.beamLaser.update(dt, beamEquipped, this.ship, this.round.enemies, this.computed);
+      const beamEquipped =
+        !!this.computed.hasAutoFire && (this.computed.extraWeapons?.includes('beam') ?? false);
+      this.beamLaser.update(dt, beamEquipped, this.ship, this.round.enemies, this.computed, this.state.round);
 
       // Regen
       this.upgrade.applyRegen(dt, this.state, this.computed);
@@ -684,8 +865,8 @@ class Game {
     // Projectile updates always
     this.projectilePool.update(dt);
 
-    // Tech tree UI tick (animation)
-    if (this.techTreeUI && phase === 'upgrade') {
+    // Tech tree UI tick (animation) — runs whenever the panel is open
+    if (this.techTreeUI && this._techTreeOpen) {
       this.techTreeUI.tick(dt);
     }
 

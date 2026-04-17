@@ -1,5 +1,6 @@
 import { TECH_TREE, CURRENCIES, RARITY_META } from '../constants.js';
-import { CATEGORY_META } from '../techtree/TechNodeTemplates.js';
+
+const SELL_RATIO = TECH_TREE.SELL_REFUND_FRACTION;
 import { eventBus, EVENTS } from '../core/EventBus.js';
 
 const NODE_W = TECH_TREE.NODE_W;
@@ -26,7 +27,13 @@ export class TechTreeUI {
     this._camera = { x: 0, y: 0, zoom: 1 };
     this._isDragging = false;
     this._dragStart = { x: 0, y: 0 };
+    /** Mousedown position (client) for click vs drag; node under press (null = empty). */
+    this._pressStart = { x: 0, y: 0 };
+    this._pressHitNode = null;
     this._hoveredNode = null;
+    /** Last pointer position over the canvas (viewport coords); kept in sync each frame so hover/tooltip survive layout reflow. */
+    this._lastClientX = null;
+    this._lastClientY = null;
     this._animTime = 0;
     this._visible = false;
 
@@ -35,8 +42,12 @@ export class TechTreeUI {
 
     // Refresh on upgrade purchase
     eventBus.on(EVENTS.UPGRADE_PURCHASED, () => this.render());
+    eventBus.on(EVENTS.UPGRADE_SOLD, () => this.render());
     eventBus.on(EVENTS.CURRENCY_CHANGED, () => {
       if (this._visible) this.render();
+    });
+    eventBus.on(EVENTS.STATS_UPDATED, computed => {
+      if (this._visible) this._renderPlayerStats(computed);
     });
   }
 
@@ -45,9 +56,10 @@ export class TechTreeUI {
       const container = document.getElementById('tech-tree-screen');
       const headerH = document.getElementById('tech-tree-header').offsetHeight;
       const currencyH = document.getElementById('tech-tree-currencies').offsetHeight;
-      const footerH = document.getElementById('tech-tree-footer').offsetHeight;
+      const statsEl = document.getElementById('tech-tree-stats');
+      const statsH = statsEl ? statsEl.offsetHeight : 0;
       this._canvas.width = container.offsetWidth;
-      this._canvas.height = container.offsetHeight - headerH - currencyH - footerH;
+      this._canvas.height = container.offsetHeight - headerH - currencyH - statsH;
     };
     window.addEventListener('resize', () => { if (this._visible) resize(); });
     this._resizeFn = resize;
@@ -56,13 +68,27 @@ export class TechTreeUI {
   _setupInteraction() {
     const canvas = this._canvas;
 
+    canvas.addEventListener('mouseenter', e => {
+      this._lastClientX = e.clientX;
+      this._lastClientY = e.clientY;
+    });
+
     canvas.addEventListener('mousedown', e => {
-      this._isDragging = true;
-      this._dragStart = { x: e.clientX - this._camera.x, y: e.clientY - this._camera.y };
-      canvas.style.cursor = 'grabbing';
+      if (e.button !== 0) return;
+      const world = this._screenToWorld(e.clientX, e.clientY);
+      const hit = this._hitTest(world.x, world.y);
+      this._pressStart = { x: e.clientX, y: e.clientY };
+      this._pressHitNode = hit;
+      this._isDragging = !hit;
+      if (this._isDragging) {
+        this._dragStart = { x: e.clientX - this._camera.x, y: e.clientY - this._camera.y };
+        canvas.style.cursor = 'grabbing';
+      }
     });
 
     canvas.addEventListener('mousemove', e => {
+      this._lastClientX = e.clientX;
+      this._lastClientY = e.clientY;
       if (this._isDragging) {
         this._camera.x = e.clientX - this._dragStart.x;
         this._camera.y = e.clientY - this._dragStart.y;
@@ -86,28 +112,34 @@ export class TechTreeUI {
     });
 
     canvas.addEventListener('mouseup', e => {
-      if (this._isDragging) {
-        const dx = e.clientX - this._dragStart.x - this._camera.x;
-        const dy = e.clientY - this._dragStart.y - this._camera.y;
-        const moved = Math.sqrt(dx * dx + dy * dy);
+      if (e.button === 0) {
+        const moved = Math.hypot(e.clientX - this._pressStart.x, e.clientY - this._pressStart.y);
         if (moved < 5) {
           const world = this._screenToWorld(e.clientX, e.clientY);
           const hit = this._hitTest(world.x, world.y);
-          if (hit) this._purchaseNode(hit);
+          const startedOn = this._pressHitNode;
+          if (hit && (!startedOn || hit.id === startedOn.id)) {
+            this._purchaseNode(hit);
+          }
         }
+        this._isDragging = false;
+        this._pressHitNode = null;
+        canvas.style.cursor = 'grab';
       }
-      this._isDragging = false;
-      canvas.style.cursor = 'grab';
     });
 
-    canvas.addEventListener('click', e => {
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (!this._visible) return;
       const world = this._screenToWorld(e.clientX, e.clientY);
       const hit = this._hitTest(world.x, world.y);
-      if (hit) this._purchaseNode(hit);
+      if (hit) this._sellLevel(hit);
     });
 
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
+      this._lastClientX = e.clientX;
+      this._lastClientY = e.clientY;
       const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
       const newZoom = Math.max(0.15, Math.min(2.5, this._camera.zoom * zoomDelta));
 
@@ -122,23 +154,36 @@ export class TechTreeUI {
       this.render();
     }, { passive: false });
 
-    canvas.addEventListener('mouseleave', () => {
+    canvas.addEventListener('mouseleave', e => {
       this._isDragging = false;
-      this._hoveredNode = null;
-      this._hideTooltip();
+      const x = e.clientX;
+      const y = e.clientY;
+      requestAnimationFrame(() => {
+        if (!this._visible) return;
+        const r = canvas.getBoundingClientRect();
+        if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) {
+          return;
+        }
+        this._lastClientX = null;
+        this._lastClientY = null;
+        this._hoveredNode = null;
+        this._hideTooltip();
+      });
     });
   }
 
-  open(state) {
+  open(state, computed) {
     this._visible = true;
-    this._resizeFn();
     this._updateCurrencyBar(state);
+    this._renderPlayerStats(computed, state);
     this._centerOnFrontier();
     this.render();
   }
 
   close() {
     this._visible = false;
+    this._lastClientX = null;
+    this._lastClientY = null;
     this._hideTooltip();
   }
 
@@ -174,6 +219,89 @@ export class TechTreeUI {
         el.innerHTML = `<span>${meta.icon}</span> <span>${meta.label}: <strong>${this._fmtNum(amt)}</strong></span>`;
       }
     }
+  }
+
+  /**
+   * @param {object|null|undefined} computed — from UpgradeSystem.compute
+   * @param {object|null|undefined} state — game state (current HP/shield); optional if already stored
+   */
+  _renderPlayerStats(computed, state) {
+    const el = document.getElementById('tech-tree-stats');
+    if (!el) return;
+
+    const p = state?.player;
+    if (!computed && !p) {
+      el.innerHTML = '';
+      return;
+    }
+
+    const c = computed || {};
+    const maxHp = c.maxHp ?? p?.maxHp ?? 0;
+    const maxSh = c.maxShieldHp ?? p?.maxShieldHp ?? 0;
+    const hpCur = p ? Math.round(p.hp) : Math.round(maxHp);
+    const shCur = p ? Math.round(p.shieldHp) : Math.round(maxSh);
+
+    const atkSp = c.attackSpeed > 0 ? c.attackSpeed : 0.6;
+    const firePerSec = atkSp > 0 ? 1 / atkSp : 0;
+
+    const rows = [];
+
+    rows.push(['HP', `${hpCur} / ${Math.round(maxHp)}`]);
+    if (maxSh > 0) {
+      rows.push(['Shield', `${shCur} / ${Math.round(maxSh)}`]);
+    }
+    rows.push(['Damage', `${Math.round(c.damage ?? p?.damage ?? 0)}`]);
+    rows.push(['Fire rate', `${firePerSec.toFixed(2)}/s`]);
+    rows.push(['Crit', `${((c.critChance ?? 0) * 100).toFixed(1)}% ×${(c.critMultiplier ?? 2).toFixed(2)}`]);
+    rows.push(['Projectiles', `${c.projectileCount ?? 1}`]);
+    if ((c.projectilePierces ?? 0) > 0) {
+      rows.push(['Pierce', `${c.projectilePierces}`]);
+    }
+    rows.push(['Proj. speed', `${(c.projectileSpeed ?? 0).toFixed(0)}`]);
+    rows.push(['Armor', `${Math.round(c.armor ?? 0)}`]);
+    rows.push(['Speed', `${(c.speed ?? 0).toFixed(2)}`]);
+    rows.push(['Magnet', `${(c.magnetRange ?? 0).toFixed(1)}`]);
+    rows.push(['Loot', `×${(c.lootMultiplier ?? 1).toFixed(2)}`]);
+    if ((c.stellarDustRate ?? 0) > 0) {
+      rows.push(['Stellar dust', `${(c.stellarDustRate).toFixed(2)}/s`]);
+    }
+
+    const pType = c.projectileType || p?.projectileType || 'laser';
+    rows.push(['Weapon', `${pType}${c.isHoming ? ' (homing)' : ''}`]);
+
+    const extras = c.extraWeapons?.length ? c.extraWeapons.join(', ') : '';
+    if (extras) rows.push(['Extra', extras]);
+
+    const flags = [];
+    if (c.hasDrone) flags.push('Drone');
+    if (c.hasAutoFire) flags.push('Auto turret');
+    if (c.hasVampire) flags.push('Leech');
+    if (c.hasDamageReflect) flags.push('Reflect');
+    if (c.hasOvercharge) flags.push('Overcharge');
+    if (c.manualTargetFocusEnabled) flags.push('Target lock');
+    if (flags.length) rows.push(['Traits', flags.join(', ')]);
+
+    if ((c.stellarNovaLevel ?? 0) > 0) {
+      rows.push([
+        'Stellar nova',
+        `Lv${c.stellarNovaLevel} · ${(c.stellarNovaInterval ?? 0).toFixed(1)}s · ${Math.round(c.stellarNovaDamage ?? 0)} dmg`,
+      ]);
+    }
+    if ((c.corrosiveAuraDps ?? 0) > 0) {
+      rows.push(['Corrosive aura', `${(c.corrosiveAuraDps).toFixed(1)} DPS`]);
+    }
+    if ((c.interestRate ?? 0) > 0) {
+      rows.push(['Scrap interest', `${((c.interestRate) * 100).toFixed(1)}%/launch`]);
+    }
+
+    el.innerHTML = rows
+      .map(
+        ([label, val]) =>
+          `<div class="tree-stat"><span class="tree-stat-label">${label}</span><span class="tree-stat-value">${val}</span></div>`
+      )
+      .join('');
+
+    if (this._visible && this._resizeFn) this._resizeFn();
   }
 
   _centerOnFrontier() {
@@ -219,7 +347,7 @@ export class TechTreeUI {
     const success = this._tree.purchase(node.id, this._currency);
     if (success) {
       if (this._audio) {
-        if (node.id === 'drone') this._audio.play('droneSpawn');
+        if (node.templateId === 'drone') this._audio.play('droneSpawn');
         else this._audio.play('upgrade');
       }
       // Flash animation via re-render
@@ -229,7 +357,48 @@ export class TechTreeUI {
     }
   }
 
+  _sellLevel(node) {
+    if (!node?.isUnlocked) return;
+    const success = this._tree.sellOneLevel(node.id, this._currency);
+    if (success && this._audio) this._audio.play('pickup');
+  }
+
+  /** Re-apply hover + tooltip from last pointer (handles reflow above canvas firing spurious mouseleave). */
+  _syncPointerHover() {
+    if (this._lastClientX == null || this._lastClientY == null) return;
+
+    const x = this._lastClientX;
+    const y = this._lastClientY;
+    const r = this._canvas.getBoundingClientRect();
+    if (x < r.left || x >= r.right || y < r.top || y >= r.bottom) {
+      if (this._hoveredNode) {
+        this._hoveredNode = null;
+        this._hideTooltip();
+      }
+      this._lastClientX = null;
+      this._lastClientY = null;
+      return;
+    }
+
+    const world = this._screenToWorld(x, y);
+    const hit = this._hitTest(world.x, world.y);
+    const hitId = hit?.id ?? null;
+    const hoveredId = this._hoveredNode?.id ?? null;
+
+    if (hitId !== hoveredId) {
+      this._hoveredNode = hit;
+      if (hit) this._showTooltip(hit, x, y);
+      else this._hideTooltip();
+    } else if (hit) {
+      this._moveTooltip(x, y);
+    }
+  }
+
   render() {
+    if (this._visible && !this._isDragging) {
+      this._syncPointerHover();
+    }
+
     const ctx = this._ctx;
     const { width, height } = this._canvas;
     ctx.clearRect(0, 0, width, height);
@@ -357,6 +526,7 @@ export class TechTreeUI {
 
   _drawNode(ctx, node) {
     const { cx, cy } = this._nodeCenter(node);
+    const CATEGORY_META = this._tree.generator.categoryMeta;
     const catMeta = CATEGORY_META[node.category] || CATEGORY_META.weapon;
     const pres = node.presentation || {};
     const rarityMeta = pres.rarity ? (RARITY_META[pres.rarity] || {}) : {};
@@ -479,13 +649,14 @@ export class TechTreeUI {
   _showTooltip(node, screenX, screenY) {
     const el = this._tooltip;
     const isAvailable = this._tree.isAvailable(node.id);
-    const meta = CATEGORY_META[node.category] || {};
+    const meta = this._tree.generator.categoryMeta[node.category] || {};
     const pres = node.presentation || {};
     const rarityMeta = pres.rarity ? (RARITY_META[pres.rarity] || {}) : null;
     const nodeColor = pres.color || rarityMeta?.color || meta.color;
 
     let html = `<div class="tooltip-name" style="color:${nodeColor}">${node.icon || ''} ${node.name}</div>`;
     html += `<div class="tooltip-category" style="color:${nodeColor}">${(meta.label || node.category || '').toUpperCase()}</div>`;
+    html += `<div class="tooltip-ring" style="font-size:10px;color:#7a8a9e;margin:2px 0 3px">Ring ${node.tier ?? 0}</div>`;
 
     // Rarity label
     if (pres.rarity) {
@@ -497,6 +668,23 @@ export class TechTreeUI {
 
     if (node.currentLevel > 0) {
       html += `<div class="tooltip-level">Level ${node.currentLevel} / ${node.maxLevel}</div>`;
+      const canSell = this._tree.canSellOneLevel(node.id);
+      const paid = node.getHistoricalCostForLevel(node.currentLevel);
+      const pct = Math.round(SELL_RATIO * 100);
+      if (canSell && Object.keys(paid).length) {
+        html += `<div class="tooltip-sell" style="margin-top:6px;font-size:10px;color:#ffb347;border-top:1px solid rgba(255,255,255,0.12);padding-top:4px">`;
+        html += `Sell 1 level (${pct}% refund): `;
+        const parts = Object.entries(paid).map(([type, amount]) => {
+          const cm = CURRENCIES[type];
+          const r = Math.floor(amount * SELL_RATIO);
+          return `<span style="color:#7dffb3">${cm?.icon || ''} ${r}</span>`;
+        });
+        html += parts.join(' ');
+        html += `<div style="color:#888;margin-top:3px">Right-click node to sell</div>`;
+        html += `</div>`;
+      } else if (!canSell) {
+        html += `<div style="margin-top:6px;font-size:9px;color:#aa6666">Cannot sell — other upgrades need this path</div>`;
+      }
     }
 
     if (!node.isMaxed) {

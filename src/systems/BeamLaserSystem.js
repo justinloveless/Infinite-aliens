@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { eventBus, EVENTS } from '../core/EventBus.js';
 import { BEAM_LASER } from '../constants.js';
+import { CombatSystem } from './CombatSystem.js';
 
 // Stable reference vectors for quaternion math
 const _yAxis = new THREE.Vector3(0, 1, 0);
@@ -51,11 +52,12 @@ export class BeamLaserSystem {
    * @param {object}   ship        — Ship instance
    * @param {object[]} enemies     — active enemy array from RoundSystem
    * @param {object}   computed    — computed stats
+   * @param {object}   [round]     — state.round (manual focus id)
    */
-  update(delta, isEquipped, ship, enemies, computed) {
+  update(delta, isEquipped, ship, enemies, computed, round) {
     this._time += delta;
 
-    if (!isEquipped) {
+    if (!isEquipped || !computed?.hasAutoFire) {
       this._setVisible(false);
       this._light.intensity = 0;
       // Reset cycle so it starts fresh when re-equipped
@@ -85,8 +87,12 @@ export class BeamLaserSystem {
       return;
     }
 
-    // ---- Find nearest active enemy ----
-    const target = this._findNearest(ship.group.position, enemies);
+    const target = CombatSystem.resolveCombatTarget(
+      enemies,
+      ship.group.position,
+      computed,
+      round
+    );
     if (!target) {
       this._setVisible(false);
       this._light.intensity = 0;
@@ -145,17 +151,6 @@ export class BeamLaserSystem {
   _setVisible(v) {
     this._core.visible = v;
     this._glow.visible = v;
-  }
-
-  _findNearest(playerPos, enemies) {
-    let nearest = null;
-    let minDist = Infinity;
-    for (const e of enemies) {
-      if (!e.active) continue;
-      const d = e.group.position.distanceTo(playerPos);
-      if (d < minDist) { minDist = d; nearest = e; }
-    }
-    return nearest;
   }
 
   /** Hide beam and reset cycle state (call on round reset / game reset). */

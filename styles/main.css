@@ -296,12 +296,46 @@ html, body {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   flex-wrap: wrap;
+  /* Reserve space so digit updates / wrap don’t shift the canvas and drop hover */
+  min-height: 2.75rem;
 }
 .tree-currency {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 0.8rem;
+}
+.tech-tree-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 4px 14px;
+  padding: 8px 20px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  min-height: 4.5rem;
+  font-size: 0.68rem;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.88);
+}
+.tech-tree-stats .tree-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.tech-tree-stats .tree-stat-label {
+  color: #7a8a9e;
+  flex-shrink: 0;
+}
+.tech-tree-stats .tree-stat-value {
+  color: rgba(0, 245, 255, 0.92);
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #tech-tree-canvas {
   flex: 1;
@@ -389,7 +423,7 @@ html, body {
   animation: pulse 1.2s ease-in-out infinite;
 }
 
-/* ===== DEATH SCREEN ===== */
+/* ===== DEATH / HANGAR SCREEN ===== */
 #death-content { text-align: center; }
 #death-title {
   font-family: var(--font-main);
@@ -397,13 +431,71 @@ html, body {
   font-weight: 900;
   color: var(--pink);
   text-shadow: var(--glow-pink);
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
-#death-content p {
-  color: rgba(255,255,255,0.6);
-  margin-bottom: 28px;
+#death-stats {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.death-stat {
+  color: rgba(255,255,255,0.65);
   font-size: 0.85rem;
+  letter-spacing: 0.04em;
 }
+#death-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+/* ===== WARP GATE SCREEN ===== */
+#warp-gate-content { text-align: center; max-width: 480px; }
+#warp-gate-title {
+  font-family: var(--font-main);
+  font-size: clamp(1.3rem, 4vw, 2rem);
+  font-weight: 900;
+  color: var(--cyan);
+  text-shadow: var(--glow-cyan);
+  letter-spacing: 0.15em;
+  margin-bottom: 10px;
+}
+#warp-gate-subtitle {
+  color: rgba(255,255,255,0.55);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  margin-bottom: 28px;
+}
+#warp-gate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+.warp-gate-btn {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px !important;
+  text-align: left !important;
+}
+.warp-gate-btn:hover .warp-gate-sector { color: #fff; }
+.warp-gate-sector {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--cyan);
+}
+.warp-gate-label {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.warp-gate-btn.gate-standard .warp-gate-sector { color: rgba(255,255,255,0.7); }
+.warp-gate-btn.gate-standard { border-color: rgba(255,255,255,0.25); box-shadow: none; }
 
 /* ===== WELCOME SCREEN ===== */
 #welcome-content { text-align: center; max-width: 400px; }
@@ -569,6 +661,13 @@ html, body {
   gap: 10px;
   padding: 14px 18px 18px;
   border-top: 1px solid rgba(0, 245, 255, 0.08);
+}
+
+.debug-menu-spawn-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 18px 14px;
 }
 
 .debug-menu-section-title {

@@ -41,8 +41,10 @@ export class SynthGrid {
     scene.add(this._lines);
   }
 
-  update(delta) {
-    this._time += delta * 8;
+  /** @param {number} speedScale - matches player run speed vs base (combat only in main) */
+  update(delta, speedScale = 1) {
+    const s = Math.max(0, speedScale);
+    this._time += delta * 8 * s;
     // Scroll horizontal lines forward
     const posAttr = this._lines.geometry.getAttribute('position');
     const arr = posAttr.array;

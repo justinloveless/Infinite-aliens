@@ -104,11 +104,9 @@
       <button id="close-tree-btn" class="neon-btn">✕ CLOSE</button>
     </div>
     <div id="tech-tree-currencies"></div>
+    <div id="tech-tree-stats" class="tech-tree-stats" aria-label="Current ship stats"></div>
     <canvas id="tech-tree-canvas"></canvas>
     <div id="node-tooltip" class="hidden"></div>
-    <div id="tech-tree-footer">
-      <button id="launch-btn" class="neon-btn launch">▶ ENGAGE</button>
-    </div>
   </div>
 
   <!-- Round Transition -->
@@ -120,12 +118,24 @@
     </div>
   </div>
 
-  <!-- Death Screen -->
+  <!-- Death / Hangar Screen (shown between all runs) -->
   <div id="death-screen" class="overlay hidden">
     <div id="death-content">
       <div id="death-title">SHIP DESTROYED</div>
-      <p>Your materials are safe. Upgrade and try again!</p>
-      <button id="retry-btn" class="neon-btn launch">REPAIR & UPGRADE</button>
+      <div id="death-stats"></div>
+      <div id="death-actions">
+        <button id="view-tree-btn" class="neon-btn">⊕ TECH TREE</button>
+        <button id="death-launch-btn" class="neon-btn launch">▶ LAUNCH</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Warp Gate Selection -->
+  <div id="warp-gate-screen" class="overlay hidden">
+    <div id="warp-gate-content">
+      <div id="warp-gate-title">SELECT WARP GATE</div>
+      <div id="warp-gate-subtitle">Choose your starting sector. Higher sectors mean stronger enemies — and better rewards.</div>
+      <div id="warp-gate-list"></div>
     </div>
   </div>
 
