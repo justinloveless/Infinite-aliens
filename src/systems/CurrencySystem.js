@@ -68,14 +68,24 @@ export class CurrencySystem {
     return drops;
   }
 
-  // Update passive generation (Stellar Dust etc.)
+  // Update passive generation (Stellar Dust etc.) from the old `computed` blob.
   updatePassive(delta, computed) {
     if (computed.stellarDustRate > 0) {
       this.add('stellarDust', computed.stellarDustRate * delta);
     }
-    // Additional passive rates from special nodes
     if (computed.passiveRates) {
       for (const [type, rate] of Object.entries(computed.passiveRates)) {
+        if (rate > 0) this.add(type, rate * delta);
+      }
+    }
+  }
+
+  /** Passive generation driven from PlayerStatsComponent (ECS). */
+  updatePassiveFromStats(delta, stats) {
+    if (!stats) return;
+    if (stats.stellarDustRate > 0) this.add('stellarDust', stats.stellarDustRate * delta);
+    if (stats.passiveRates) {
+      for (const [type, rate] of Object.entries(stats.passiveRates)) {
         if (rate > 0) this.add(type, rate * delta);
       }
     }

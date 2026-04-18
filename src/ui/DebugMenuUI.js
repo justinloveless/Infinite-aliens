@@ -1,6 +1,6 @@
 import { CURRENCIES } from '../constants.js';
-import { reticleDebug } from '../entities/Enemy.js';
-import { DEBUG_ENEMY_SPAWN_TYPES } from '../entities/EnemyFactory.js';
+import { reticleDebug } from '../components/enemy/EnemyVisualsComponent.js';
+import { DEBUG_ENEMY_SPAWN_TYPES } from '../components/enemy/EnemyDefs.js';
 
 const CURRENCY_KEYS = Object.keys(CURRENCIES);
 const DEBUG_MENU_POS_KEY = 'infinite_aliens_debug_menu_pos';
