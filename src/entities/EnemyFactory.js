@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 import { Enemy } from './Enemy.js';
+import {
+  createChargeMovement,
+  createSteadyMovement,
+  createZigzagMovement,
+  createKeepRangeMovement,
+  createBossMovement,
+} from '../ecs/movementComponents.js';
 
 // Enemy type definitions
 const ENEMY_DEFS = {
@@ -85,6 +92,19 @@ const ENEMY_DEFS = {
   },
 };
 
+const BEHAVIOR_FACTORY = {
+  charge:    (def) => createChargeMovement(),
+  steady:    (def) => createSteadyMovement(),
+  zigzag:    (def) => createZigzagMovement(),
+  keepRange: (def) => createKeepRangeMovement(def.keepRangeDist || 12),
+  boss:      (def) => createBossMovement(),
+};
+
+const EXPLOSION_CONFIG = {
+  boss: { color: 0xaa00ff, scale: 2.5 },
+  tank: { color: 0xff6600, scale: 1.5 },
+};
+
 // Which enemy types are available per round
 function getAvailableTypes(round) {
   const types = ['scout'];
@@ -105,14 +125,24 @@ function weightedPick(types, rng) {
   return defs[0];
 }
 
+function attachComponents(enemy, def, world) {
+  const entityId = world.createEntity();
+  world.addComponent(entityId, 'Movement', BEHAVIOR_FACTORY[def.behavior](def));
+  world.addComponent(entityId, 'ExplosionConfig',
+    EXPLOSION_CONFIG[def.type] ?? { color: 0xff6600, scale: 1.0 });
+  enemy.entityId = entityId;
+}
+
 export class EnemyFactory {
-  create(typeName, round, scene) {
+  create(typeName, round, scene, world) {
     const def = ENEMY_DEFS[typeName];
     if (!def) throw new Error(`Unknown enemy type: ${typeName}`);
-    return new Enemy(def, round, scene);
+    const enemy = new Enemy(def, round, scene);
+    attachComponents(enemy, def, world);
+    return enemy;
   }
 
-  spawnRandom(round, scene) {
+  spawnRandom(round, scene, world) {
     const types = getAvailableTypes(round);
     const def = weightedPick(types, Math.random);
 
@@ -120,6 +150,7 @@ export class EnemyFactory {
     const count = def.spawnCount || 1;
     for (let i = 0; i < count; i++) {
       const enemy = new Enemy(def, round, scene);
+      attachComponents(enemy, def, world);
       if (count > 1) {
         enemy.group.position.x += (i - 1) * 2.5;
       }
@@ -128,7 +159,10 @@ export class EnemyFactory {
     return enemies;
   }
 
-  spawnBoss(round, scene) {
-    return [new Enemy(ENEMY_DEFS.boss, round, scene)];
+  spawnBoss(round, scene, world) {
+    const def = ENEMY_DEFS.boss;
+    const enemy = new Enemy(def, round, scene);
+    attachComponents(enemy, def, world);
+    return [enemy];
   }
 }

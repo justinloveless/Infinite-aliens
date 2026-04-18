@@ -1,8 +1,17 @@
 import { PLAYER } from '../constants.js';
 
+const ABILITY_COMPONENTS = {
+  hasVampire:       ['VampiricRounds', { healPercent: 0.02 }],
+  hasDamageReflect: ['DamageReflect',  { reflectPercent: 0.20 }],
+  hasOvercharge:    ['Overcharge',     { shotCount: 0, threshold: 10, multiplier: 5 }],
+  hasDrone:         ['Drone',          {}],
+};
+
+const ABILITY_COMPONENT_NAMES = Object.values(ABILITY_COMPONENTS).map(([name]) => name);
+
 // Rebuild computedStats from base stats + tech tree
 export class UpgradeSystem {
-  compute(state, techTreeState) {
+  compute(state, techTreeState, world, playerEntityId) {
     const base = state.player;
     const computed = {
       // Start with base values
@@ -22,13 +31,14 @@ export class UpgradeSystem {
       lootMultiplier: base.lootMultiplier,
       stellarDustRate: base.stellarDustRate,
       projectileType: base.projectileType,
-      hasDrone: base.hasDrone,
-      hasVampire: base.hasVampire,
-      hasDamageReflect: base.hasDamageReflect,
-      hasOvercharge: base.hasOvercharge,
       isHoming: base.projectileType === 'missile',
       passiveRates: {},
     };
+
+    // Clear all ability components before re-applying from tech tree
+    for (const name of ABILITY_COMPONENT_NAMES) {
+      world.removeComponent(playerEntityId, name);
+    }
 
     if (!techTreeState) return computed;
 
@@ -40,7 +50,7 @@ export class UpgradeSystem {
       const level = node.currentLevel;
 
       for (const effect of node.effects) {
-        this._applyEffect(computed, effect, level);
+        this._applyEffect(computed, effect, level, world, playerEntityId);
       }
     }
 
@@ -56,7 +66,7 @@ export class UpgradeSystem {
     return computed;
   }
 
-  _applyEffect(computed, effect, level) {
+  _applyEffect(computed, effect, level, world, playerEntityId) {
     const { type, stat, value } = effect;
 
     switch (type) {
@@ -76,9 +86,13 @@ export class UpgradeSystem {
         computed[stat] = value;
         break;
 
-      case 'special':
-        computed[stat] = value;
+      case 'special': {
+        const mapping = ABILITY_COMPONENTS[stat];
+        if (mapping) {
+          world.addComponent(playerEntityId, mapping[0], { ...mapping[1] });
+        }
         break;
+      }
     }
   }
 

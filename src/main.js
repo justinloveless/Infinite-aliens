@@ -26,6 +26,8 @@ import { TechTreeUI } from './ui/TechTreeUI.js';
 import { RoundTransition } from './ui/RoundTransition.js';
 import { DamageNumbers } from './ui/DamageNumbers.js';
 
+import { World } from './ecs/World.js';
+
 // ============================
 // GAME ORCHESTRATOR
 // ============================
@@ -57,12 +59,16 @@ class Game {
     this.ship = new Ship(this.scene);
     this.projectilePool = new ProjectilePool(this.scene);
 
+    // ECS
+    this.world = new World();
+    this.playerEntityId = this.world.createEntity();
+
     // Systems
     this.collision = new CollisionSystem();
-    this.combat = new CombatSystem(this.projectilePool, this.collision);
+    this.combat = new CombatSystem(this.projectilePool, this.collision, this.world, this.playerEntityId);
     this.currency = new CurrencySystem();
     this.upgrade = new UpgradeSystem();
-    this.round = new RoundSystem(this.currency);
+    this.round = new RoundSystem(this.currency, this.world);
 
     // UI
     this.ui = new UIManager();
@@ -230,7 +236,7 @@ class Game {
   }
 
   _rebuildComputed() {
-    this.computed = this.upgrade.compute(this.state, this.techTree);
+    this.computed = this.upgrade.compute(this.state, this.techTree, this.world, this.playerEntityId);
     this.state._computed = this.computed;
     // Ensure current HP doesn't exceed new max
     const p = this.state.player;

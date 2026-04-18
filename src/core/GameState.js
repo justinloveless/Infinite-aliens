@@ -34,11 +34,6 @@ export function createInitialState() {
       lootMultiplier: PLAYER.BASE_LOOT_MULT,
       stellarDustRate: PLAYER.STELLAR_DUST_RATE,
       projectileType: 'laser',  // 'laser' | 'missile' | 'plasma'
-      hasDrone: false,
-      hasVampire: false,
-      hasDamageReflect: false,
-      hasOvercharge: false,
-      overchargeCounter: 0,
     },
 
     // Computed stats (rebuilt when upgrades change)

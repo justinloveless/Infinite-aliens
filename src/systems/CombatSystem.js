@@ -3,9 +3,11 @@ import { PLAYER } from '../constants.js';
 import { eventBus, EVENTS } from '../core/EventBus.js';
 
 export class CombatSystem {
-  constructor(projectilePool, collisionSystem) {
+  constructor(projectilePool, collisionSystem, world, playerEntityId) {
     this._pool = projectilePool;
     this._collision = collisionSystem;
+    this._world = world;
+    this._playerEntityId = playerEntityId;
     this._attackTimer = 0;
     this._clickCooldown = 0;
     this._contactCooldowns = new Map(); // enemyId -> timer
@@ -49,20 +51,23 @@ export class CombatSystem {
       this._attackTimer = 0;
       const target = this._findNearestEnemy(playerPos);
       if (target) {
+        const origin = playerPos.clone().add(new THREE.Vector3(0, 0, -0.5));
+        const baseDir = this._getDirection(playerPos, target.group.position);
+
         for (let i = 0; i < computed.projectileCount; i++) {
           const { damage, isCrit } = this._calcDamage(computed);
 
           // Spread for multi-shot
-          const baseDir = this._getDirection(playerPos, target.group.position);
+          const dir = baseDir.clone();
           if (computed.projectileCount > 1) {
             const spread = (i / (computed.projectileCount - 1) - 0.5) * 0.4;
-            baseDir.x += spread;
-            baseDir.normalize();
+            dir.x += spread;
+            dir.normalize();
           }
 
           this._pool.spawn(
-            playerPos.clone().add(new THREE.Vector3(0, 0, -0.5)),
-            baseDir,
+            origin.clone(),
+            dir,
             damage,
             isCrit,
             computed.projectileType,
@@ -70,6 +75,26 @@ export class CombatSystem {
             computed.isHoming ? target : null
           );
         }
+
+        // Overcharge: every Nth shot fires an extra high-damage burst
+        const overcharge = this._world.getComponent(this._playerEntityId, 'Overcharge');
+        if (overcharge) {
+          overcharge.shotCount++;
+          if (overcharge.shotCount >= overcharge.threshold) {
+            overcharge.shotCount = 0;
+            const { damage } = this._calcDamage(computed);
+            this._pool.spawn(
+              origin,
+              baseDir.clone(),
+              damage * overcharge.multiplier,
+              true,
+              computed.projectileType,
+              true,
+              target
+            );
+          }
+        }
+
         if (audioManager) audioManager.play('laser');
         eventBus.emit(EVENTS.PROJECTILE_FIRED);
       }
@@ -96,9 +121,9 @@ export class CombatSystem {
       eventBus.emit(EVENTS.ENEMY_DAMAGED, { enemy, damage: effectiveDmg, isCrit });
 
       if (died) {
-        // Vampiric heal
-        if (computed.hasVampire) {
-          const healAmt = Math.ceil(effectiveDmg * 0.02);
+        const vampire = this._world.getComponent(this._playerEntityId, 'VampiricRounds');
+        if (vampire) {
+          const healAmt = Math.ceil(effectiveDmg * vampire.healPercent);
           eventBus.emit(EVENTS.PLAYER_HEALED, { amount: healAmt });
         }
         eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
@@ -116,9 +141,9 @@ export class CombatSystem {
       const cooldown = this._contactCooldowns.get(enemy.id) || 0;
       if (cooldown <= 0) {
         let dmg = enemy.contactDamage;
-        // Damage reflect
-        if (computed.hasDamageReflect) {
-          enemy.takeDamage(Math.ceil(dmg * 0.2));
+        const reflect = this._world.getComponent(this._playerEntityId, 'DamageReflect');
+        if (reflect) {
+          enemy.takeDamage(Math.ceil(dmg * reflect.reflectPercent));
           if (!enemy.active) eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
         }
         dmg = Math.max(1, dmg - computed.armor);
