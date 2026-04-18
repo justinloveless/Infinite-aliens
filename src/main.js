@@ -6,11 +6,15 @@ import { Starfield } from './scene/Starfield.js';
 import { SynthGrid } from './scene/SynthGrid.js';
 import { CameraController } from './scene/CameraController.js';
 import { setupPostProcessing } from './scene/PostProcessing.js';
+import { QualityController } from './scene/QualityController.js';
+import { LightPool } from './scene/LightPool.js';
 import { GameLoop } from './core/GameLoop.js';
 import { createInitialState } from './core/GameState.js';
 import { SaveManager } from './core/SaveManager.js';
 import { AudioManager } from './core/AudioManager.js';
 import { eventBus, EVENTS } from './core/EventBus.js';
+import { ProjectileRenderer } from './rendering/ProjectileRenderer.js';
+import { PerfOverlay } from './ui/PerfOverlay.js';
 
 import { World } from './ecs/World.js';
 import { createPlayer } from './prefabs/createPlayer.js';
@@ -31,6 +35,8 @@ import { DamageNumbers } from './ui/DamageNumbers.js';
 import { BLOOM, PLAYER, RUN, SCENE, WARP } from './constants.js';
 import * as THREE from 'three';
 
+const NOOP_MARK = () => {};
+
 class Game {
   constructor() {
     this.state = null;
@@ -41,6 +47,12 @@ class Game {
     this.saveManager = new SaveManager();
     this.settings = new SettingsManager();
     this.audio = new AudioManager();
+
+    // Per-section tick profiler. Enable with Shift+F3; logs a breakdown
+    // whenever a frame's measured work exceeds 50 ms so we can see which
+    // phase (spawn / world / collision / render / ...) caused a hitch.
+    this._profilerEnabled = true;
+    this._profMarks = null;
 
     this.scene = new SceneManager();
     this.starfield = new Starfield(this.scene.scene);
@@ -60,6 +72,9 @@ class Game {
     this.audio.setSfxVolume(this.settings.sfxVolume);
     this.audio.setMuted(this.settings.muted);
 
+    this.projectileRenderer = new ProjectileRenderer(this.scene);
+    this.lightPool = new LightPool({ scene: this.scene.scene, capacity: 32 });
+
     this.currency = new CurrencySystem();
     this.world = new World({
       scene: this.scene,
@@ -68,7 +83,22 @@ class Game {
       eventBus,
       currency: this.currency,
       createAsteroid,
+      projectileRenderer: this.projectileRenderer,
+      lightPool: this.lightPool,
     });
+
+    this.perfOverlay = new PerfOverlay({
+      renderer: this.scene.renderer,
+      world: this.world,
+    });
+    this.qualityController = new QualityController({
+      renderer: this.scene.renderer,
+      composer,
+      postPasses,
+      getFps: () => this.perfOverlay.getStats().fps,
+    });
+    this._applySettingsToPerf();
+    this._logGpuInfo();
 
     this.ui = new UIManager();
     this.hud = new HUD();
@@ -97,7 +127,93 @@ class Game {
     this._setupSettingsButton();
     this._setupDebugMenuHotkey();
     this._setupPauseControls();
+    this._setupPerfOverlayHotkey();
+    this._setupSettingsListener();
     if (import.meta.env.DEV) this._setupUpgradeEditor();
+  }
+
+  _applySettingsToPerf() {
+    if (this.settings.showFps) this.perfOverlay.show();
+    else this.perfOverlay.hide();
+    this.qualityController.setMode(this.settings.graphicsQuality);
+  }
+
+  _setupSettingsListener() {
+    this.settings.onChange((key) => {
+      if (key === 'showFps') {
+        if (this.settings.showFps) this.perfOverlay.show();
+        else this.perfOverlay.hide();
+      } else if (key === 'graphicsQuality') {
+        this.qualityController.setMode(this.settings.graphicsQuality);
+      } else if (key === 'reset') {
+        this._applySettingsToPerf();
+      }
+    });
+  }
+
+  _setupPerfOverlayHotkey() {
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'F3' || e.repeat) return;
+      if (this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      const next = !this.settings.showFps;
+      this.settings.setShowFps(next);
+    });
+    // Shift+F3: toggle per-section profiler. Logs a breakdown on hitches.
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'F3' || !e.shiftKey || e.repeat) return;
+      if (this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      this._profilerEnabled = !this._profilerEnabled;
+      console.log(`[perf] profiler ${this._profilerEnabled ? 'ON' : 'OFF'} (log hitches >50ms)`);
+    });
+    // Alt+F3: toggle full composer bypass. Runs plain renderer.render().
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'F3' || !e.altKey || e.repeat) return;
+      if (this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      this._bypassComposer = !this._bypassComposer;
+      this.scene.setBypassComposer(this._bypassComposer);
+      console.log(`[perf] composer bypass ${this._bypassComposer ? 'ON (plain renderer)' : 'OFF (composer)'}`);
+    });
+  }
+
+  /** Records the time at this label relative to the start of the current tick. */
+  _profMark(label) {
+    if (!this._profMarks) this._profMarks = [];
+    this._profMarks.push([label, performance.now()]);
+  }
+
+  /** At end of tick, if total cost was high enough, log a breakdown. */
+  _profFlush() {
+    const marks = this._profMarks;
+    if (!marks || marks.length < 2) { if (marks) marks.length = 0; return; }
+    const total = marks[marks.length - 1][1] - marks[0][1];
+    if (total >= 50) {
+      const parts = [];
+      for (let i = 1; i < marks.length; i++) {
+        const d = marks[i][1] - marks[i - 1][1];
+        if (d >= 1) parts.push(`${marks[i][0]}=${d.toFixed(1)}`);
+      }
+      const draws = this.scene.renderer.info.render.calls;
+      const tris = this.scene.renderer.info.render.triangles;
+      console.warn(`[perf] tick=${total.toFixed(1)}ms ${parts.join(' ')} draw=${draws} tris=${tris}`);
+    }
+    marks.length = 0;
+  }
+
+  /** Log WebGL renderer/vendor once at startup so we can confirm GPU accel. */
+  _logGpuInfo() {
+    try {
+      const gl = this.scene.renderer.getContext();
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      const vendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
+      const renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      const dpr = window.devicePixelRatio;
+      const pr = this.scene.renderer.getPixelRatio();
+      const size = this.scene.renderer.getSize(new THREE.Vector2());
+      console.log(`[perf] GPU: ${vendor} / ${renderer} | dpr=${dpr} pixelRatio=${pr} size=${size.x}x${size.y}`);
+    } catch (e) { /* ignore */ }
   }
 
   _setupEventListeners() {
@@ -694,28 +810,51 @@ class Game {
   }
 
   _tick(delta) {
+    // Raw, uncapped gap between this tick and the previous one. The GameLoop
+    // clamps `delta` at 100 ms, so a multi-second browser/GC stall looks like
+    // a single 100 ms frame in the fps average. This raw measurement surfaces
+    // those hitches in the perf overlay.
+    const nowMs = performance.now();
+    const rawGapMs = this._lastTickMs != null ? nowMs - this._lastTickMs : 0;
+    this._lastTickMs = nowMs;
+
     const dt = this._paused ? 0 : delta;
+
+    // Feed perf metrics + adaptive quality with the real (unpaused) delta so
+    // pausing the game doesn't trick the tier selector. Work time (CPU spent
+    // inside _tick) is measured from the end of the *previous* tick, so the
+    // value we pass here is for the frame that just ran.
+    const prevWorkMs = this._lastWorkMs ?? 0;
+    this.perfOverlay.tick(delta, rawGapMs, prevWorkMs);
+    this.qualityController.tick(delta);
 
     if (!this.state || !this.playerEntity) {
       this.starfield.update(dt, 1);
       this.synthGrid.update(dt, 1);
       this.camera.update(dt);
       this._updateShaders(dt);
+      this.projectileRenderer.flush();
       this.scene.render();
+      this._lastWorkMs = performance.now() - nowMs;
       return;
     }
 
     const phase = this.state.round.phase;
     const worldSpeed = this._worldMotionScale();
 
-    this.upgradeApplier?.tick(dt);
-    this.starfield.update(dt, worldSpeed);
-    this.synthGrid.update(dt, worldSpeed);
-    this.camera.update(dt);
-    this._updateShaders(dt);
+    // Break `_tick` into labeled sections so the perf overlay can attribute
+    // hitches. `_mark` is a cheap no-op when profiling is off.
+    const mark = this._profilerEnabled ? this._profMark.bind(this) : NOOP_MARK;
+    mark('start');
+
+    this.upgradeApplier?.tick(dt);                     mark('upgrade');
+    this.starfield.update(dt, worldSpeed);             mark('starfield');
+    this.synthGrid.update(dt, worldSpeed);             mark('synthgrid');
+    this.camera.update(dt);                            mark('camera');
+    this._updateShaders(dt);                           mark('shaders');
 
     if (phase === 'combat') {
-      this.spawnDirector.update(dt);
+      this.spawnDirector.update(dt);                   mark('spawn');
 
       const bossNow = !!this.state.round.bossIsActive;
       if (bossNow !== this._prevBossMusicActive) {
@@ -724,23 +863,36 @@ class Game {
       }
     }
 
-    this.world.update(dt);
+    this.world.update(dt);                             mark('world');
     if (phase === 'combat') {
-      this.collision.update();
+      this.collision.update();                         mark('collision');
     }
 
-    this._syncStateFromPlayer();
+    this._syncStateFromPlayer();                       mark('sync');
 
     if (phase === 'combat') {
       const manual = this.playerEntity.get('ManualGunComponent');
       this.hud.update(this.state, this.computed, manual?.getHeatState?.() ?? null);
+      mark('hud');
     }
 
     if (this.techTreeUI && this._techTreeOpen) this.techTreeUI.tick(dt);
 
     if (this.techTree) this.saveManager.update(dt, this.state, this.techTree);
+    mark('save');
 
-    this.scene.render();
+    this.projectileRenderer.flush();                   mark('projFlush');
+
+    // Disable auto-reset so renderer.info accumulates across all composer
+    // passes. Lets us see the real total draw count (not just the last
+    // fullscreen pass, which is always "1 draw / 1 triangle").
+    const ri = this.scene.renderer.info;
+    ri.autoReset = false;
+    ri.reset();
+    this.scene.render();                               mark('render');
+
+    this._lastWorkMs = performance.now() - nowMs;
+    if (this._profilerEnabled) this._profFlush();
   }
 
   _updateShaders(delta) {

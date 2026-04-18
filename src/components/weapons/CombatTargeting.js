@@ -10,21 +10,24 @@
 export function resolveTarget(world, playerPos, stats, round) {
   const range = stats?.targetingRange ?? Infinity;
   const r2 = range * range;
-  const enemies = world.query('enemy');
+  // Cached per-frame list; skips the active-filter cost and is reused by
+  // every weapon + AoE querying enemies this tick.
+  const enemies = world.getFrameEnemies();
 
   const manualId = stats?.manualTargetFocusEnabled && round?.manualFocusEnemyId
     ? round.manualFocusEnemyId : null;
   if (manualId) {
-    for (const e of enemies) {
-      if (e.active && e.id === manualId) return e;
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (e.id === manualId) return e;
     }
     if (round) round.manualFocusEnemyId = null;
   }
 
   let nearest = null;
   let minD2 = Infinity;
-  for (const e of enemies) {
-    if (!e.active) continue;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
     const t = e.get('TransformComponent');
     if (!t) continue;
     const dx = t.position.x - playerPos.x;

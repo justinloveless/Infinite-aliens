@@ -7,7 +7,19 @@ import { BLOOM } from '../constants.js';
 import { ChromaticAberrationShader, ScanlineShader, ColorGradeShader, FilmGrainShader } from './ShaderPasses.js';
 
 export function setupPostProcessing(renderer, scene, camera) {
-  const composer = new EffectComposer(renderer);
+  // Multisampled render target so MSAA survives through the composer's
+  // intermediate passes. Skipped on very high-res displays where the
+  // fill-rate cost outweighs the AA benefit.
+  const widthPx = window.innerWidth * renderer.getPixelRatio();
+  const samples = widthPx < 2500 ? 4 : 0;
+  const renderTarget = new THREE.WebGLRenderTarget(
+    window.innerWidth, window.innerHeight,
+    {
+      type: THREE.HalfFloatType,
+      samples,
+    }
+  );
+  const composer = new EffectComposer(renderer, renderTarget);
 
   // 1. Render pass
   composer.addPass(new RenderPass(scene, camera));

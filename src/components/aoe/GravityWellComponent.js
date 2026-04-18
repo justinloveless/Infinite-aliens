@@ -12,9 +12,9 @@ export class GravityWellComponent extends Component {
     if (ctx?.state?.round?.phase !== 'combat') return;
     const t = this.entity.get('TransformComponent'); if (!t) return;
     const r2 = this.radius * this.radius;
-    const enemies = ctx.world.query('enemy');
-    for (const e of enemies) {
-      if (!e.active) continue;
+    const enemies = ctx.world.getFrameEnemies();
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
       const et = e.get('TransformComponent'); if (!et) continue;
       if (et.position.distanceToSquared(t.position) <= r2) {
         e.get('StatusEffectsComponent')?.apply('slow', { mult: this.slowMult, duration: 0.25 });

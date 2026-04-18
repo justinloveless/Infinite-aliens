@@ -11,6 +11,23 @@ const COLORS = {
   stellarDust: 0xffd700,
 };
 
+// All loot crystals share one unit geometry; per-drop size is applied via
+// mesh.scale.setScalar(size) so we never allocate a fresh OctahedronGeometry.
+const LOOT_GEO = new THREE.OctahedronGeometry(1, 0);
+
+// Materials are cached per currency so every drop of the same currency shares
+// a single Material instance -> fewer shader swaps, fewer uploads.
+const LOOT_MAT_CACHE = new Map();
+function getLootMaterial(currencyType) {
+  let mat = LOOT_MAT_CACHE.get(currencyType);
+  if (!mat) {
+    const color = COLORS[currencyType] || 0xffffff;
+    mat = new THREE.MeshBasicMaterial({ color });
+    LOOT_MAT_CACHE.set(currencyType, mat);
+  }
+  return mat;
+}
+
 function sizeForAmount(amount) {
   if (amount >= 1000) return 0.26;
   if (amount >= 100)  return 0.18;
@@ -30,20 +47,28 @@ export class LootDropComponent extends Component {
     this._time = Math.random() * Math.PI * 2;
     this._scene = null;
 
-    const color = COLORS[currencyType] || 0xffffff;
-    const geo = new THREE.OctahedronGeometry(sizeForAmount(amount), 0);
-    const mat = new THREE.MeshBasicMaterial({ color });
-    this.mesh = new THREE.Mesh(geo, mat);
-    this._light = new THREE.PointLight(color, 0.8, 2.5);
+    this._color = COLORS[currencyType] || 0xffffff;
+    const mat = getLootMaterial(currencyType);
+    this.mesh = new THREE.Mesh(LOOT_GEO, mat);
+    this.mesh.scale.setScalar(sizeForAmount(amount));
+
+    // Light is acquired from the pool on attach so the scene's light count
+    // stays constant (see LightPool.js -- avoids shader recompile stalls).
+    this._light = null;
+    this._lightPool = null;
   }
 
   onAttach(ctx) {
     this._scene = ctx.scene;
     const t = this.entity.get('TransformComponent');
     this.mesh.position.copy(t.position);
-    this._light.position.copy(t.position);
     ctx.scene.groups.loot.add(this.mesh);
-    ctx.scene.groups.loot.add(this._light);
+
+    this._lightPool = ctx.lightPool ?? null;
+    if (this._lightPool) {
+      this._light = this._lightPool.acquire(this._color, 0.8, 2.5);
+      if (this._light) this._light.position.copy(t.position);
+    }
 
     this.entity.get('ColliderComponent').onHit = (other) => {
       if (!other.hasTag('player')) return;
@@ -54,10 +79,11 @@ export class LootDropComponent extends Component {
   onDetach() {
     if (this._scene) {
       this._scene.groups.loot.remove(this.mesh);
-      this._scene.groups.loot.remove(this._light);
     }
-    this.mesh.geometry.dispose();
-    this.mesh.material.dispose();
+    if (this._lightPool) this._lightPool.release(this._light);
+    this._light = null;
+    this._lightPool = null;
+    // geometry and material are cached/shared - do not dispose here.
   }
 
   _collect(ctx) {
@@ -92,7 +118,9 @@ export class LootDropComponent extends Component {
       }
     }
     this.mesh.position.copy(t.position);
-    this._light.position.copy(t.position);
-    this._light.intensity = 0.6 + Math.sin(this._time * 3) * 0.2;
+    if (this._light) {
+      this._light.position.copy(t.position);
+      this._light.intensity = 0.6 + Math.sin(this._time * 3) * 0.2;
+    }
   }
 }

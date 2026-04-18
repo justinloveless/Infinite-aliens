@@ -547,6 +547,11 @@ export class UpgradeApplier {
         const trigger = node.triggers[i];
         const key = `${node.id}:${i}`;
         const handler = (data) => {
+          // Re-entrance guard. Without this, an action that emits damage on
+          // enemy:damaged (for example a chain-damage upgrade with no
+          // cooldown) would recurse infinitely: takeDamage -> ENEMY_DAMAGED
+          // -> trigger -> takeDamage -> ... until the stack blows.
+          if (handler._firing) return;
           if (trigger.cooldown > 0) {
             const rem = this._triggerCooldowns.get(key) || 0;
             if (rem > 0) return;
@@ -566,7 +571,12 @@ export class UpgradeApplier {
               if (!this._evalCondition(trigger.condition, stats, uids)) return;
             }
           }
-          this._executeTriggerAction(trigger.action, level, stats, data);
+          handler._firing = true;
+          try {
+            this._executeTriggerAction(trigger.action, level, stats, data);
+          } finally {
+            handler._firing = false;
+          }
         };
         this._triggerUnsubscribers.push(eventBus.on(trigger.event, handler));
       }

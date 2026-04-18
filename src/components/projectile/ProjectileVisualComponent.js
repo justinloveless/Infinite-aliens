@@ -1,22 +1,25 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 
+// Shared geometry + color tables. These are also the source of truth for
+// the InstancedMesh buckets inside ProjectileRenderer.
+
 const GEO_CACHE = {};
 const OVERRIDE_GEO_CACHE = new Map();
-const MANUAL_HEAT_MAT_CACHE = new Map();
+const MANUAL_HEAT_HEX_CACHE = new Map();
 
-function getManualHeatMaterial(heatRatio) {
+function getManualHeatHex(heatRatio) {
   const step = Math.round(Math.min(1, Math.max(0, heatRatio)) * 10);
-  if (!MANUAL_HEAT_MAT_CACHE.has(step)) {
+  let hex = MANUAL_HEAT_HEX_CACHE.get(step);
+  if (hex == null) {
     const cool = new THREE.Color(0xffe030);
     const hot = new THREE.Color(0xff1800);
     cool.lerp(hot, step / 10);
     cool.multiplyScalar(1.5 + (step / 10) * 1.5);
-    const mat = new THREE.MeshBasicMaterial({ color: cool });
-    mat._matKey = `manual_heat_${step}`;
-    MANUAL_HEAT_MAT_CACHE.set(step, mat);
+    hex = cool.getHex();
+    MANUAL_HEAT_HEX_CACHE.set(step, hex);
   }
-  return MANUAL_HEAT_MAT_CACHE.get(step);
+  return hex;
 }
 
 function geoOf(type) {
@@ -61,43 +64,82 @@ const TYPE_COLORS = {
 };
 
 /**
- * Builds & owns the projectile's THREE mesh. The mesh mirrors the entity's
- * TransformComponent each frame via its own update().
+ * Allocates an instance slot in the central ProjectileRenderer (falls back to
+ * a per-projectile Mesh only if the renderer is unavailable, e.g. in tests).
+ * Per-frame update writes the entity's position into the instanced matrix.
  */
 export class ProjectileVisualComponent extends Component {
   constructor({ type = 'laser', heatRatio = 0, visualOverride = null } = {}) {
     super();
     this.type = type;
+    this._handle = null;
+    this._fallbackMesh = null;
+    this._scene = null;
 
     const geo = visualOverride?.geometry ? geoFromSpec(visualOverride.geometry) : geoOf(type);
-    let mat;
-    if (type === 'manual' && !visualOverride?.color) {
-      mat = getManualHeatMaterial(heatRatio);
-    } else {
-      const color = visualOverride?.color
-        ? new THREE.Color(visualOverride.color).getHex()
-        : TYPE_COLORS[type] ?? 0xffffff;
-      mat = new THREE.MeshBasicMaterial({ color });
-    }
-    this.mesh = new THREE.Mesh(geo, mat);
     const scale = visualOverride?.scale ?? 1;
-    this.mesh.scale.setScalar(scale);
-    if (type === 'laser' || type === 'manual') this.mesh.rotation.x = Math.PI / 2;
+    const rotateX = (type === 'laser' || type === 'manual');
+
+    let colorHex;
+    if (type === 'manual' && !visualOverride?.color) {
+      colorHex = getManualHeatHex(heatRatio);
+    } else if (visualOverride?.color) {
+      colorHex = new THREE.Color(visualOverride.color).getHex();
+    } else {
+      colorHex = TYPE_COLORS[type] ?? 0xffffff;
+    }
+
+    this._spec = {
+      // Bucket key must capture everything that defines the InstancedMesh's
+      // appearance except per-instance color. Color is applied per-instance.
+      key: `${type}|${visualOverride ? JSON.stringify(visualOverride.geometry || null) : 'default'}|s${scale}|r${rotateX ? 1 : 0}`,
+      geometry: geo,
+      scale,
+      rotateX,
+      color: 0xffffff, // base white; tint is supplied per-instance
+    };
+    this._instanceColorHex = colorHex;
   }
 
   onAttach(ctx) {
-    ctx?.scene?.groups.projectiles.add(this.mesh);
+    this._scene = ctx?.scene ?? null;
+    const renderer = ctx?.projectileRenderer;
+    if (renderer) {
+      this._handle = renderer.allocate(this._spec);
+      this._handle.setColor(this._instanceColorHex);
+      const t = this.entity?.get('TransformComponent');
+      if (t) this._handle.setPosition(t.position);
+      return;
+    }
+    // Fallback: regular Mesh (matches the original behavior).
+    const mat = new THREE.MeshBasicMaterial({ color: this._instanceColorHex });
+    const mesh = new THREE.Mesh(this._spec.geometry, mat);
+    mesh.scale.setScalar(this._spec.scale);
+    if (this._spec.rotateX) mesh.rotation.x = Math.PI / 2;
+    this._fallbackMesh = mesh;
+    ctx?.scene?.groups.projectiles.add(mesh);
   }
 
   onDetach() {
-    const parent = this.mesh.parent;
-    if (parent) parent.remove(this.mesh);
-    // Don't dispose cached geometry/materials.
+    if (this._handle) {
+      this._handle.release();
+      this._handle = null;
+    }
+    if (this._fallbackMesh) {
+      const parent = this._fallbackMesh.parent;
+      if (parent) parent.remove(this._fallbackMesh);
+      this._fallbackMesh.material?.dispose?.();
+      this._fallbackMesh = null;
+    }
   }
 
   update() {
     const t = this.entity?.get('TransformComponent');
     if (!t) return;
-    this.mesh.position.copy(t.position);
+    if (this._handle) {
+      this._handle.setPosition(t.position);
+    } else if (this._fallbackMesh) {
+      this._fallbackMesh.position.copy(t.position);
+    }
   }
 }

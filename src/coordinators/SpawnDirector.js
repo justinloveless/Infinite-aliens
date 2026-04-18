@@ -155,8 +155,7 @@ export class SpawnDirector {
     );
     const spawnInterval = Math.max(RUN.SPAWN_INTERVAL_MIN, baseInterval * roundMods.spawnInterval);
 
-    let aliveEnemies = 0;
-    for (const e of this.world.query('enemy')) if (e.active) aliveEnemies++;
+    const aliveEnemies = this.world.getFrameEnemies().length;
     const hasBoss = this._hasLiveBoss();
     state.round.bossIsActive = hasBoss;
 

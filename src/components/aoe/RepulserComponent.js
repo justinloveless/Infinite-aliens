@@ -20,12 +20,13 @@ export class RepulserComponent extends Component {
     this._timer = 0;
 
     const t = this.entity.get('TransformComponent'); if (!t) return;
-    const enemies = ctx.world.query('enemy');
-    for (const e of enemies) {
-      if (!e.active) continue;
+    const enemies = ctx.world.getFrameEnemies();
+    const r2 = this.radius * this.radius;
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
       const et = e.get('TransformComponent'); if (!et) continue;
-      const dist = et.position.distanceTo(t.position);
-      if (dist > this.radius) continue;
+      const d2 = et.position.distanceToSquared(t.position);
+      if (d2 > r2) continue;
       const dir = et.position.clone().sub(t.position);
       if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1);
       dir.normalize();

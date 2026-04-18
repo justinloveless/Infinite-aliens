@@ -12,6 +12,31 @@ export class World {
     this._byTag = new Map();        // tag -> Set<Entity>
     this._byComponent = new Map();  // componentName -> Set<Entity>
     this._pendingDestroy = new Set();
+
+    // Per-frame cached enemy list. Built lazily on the first call after
+    // update() starts, reused by targeting + AoE components, and invalidated
+    // at the start of every update() tick.
+    this._frameEnemies = [];
+    this._frameEnemiesDirty = true;
+  }
+
+  /**
+   * Returns a shared array of currently active enemies for this frame. The
+   * array is reused; do not mutate it. Consumers that need to store a
+   * reference should copy.
+   */
+  getFrameEnemies() {
+    if (!this._frameEnemiesDirty) return this._frameEnemies;
+    const out = this._frameEnemies;
+    out.length = 0;
+    const pool = this._byTag.get('enemy');
+    if (pool) {
+      for (const e of pool) {
+        if (e.active) out.push(e);
+      }
+    }
+    this._frameEnemiesDirty = false;
+    return out;
   }
 
   setContext(patch) {
@@ -27,6 +52,7 @@ export class World {
       c.world = this;
       c._attach();
     }
+    this._frameEnemiesDirty = true;
     return entity;
   }
 
@@ -64,6 +90,7 @@ export class World {
   }
 
   update(dt) {
+    this._frameEnemiesDirty = true;
     for (const e of this._entities) {
       if (e.active) e.update(dt, this.ctx);
     }
@@ -80,11 +107,16 @@ export class World {
       e.world = null;
     }
     this._pendingDestroy.clear();
+    this._frameEnemiesDirty = true;
   }
 
-  _markDestroyed(entity) { this._pendingDestroy.add(entity); }
+  _markDestroyed(entity) {
+    this._pendingDestroy.add(entity);
+    this._frameEnemiesDirty = true;
+  }
 
   _onEntityTagsChanged(entity) {
+    this._frameEnemiesDirty = true;
     // Re-sync tag indices for this entity. Simple and robust.
     for (const [tag, set] of this._byTag) {
       if (entity.tags.has(tag)) set.add(entity);

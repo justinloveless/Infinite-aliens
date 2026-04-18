@@ -26,11 +26,12 @@ export class StellarNovaComponent extends Component {
   }
 
   _pulse(ctx, pos) {
-    const enemies = ctx.world.query('enemy');
-    for (const e of enemies) {
-      if (!e.active) continue;
+    const enemies = ctx.world.getFrameEnemies();
+    const r2 = this.radius * this.radius;
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
       const et = e.get('TransformComponent'); if (!et) continue;
-      if (et.position.distanceTo(pos) <= this.radius) {
+      if (et.position.distanceToSquared(pos) <= r2) {
         e.get('HealthComponent')?.takeDamage(this.damage);
       }
     }
