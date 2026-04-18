@@ -23,6 +23,15 @@ export class CombatSystem {
     this._enemyShotDir = new THREE.Vector3();
     this._enemyShotSpawn = new THREE.Vector3();
 
+    // Repulser
+    this._repulserTimer = 0;
+
+    // Phoenix Drive revival
+    this._phoenixCooldownRemaining = 0;
+
+    // EMP stun tracking
+    this._empStunRemaining = 0;
+
     // Handle AoE damage emitted by upgrade triggers
     eventBus.on('trigger:emit_damage', ({ position, amount, radius }) => {
       this._handleAoeDamage(position, amount, radius);
@@ -182,6 +191,16 @@ export class CombatSystem {
       }
     }
 
+    // ---- Energy tick ----
+    const netEnergy = computed.energyRegen - computed.energyDrain;
+    state.player.energy = Math.max(0, Math.min(computed.maxEnergy,
+      state.player.energy + netEnergy * delta));
+
+    // ---- EMP stun tick ----
+    if (this._empStunRemaining > 0) {
+      this._empStunRemaining = Math.max(0, this._empStunRemaining - delta);
+    }
+
     const playerPos = ship.group.position;
     // Store player world position for trigger actions (e.g. reactive_plating emit_damage)
     state._playerWorldPos = playerPos;
@@ -224,6 +243,15 @@ export class CombatSystem {
           computed.stellarNovaRadius
         );
         eventBus.emit(EVENTS.STELLAR_NOVA, { radius: computed.stellarNovaRadius });
+      }
+    }
+
+    // ---- Repulser tick ----
+    if (computed.repulserActive) {
+      this._repulserTimer += delta;
+      if (this._repulserTimer >= computed.repulserInterval) {
+        this._repulserTimer = 0;
+        this._fireRepulser(playerPos, computed);
       }
     }
 
@@ -365,6 +393,11 @@ export class CombatSystem {
         if (computed.hasVampire) {
           eventBus.emit(EVENTS.PLAYER_HEALED, { amount: Math.ceil(effectiveDmg * 0.02) });
         }
+        if (computed.salvagingBeamActive && state.player.energy > 0) {
+          const healRatio = computed.salvagingBeamHealRatio ?? 0.05;
+          const heal = Math.max(1, Math.ceil(effectiveDmg * healRatio * computed.salvagingBeamCount));
+          eventBus.emit(EVENTS.PLAYER_HEALED, { amount: heal });
+        }
         eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
         if (audioManager) audioManager.play(enemy.type === 'boss' ? 'bossExplosion' : 'explosion');
       } else {
@@ -459,6 +492,14 @@ export class CombatSystem {
       }
     }
 
+    // ---- EMP: stun active (slow all enemies to near-zero speed) ----
+    if (this._empStunRemaining > 0) {
+      for (const enemy of this._enemies) {
+        if (!enemy.active) continue;
+        enemy.applyStatus('slow', { mult: 0.02, duration: 0.1 });
+      }
+    }
+
     // ---- Loot collection ----
     const collected = this._collision.checkLootVsPlayer(
       this._lootDrops, playerPos, PLAYER.COLLISION_RADIUS
@@ -471,6 +512,43 @@ export class CombatSystem {
       });
       if (audioManager) {
         audioManager.play(loot.currencyType === 'darkMatter' ? 'rarePickup' : 'pickup');
+      }
+    }
+  }
+
+  /** Repulser: push enemies away from playerPos and deal damage. */
+  _fireRepulser(playerPos, computed) {
+    const radius = computed.repulserRadius;
+    const dmg = computed.repulserDamage;
+    for (const enemy of this._enemies) {
+      if (!enemy.active) continue;
+      const dist = enemy.group.position.distanceTo(playerPos);
+      if (dist > radius) continue;
+
+      // Push enemy away
+      const dir = enemy.group.position.clone().sub(playerPos);
+      if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1);
+      dir.normalize();
+      enemy.group.position.addScaledVector(dir, radius * 0.5);
+
+      // Deal damage if configured
+      if (dmg > 0) {
+        const died = enemy.takeDamage(dmg);
+        eventBus.emit(EVENTS.ENEMY_DAMAGED, { enemy, damage: dmg, isCrit: false });
+        if (died) eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
+      }
+    }
+  }
+
+  /** Trigger EMP stun: freeze all enemies for `duration` seconds. */
+  triggerEmp(duration, damage) {
+    this._empStunRemaining = duration;
+    if (damage > 0) {
+      for (const enemy of this._enemies) {
+        if (!enemy.active) continue;
+        const died = enemy.takeDamage(damage);
+        eventBus.emit(EVENTS.ENEMY_DAMAGED, { enemy, damage, isCrit: false });
+        if (died) eventBus.emit(EVENTS.ENEMY_KILLED, { enemy });
       }
     }
   }

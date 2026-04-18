@@ -143,6 +143,7 @@ html, body {
 .bar { height: 100%; transition: width 0.15s ease-out; }
 .hp-bar { background: linear-gradient(90deg, #39ff14, #00f5ff); box-shadow: 0 0 6px #39ff14; }
 .shield-bar { background: linear-gradient(90deg, #00f5ff, #9b30ff); box-shadow: 0 0 6px #00f5ff; }
+.energy-bar { background: linear-gradient(90deg, #00ccff, #0044ff); box-shadow: 0 0 6px #00ccff; }
 
 #run-display {
   font-family: var(--font-main);
@@ -899,4 +900,60 @@ html, body {
   color: var(--pink);
   border-color: var(--pink);
   box-shadow: var(--glow-pink);
+}
+
+/* ===== Ability Slots ===== */
+#ability-slots {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 100;
+}
+
+.ability-slot {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(0, 245, 255, 0.35);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ability-slot.ready {
+  border-color: rgba(0, 245, 255, 0.8);
+  box-shadow: 0 0 6px rgba(0, 245, 255, 0.4);
+}
+
+.ability-key {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-family: var(--font-main);
+  font-size: 0.5rem;
+  color: rgba(0, 245, 255, 0.6);
+  z-index: 2;
+}
+
+.ability-icon {
+  font-size: 1.3rem;
+  z-index: 1;
+}
+
+.ability-cooldown-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.65);
+  height: 100%;
+  transform-origin: bottom;
+  transition: transform 0.1s linear;
+  z-index: 3;
 }

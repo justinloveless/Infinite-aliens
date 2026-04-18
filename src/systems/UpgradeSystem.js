@@ -1,4 +1,4 @@
-import { PLAYER } from '../constants.js';
+import { PLAYER, ENERGY } from '../constants.js';
 
 function applyStellarNovaFromTree(computed, unlocked) {
   for (const node of unlocked) {
@@ -107,6 +107,77 @@ export class UpgradeSystem {
       manualGunHeatPerShotMult: 1,
       /** Multiplier on overheat lockout duration (lower = faster recovery). */
       manualGunOverheatDurationMult: 1,
+
+      // Energy system
+      maxEnergy: ENERGY.BASE_MAX,
+      energyRegen: ENERGY.BASE_REGEN,
+      energyDrain: 0,
+
+      // Repulser
+      repulserActive: false,
+      repulserInterval: 6,
+      repulserRadius: 8,
+      repulserDamage: 0,
+
+      // Scanner
+      scannerActive: false,
+
+      // Phoenix Drive (auto-revive)
+      phoenixDriveActive: false,
+      phoenixDriveCooldown: 300,
+      phoenixDriveCorona: 0,
+
+      // Rail Gun
+      railgunActive: false,
+      railgunChargeTime: 2.5,
+      railgunDamage: 0,
+      railgunEnergyCost: 40,
+      manualGunSwapped: false,
+
+      // Salvaging Beam
+      salvagingBeamActive: false,
+      salvagingBeamCount: 1,
+      salvagingBeamHealRatio: 0.05,
+
+      // Mining Laser
+      miningLaserActive: false,
+      miningLaserCount: 1,
+      miningYield: 1,
+
+      // Laser upgrades
+      laserFocusActive: false,
+      laserSplitCount: 0,
+
+      // Targeting
+      multiTargetActive: false,
+      targetAcquisitionSpeed: 1,
+      smartTargetingActive: false,
+
+      // Active abilities — flags unlocked by upgrade nodes
+      speedBoosterUnlocked: false,
+      speedBoostMult: 1.8,
+      speedBoostDuration: 3,
+      speedBoostCooldown: 20,
+
+      empUnlocked: false,
+      empDuration: 3,
+      empDamage: 0,
+      empCooldown: 25,
+
+      warpDriveUnlocked: false,
+      warpDistance: 10,
+      warpDriveCooldown: 15,
+
+      gravityBombUnlocked: false,
+      gravityBombRadius: 8,
+      gravityBombDamage: 0,
+      gravityBombDuration: 5,
+      gravityBombCooldown: 30,
+
+      decoyUnlocked: false,
+      decoyDuration: 5,
+      decoyCount: 1,
+      decoyEnergyCost: 20,
     };
 
     if (!techTreeState) {
@@ -172,6 +243,9 @@ export class UpgradeSystem {
       0.18,
       Math.min(1, computed.manualGunOverheatDurationMult)
     );
+    computed.maxEnergy = Math.max(10, computed.maxEnergy);
+    computed.energyRegen = Math.max(0, computed.energyRegen);
+    computed.energyDrain = Math.max(0, computed.energyDrain);
 
     // Clamp enemy modifier multipliers
     for (const type of ENEMY_TYPES) {

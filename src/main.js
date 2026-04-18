@@ -24,6 +24,7 @@ import { UpgradeSystem } from './systems/UpgradeSystem.js';
 import { TechTreeState } from './techtree/TechTreeState.js';
 import { AsteroidSystem } from './systems/AsteroidSystem.js';
 import { BeamLaserSystem } from './systems/BeamLaserSystem.js';
+import { AbilitySystem } from './systems/AbilitySystem.js';
 
 import { UIManager } from './ui/UIManager.js';
 import { HUD } from './ui/HUD.js';
@@ -79,6 +80,7 @@ class Game {
     this.round = new RoundSystem(this.currency);
     this.asteroidSystem = new AsteroidSystem(this.scene.scene);
     this.beamLaser = new BeamLaserSystem(this.scene.scene);
+    this.ability = new AbilitySystem();
 
     // UI
     this.ui = new UIManager();
@@ -96,6 +98,7 @@ class Game {
     this._techTreeOpen = false;
 
     this.upgradeEditor = null;
+    this._phoenixCooldown = 0;
 
     this._focusPickRaycaster = new THREE.Raycaster();
     this._focusPickNdc = new THREE.Vector2();
@@ -103,6 +106,7 @@ class Game {
     this._setupEventListeners();
     this._setupClickHandling();
     this._setupManualGunInput();
+    this._setupAbilityKeys();
     this._setupSettingsButton();
     this._setupDebugMenuHotkey();
     this._setupPauseControls();
@@ -152,6 +156,28 @@ class Game {
     });
 
     eventBus.on(EVENTS.PLAYER_DIED, () => {
+      // Phoenix Drive: intercept death if active and off cooldown
+      if (this.computed?.phoenixDriveActive) {
+        if (!this._phoenixCooldown || this._phoenixCooldown <= 0) {
+          this._phoenixCooldown = this.computed.phoenixDriveCooldown;
+          const p = this.state.player;
+          p.hp = Math.ceil(this.computed.maxHp * 0.25); // revive at 25% HP
+          // Nova damage on revival
+          if (this.computed.phoenixDriveCorona > 0) {
+            const playerPos = this.ship?.group?.position;
+            if (playerPos) {
+              eventBus.emit('trigger:emit_damage', {
+                position: playerPos.clone(),
+                amount: this.computed.phoenixDriveCorona,
+                radius: 8,
+              });
+            }
+          }
+          eventBus.emit(EVENTS.PHOENIX_REVIVED, {});
+          return; // skip death processing
+        }
+      }
+
       this.setPaused(false);
       this.audio.stopMusic();
       this.audio.play('death');
@@ -443,6 +469,19 @@ class Game {
     });
   }
 
+  _setupAbilityKeys() {
+    window.addEventListener('keydown', e => {
+      if (this._paused) return;
+      if (!this.state || this.state.round.phase !== 'combat') return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const slot = parseInt(e.key, 10) - 1; // '1'→0, '2'→1, etc.
+      if (slot >= 0 && slot <= 3) {
+        this.ability.activate(slot, this.state, this.computed, this.combat, this.ship);
+      }
+    });
+  }
+
   async start() {
     // Show start screen first
     this.ui.showStart(() => {
@@ -529,15 +568,17 @@ class Game {
   _rebuildComputed() {
     this.computed = this.upgrade.compute(this.state, this.techTree);
     this.state._computed = this.computed;
-    // Ensure current HP doesn't exceed new max
+    // Ensure current stats don't exceed new maxes
     const p = this.state.player;
     p.hp = Math.min(p.hp, this.computed.maxHp);
     p.shieldHp = Math.min(p.shieldHp, this.computed.maxShieldHp);
+    if (p.energy !== undefined) p.energy = Math.min(p.energy, this.computed.maxEnergy);
     this.ship.setShieldVisible(this.computed.maxShieldHp > 0 && p.shieldHp > 0);
     const autoExtras = this.computed.hasAutoFire ? (this.computed.extraWeapons || []) : [];
     this.ship.syncTurrets(autoExtras);
     this.ship.syncVisualModifiers(this.computed.visualModifiers || []);
     this.projectilePool.applyProjectileVisual(this.computed.projectileVisuals || new Map());
+    this.ability.syncAbilities(this.computed);
     eventBus.emit(EVENTS.STATS_UPDATED, this.computed);
   }
 
@@ -623,9 +664,11 @@ class Game {
     r.killsThisRun = 0;
     this.state.roundLoot = {};
 
-    // Repair the ship
+    // Repair the ship and restore energy
     this.state.player.hp = this.computed.maxHp;
     this.state.player.shieldHp = 0;
+    this.state.player.energy = this.computed.maxEnergy;
+    this._phoenixCooldown = 0;
 
     // Clear any leftover combat entities
     this.round.purgeCombatWorld();
@@ -796,7 +839,9 @@ class Game {
 
   _worldMotionScale() {
     if (!this.state || this.state.round.phase !== 'combat') return 1;
-    return (this.computed?.speed ?? PLAYER.BASE_SPEED) / PLAYER.BASE_SPEED;
+    const p = this.state.player;
+    const boostMult = (p._speedBoostTimer > 0 && p._speedBoostMult > 1) ? p._speedBoostMult : 1;
+    return ((this.computed?.speed ?? PLAYER.BASE_SPEED) * boostMult) / PLAYER.BASE_SPEED;
   }
 
   _tick(delta) {
@@ -816,6 +861,17 @@ class Game {
 
     const phase = this.state.round.phase;
     const worldSpeed = this._worldMotionScale();
+
+    // ---- Speed Boost ability tick ----
+    const p = this.state?.player;
+    if (p && p._speedBoostTimer > 0) {
+      p._speedBoostTimer = Math.max(0, p._speedBoostTimer - dt);
+    }
+
+    // ---- Phoenix Drive cooldown tick ----
+    if (this._phoenixCooldown > 0) {
+      this._phoenixCooldown = Math.max(0, this._phoenixCooldown - dt);
+    }
 
     // Always update ship visuals
     this.ship.update(dt, this.computed, phase);
@@ -838,6 +894,10 @@ class Game {
         this._prevBossMusicActive = bossNow;
         this.audio.playMusic(this._combatMusicKey());
       }
+
+      // Active abilities
+      this.ability.update(dt);
+      this.ability.tickHud();
 
       // Auto-attack + collision
       this.combat.update(dt, this.state, this.computed, this.ship, this.audio);

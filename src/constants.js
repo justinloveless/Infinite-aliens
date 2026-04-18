@@ -1,7 +1,7 @@
 // ===== GAME CONSTANTS =====
 
 export const GAME = {
-  VERSION: 11,
+  VERSION: 12,
   AUTO_SAVE_INTERVAL: 30000,  // ms
   OFFLINE_CAP: 8 * 3600,     // seconds
   OFFLINE_EFFICIENCY: 0.5,
@@ -204,6 +204,11 @@ export const WARP = {
 
 export const ASTEROID = {
   SPAWN_INTERVAL: 5.0, // seconds between large asteroid spawns
+};
+
+export const ENERGY = {
+  BASE_MAX:   100,
+  BASE_REGEN:   0,   // zero until generators are installed
 };
 
 export const BEAM_LASER = {

@@ -6,6 +6,7 @@ export class HUD {
     this._hpBar = document.getElementById('hp-bar');
     this._shieldBar = document.getElementById('shield-bar');
     this._heatBar = document.getElementById('heat-bar');
+    this._energyBar = document.getElementById('energy-bar');
     this._roundNum = document.getElementById('round-number');
     this._distanceVal = document.getElementById('distance-value');
     this._bossBar = document.getElementById('boss-progress-bar');
@@ -72,6 +73,14 @@ export class HUD {
       document.getElementById('shield-container').style.display = '';
     } else {
       document.getElementById('shield-container').style.display = 'none';
+    }
+
+    if (this._energyBar && computed && computed.energyRegen > 0) {
+      const energyPct = (p.energy / computed.maxEnergy) * 100;
+      this._energyBar.style.width = `${Math.max(0, Math.min(100, energyPct))}%`;
+      document.getElementById('energy-container').style.display = '';
+    } else if (this._energyBar) {
+      document.getElementById('energy-container').style.display = 'none';
     }
 
     const r = state.round;

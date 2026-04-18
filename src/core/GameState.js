@@ -1,4 +1,4 @@
-import { PLAYER, GAME } from '../constants.js';
+import { PLAYER, GAME, ENERGY } from '../constants.js';
 
 export function createInitialState() {
   return {
@@ -50,6 +50,7 @@ export function createInitialState() {
       hasDamageReflect: false,
       hasOvercharge: false,
       overchargeCounter: 0,
+      energy: ENERGY.BASE_MAX,
     },
 
     // Computed stats (rebuilt when upgrades change)

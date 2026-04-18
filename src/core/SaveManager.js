@@ -94,6 +94,13 @@ export class SaveManager {
           data.player.hasAutoFire = true;
         }
       }
+      // v12: energy system added — inject player.energy if missing
+      if (data.version === 11) {
+        data.version = 12;
+        if (data.player && data.player.energy === undefined) {
+          data.player.energy = 100;
+        }
+      }
       if (data.version !== GAME.VERSION) return null;
       return data;
     } catch {
