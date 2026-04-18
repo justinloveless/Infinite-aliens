@@ -1,130 +1,212 @@
 import { TechNode } from './TechNode.js';
-import { NODE_TEMPLATES, CATEGORY_META, getCategoryWeights } from './TechNodeTemplates.js';
+import upgradesData from '../data/upgrades.json';
 import { TECH_TREE } from '../constants.js';
 
-// Mulberry32 seeded PRNG - fast, deterministic
-function makePRNG(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s |= 0; s = (s + 0x6D2B79F5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+// Ring 0 starter anchors: cardinal positions, one per non-special category.
+// Top=weapon, Right=defense, Bottom=utility, Left=passive.
+const STARTER_ANCHORS = [
+  { category: 'weapon',  angle: -Math.PI / 2 },   // top
+  { category: 'defense', angle: 0 },              // right
+  { category: 'utility', angle: Math.PI / 2 },    // bottom
+  { category: 'passive', angle: Math.PI },        // left
+];
+
+const ADJACENT_PAIR_KEYS = new Set([
+  'weapon|defense', 'defense|weapon',
+  'defense|utility', 'utility|defense',
+  'utility|passive', 'passive|utility',
+  'passive|weapon', 'weapon|passive',
+]);
+
+function areAdjacentCategories(a, b) {
+  return ADJACENT_PAIR_KEYS.has(`${a}|${b}`);
+}
+
+function angleMidpointBetweenCategories(catA, catB) {
+  const ax = STARTER_ANCHORS.find((x) => x.category === catA)?.angle ?? 0;
+  const bx = STARTER_ANCHORS.find((x) => x.category === catB)?.angle ?? 0;
+  const vx = Math.cos(ax) + Math.cos(bx);
+  const vy = Math.sin(ax) + Math.sin(bx);
+  if (Math.abs(vx) < 1e-6 && Math.abs(vy) < 1e-6) return ax;
+  return Math.atan2(vy, vx);
+}
+
+/** Canonical edge keys between adjacent starters (fixed order for placement). */
+const DIAGONAL_KEYS = ['weapon|defense', 'defense|utility', 'utility|passive', 'passive|weapon'];
+
+function canonicalDiagonalKey(catA, catB) {
+  if (!catA || !catB || !areAdjacentCategories(catA, catB)) return null;
+  const pair = `${catA}|${catB}`;
+  const rev = `${catB}|${catA}`;
+  if (DIAGONAL_KEYS.includes(pair)) return pair;
+  if (DIAGONAL_KEYS.includes(rev)) return rev;
+  return null;
+}
+
+/** Mid-angle + branch endpoints for each inter-cardinal gap (special "diagonals"). */
+const DIAGONAL_SPECS = DIAGONAL_KEYS.map((key) => {
+  const [c1, c2] = key.split('|');
+  return {
+    key,
+    c1,
+    c2,
+    angle: angleMidpointBetweenCategories(c1, c2),
   };
-}
+});
 
-function weightedPick(weights, rng) {
-  const entries = Object.entries(weights).filter(([, w]) => w > 0);
-  const total = entries.reduce((s, [, w]) => s + w, 0);
-  if (total === 0) return entries[0][0];
-  let r = rng() * total;
-  for (const [k, w] of entries) {
-    r -= w;
-    if (r <= 0) return k;
+/** Evenly space `count` angles across [anchor − slice/2, anchor + slice/2]. */
+function anglesInBranchSlice(anchorAngle, count, sliceRad) {
+  if (count <= 0) return [];
+  const half = sliceRad / 2;
+  const lo = anchorAngle - half;
+  if (count === 1) return [anchorAngle];
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1);
+    out.push(lo + t * sliceRad);
   }
-  return entries[entries.length - 1][0];
-}
-
-function pickRandom(arr, rng) {
-  return arr[Math.floor(rng() * arr.length)];
+  return out;
 }
 
 export class TechTreeGenerator {
-  constructor(baseSeed) {
-    this._baseSeed = baseSeed;
+  /**
+   * @param {*} _baseSeed   unused (kept for API compat)
+   * @param {object[]|null} customNodes  override the full node list (e.g. with dev extras)
+   */
+  constructor(_baseSeed, customNodes = null) {
+    this._customNodes = customNodes; // null → use upgradesData.nodes
     this._generatedNodes = {}; // nodeId -> TechNode
-    this._tiers = [];          // tiers[i] = [nodeId, ...]
+    this._tiers = [];          // tiers[ring] = [nodeId, ...]
+    this._angles = {};         // nodeId -> angle on its ring
+    this._built = false;
   }
 
-  // Generate all tiers up to (and including) the given tier
-  generateUpToTier(targetTier, unlockedCounts = {}) {
-    const startTier = this._tiers.length;
-    for (let tier = startTier; tier <= targetTier; tier++) {
-      this._generateTier(tier, unlockedCounts);
+  /** Build all nodes (finite tree). No-op after the first call. */
+  generateUpToTier(_targetRing, _unlockedCounts = {}) {
+    if (!this._built) {
+      this._buildAllNodes();
+      this._built = true;
     }
     return this._generatedNodes;
   }
 
-  _generateTier(tier, unlockedCounts) {
-    const rng = makePRNG(this._baseSeed + tier * TECH_TREE.TIER_PRIME);
+  // ─── Private: two-pass finite builder ──────────────────────────────────────
 
-    // Determine node count
-    let count;
-    if (tier < TECH_TREE.ROOT_TIER_COUNTS.length) {
-      count = TECH_TREE.ROOT_TIER_COUNTS[tier];
-    } else {
-      count = TECH_TREE.MIN_NODES_PER_TIER + Math.floor(rng() * (TECH_TREE.MAX_NODES_PER_TIER - TECH_TREE.MIN_NODES_PER_TIER + 1));
+  _buildAllNodes() {
+    // Flatten all nodes from JSON (or custom override) into a map: id -> { template, category }
+    const sourceNodes = this._customNodes ?? upgradesData.nodes;
+    const flatTemplates = {};
+    for (const node of sourceNodes) {
+      flatTemplates[node.id] = { template: node, category: node.category };
     }
 
-    const prevTier = this._tiers[tier - 1] || [];
-    const tierNodes = [];
-    const usedTemplateIds = new Set();
+    // Pass 1: compute ring for every template via topological recursion
+    const ringMap = this._computeRings(flatTemplates);
+    const maxRing = Math.max(...Object.values(ringMap));
 
-    // Anti-monotony: ensure at least 1 weapon and 1 defense after tier 0
-    const requiredCategories = tier >= 1
-      ? [null, null]    // filled in as we go
-      : [];
+    // Initialize tiers array
+    for (let r = 0; r <= maxRing; r++) {
+      this._tiers.push([]);
+    }
 
-    for (let idx = 0; idx < count; idx++) {
-      // Category selection
-      const weights = getCategoryWeights(tier, unlockedCounts);
+    // Group template IDs by (ring, category)
+    const groups = {}; // groups[ring][category] = [templateId, ...]
+    for (const [id, { category }] of Object.entries(flatTemplates)) {
+      const ring = ringMap[id];
+      if (!groups[ring]) groups[ring] = {};
+      if (!groups[ring][category]) groups[ring][category] = [];
+      groups[ring][category].push(id);
+    }
 
-      // Force weapon/defense variety
-      if (tier >= 1) {
-        const hasWeapon = tierNodes.some(id => this._generatedNodes[id]?.category === 'weapon');
-        const hasDefense = tierNodes.some(id => this._generatedNodes[id]?.category === 'defense');
-        const remaining = count - idx;
+    // Pass 2: create nodes ring by ring
+    for (let r = 0; r <= maxRing; r++) {
+      const radius = TECH_TREE.CENTER_RADIUS + r * TECH_TREE.RING_SPACING;
+      const sliceRad = TECH_TREE.BRANCH_SLICE_RAD;
 
-        if (!hasWeapon && remaining <= (count - idx)) {
-          // Only enough spots left to force weapon+defense
-          if (!hasWeapon && !hasDefense && remaining === 2) {
-            weights['weapon'] = 100;
-            for (const k of Object.keys(weights)) if (k !== 'weapon') weights[k] = 0;
-          }
-        }
-        if (!hasDefense && remaining === 1 && !hasWeapon) {
-          weights['defense'] = 100;
-          for (const k of Object.keys(weights)) if (k !== 'defense') weights[k] = 0;
-        }
-
-        // Limit specials to 1 per tier
-        const hasSpecial = tierNodes.some(id => this._generatedNodes[id]?.category === 'special');
-        if (hasSpecial) weights['special'] = 0;
+      // Main branch categories
+      for (const anchor of STARTER_ANCHORS) {
+        const cat = anchor.category;
+        const ids = (groups[r]?.[cat]) || [];
+        const angles = anglesInBranchSlice(anchor.angle, ids.length, sliceRad);
+        ids.forEach((id, s) => {
+          const { template } = flatTemplates[id];
+          const position = this._polarToPosition(radius, angles[s]);
+          this._createNode(r, template, cat, position);
+          this._angles[id] = angles[s];
+        });
       }
 
-      const category = weightedPick(weights, rng);
-
-      // Pick template (avoid duplicates within this tier)
-      const pool = NODE_TEMPLATES[category].filter(t => !usedTemplateIds.has(t.id));
-      if (pool.length === 0) {
-        // Fall back to any template
-        const fallback = pickRandom(NODE_TEMPLATES[category], rng);
-        this._createNode(tier, idx, fallback, category, rng, prevTier, tierNodes, unlockedCounts);
-        usedTemplateIds.add(fallback.id);
-      } else {
-        const template = pickRandom(pool, rng);
-        this._createNode(tier, idx, template, category, rng, prevTier, tierNodes, unlockedCounts);
-        usedTemplateIds.add(template.id);
+      // Special nodes: group by diagonal, then spread within that diagonal's arc
+      const specialIds = (groups[r]?.['special']) || [];
+      if (specialIds.length > 0) {
+        // Bucket specials by diagonal key
+        const diagBuckets = {};
+        for (const id of specialIds) {
+          const { template } = flatTemplates[id];
+          const [a, b] = template.betweenCategories || [];
+          const key = canonicalDiagonalKey(a, b);
+          if (!diagBuckets[key]) diagBuckets[key] = [];
+          diagBuckets[key].push(id);
+        }
+        for (const spec of DIAGONAL_SPECS) {
+          const bucket = diagBuckets[spec.key] || [];
+          const angles = anglesInBranchSlice(spec.angle, bucket.length, sliceRad);
+          bucket.forEach((id, s) => {
+            const { template } = flatTemplates[id];
+            const position = this._polarToPosition(radius, angles[s]);
+            this._createNode(r, template, 'special', position);
+            this._angles[id] = angles[s];
+          });
+        }
       }
     }
 
-    this._tiers.push(tierNodes);
+    // Connect neighboring starters laterally (so the hub feels connected)
+    const starterIds = STARTER_ANCHORS.map(a => `starter_${a.category}`);
+    for (let i = 0; i < starterIds.length; i++) {
+      const nextI = (i + 1) % starterIds.length;
+      const a = this._generatedNodes[starterIds[i]];
+      const b = this._generatedNodes[starterIds[nextI]];
+      if (a && b) {
+        if (!a.prerequisites.includes(b.id)) a.prerequisites.push(b.id);
+        if (!b.prerequisites.includes(a.id)) b.prerequisites.push(a.id);
+      }
+    }
   }
 
-  _createNode(tier, idx, template, category, rng, prevTier, tierNodes, unlockedCounts) {
-    const id = `node_${tier}_${idx}`;
+  /** Compute ring for every template via memoized topological recursion. */
+  _computeRings(flatTemplates) {
+    const rings = {};
+    const getRing = (id) => {
+      if (id in rings) return rings[id];
+      const entry = flatTemplates[id];
+      const prereqs = entry?.template?.prereqs;
+      if (!prereqs?.length) return (rings[id] = 0);
+      return (rings[id] = Math.max(...prereqs.map(getRing)) + 1);
+    };
+    for (const id of Object.keys(flatTemplates)) getRing(id);
+    return rings;
+  }
 
-    // Scale costs with tier
-    const costScale = Math.pow(TECH_TREE.COST_SCALING_BASE, Math.floor(tier / 2));
+  // ─── Node creation ──────────────────────────────────────────────────────────
+
+  _createNode(ring, template, category, position) {
+    const id = template.id; // stable templateId as node ID
+
+    // Scale costs with ring (every 2 rings = 2x more expensive)
+    const costScale = Math.pow(TECH_TREE.COST_SCALING_BASE, Math.floor(ring / 2));
     const scaledCost = Object.fromEntries(
       Object.entries(template.baseCost).map(([k, v]) => [k, Math.ceil(v * costScale)])
     );
 
-    // Scale effect values with tier (slight bonus at higher tiers)
-    const tierBonus = 1 + TECH_TREE.EFFECT_TIER_BONUS * tier;
+    // Operators that should not be scaled by ring depth
+    const FIXED_OPS = new Set(['min', 'max', 'append', 'toggle', 'add_flat', 'set', 'special', 'add_weapon']);
+
+    // Slight effect bonus at deeper rings
+    const tierBonus = 1 + TECH_TREE.EFFECT_TIER_BONUS * ring;
     const scaledEffects = template.effects.map(e => {
+      if (FIXED_OPS.has(e.type)) return { ...e };
       if (e.type === 'multiply') {
-        // Slightly stronger multiplier at higher tiers
         const scaledVal = 1 + (e.value - 1) * tierBonus;
         return { ...e, value: parseFloat(scaledVal.toFixed(4)) };
       } else if (e.type === 'add') {
@@ -133,35 +215,23 @@ export class TechTreeGenerator {
       return { ...e };
     });
 
-    // Milestone node every 10 tiers
+    // Milestone: every 10th ring, weapon-branch center node is dramatically enhanced
     let name = template.name;
     let description = template.description;
-    if (tier > 0 && tier % 10 === 0 && idx === 0) {
+    const isMilestoneSlot = category === 'weapon' && ring > 0 && ring % 10 === 0;
+    if (isMilestoneSlot) {
       name = `⚡ ${name} [ENHANCED]`;
       description = `[MILESTONE] ${description}`;
-      // Double effect
       scaledEffects.forEach(e => {
         if (e.type === 'add') e.value *= 2;
         else if (e.type === 'multiply') e.value = 1 + (e.value - 1) * 2;
       });
     }
 
-    // Assign prerequisites from previous tier
-    const prereqs = this._assignPrerequisites(tier, idx, prevTier, rng);
-
-    // Layout position
-    const nodeWidth = TECH_TREE.NODE_W + TECH_TREE.NODE_PADDING_X;
-    const nodeHeight = TECH_TREE.NODE_H + TECH_TREE.NODE_PADDING_Y;
-    // Count nodes in this tier (approximate, we're building incrementally)
-    const tierCount = tierNodes.length + 1;
-    const position = {
-      x: TECH_TREE.GRID_OFFSET_X + idx * nodeWidth,
-      y: TECH_TREE.GRID_OFFSET_Y + tier * nodeHeight,
-    };
-
     const node = new TechNode({
       id,
-      tier,
+      templateId: template.id,
+      tier: ring,
       name,
       description,
       category,
@@ -169,67 +239,37 @@ export class TechTreeGenerator {
       maxLevel: template.maxLevel,
       currentLevel: 0,
       baseCost: scaledCost,
-      prerequisites: prereqs,
+      prerequisites: template.prereqs ? [...template.prereqs] : [],
       position,
       icon: template.icon,
+      triggers: template.triggers || [],
+      synergies: template.synergies || [],
+      presentation: template.presentation || null,
+      costModifiers: template.costModifiers || [],
+      visual: template.visual || null,
     });
 
     this._generatedNodes[id] = node;
-    tierNodes.push(id);
-
-    // Update unlockedCounts tracking for variety
-    if (!unlockedCounts[category]) unlockedCounts[category] = 0;
-
+    this._tiers[ring].push(id);
     return node;
   }
 
-  _assignPrerequisites(tier, nodeIdx, prevTier, rng) {
-    if (tier === 0 || prevTier.length === 0) return [];
-
-    // Connect to 1-2 nodes from previous tier
-    const maxPrereqs = Math.min(2, prevTier.length);
-    const numPrereqs = 1 + (rng() < 0.3 ? 1 : 0);
-    const actual = Math.min(numPrereqs, maxPrereqs);
-
-    // Pick a "primary" prerequisite: roughly aligned by position
-    const normalized = nodeIdx / Math.max(1, 3);
-    const targetIdx = Math.floor(normalized * prevTier.length);
-    const clamped = Math.max(0, Math.min(prevTier.length - 1, targetIdx));
-    const prereqs = [prevTier[clamped]];
-
-    // Optionally add a second
-    if (actual === 2) {
-      const otherIdx = clamped === 0 ? 1 : clamped - 1;
-      if (otherIdx < prevTier.length) {
-        prereqs.push(prevTier[otherIdx]);
-      }
-    }
-
-    return prereqs;
+  // Place a node so its center sits at (cos(angle), sin(angle)) * radius
+  _polarToPosition(radius, angle) {
+    return {
+      x: Math.cos(angle) * radius - TECH_TREE.NODE_W / 2,
+      y: Math.sin(angle) * radius - TECH_TREE.NODE_H / 2,
+    };
   }
 
-  // Recalculate node positions after a tier is fully built
-  repositionTier(tier) {
-    const tierNodes = this._tiers[tier];
-    if (!tierNodes) return;
-    const count = tierNodes.length;
-    const nodeWidth = TECH_TREE.NODE_W + TECH_TREE.NODE_PADDING_X;
-    const nodeHeight = TECH_TREE.NODE_H + TECH_TREE.NODE_PADDING_Y;
-    const totalWidth = (count - 1) * nodeWidth;
-
-    tierNodes.forEach((id, idx) => {
-      const node = this._generatedNodes[id];
-      if (node) {
-        node.position.x = TECH_TREE.GRID_OFFSET_X + idx * nodeWidth;
-        node.position.y = TECH_TREE.GRID_OFFSET_Y + tier * nodeHeight;
-      }
-    });
-  }
+  // No-op: positions are authoritative at creation time in circular layout
+  repositionTier(_ring) { /* intentionally empty */ }
 
   get nodes() { return this._generatedNodes; }
   get tiers() { return this._tiers; }
+  get categoryMeta() { return upgradesData.categories; }
 
   getNode(id) { return this._generatedNodes[id]; }
-  getNodesForTier(tier) { return (this._tiers[tier] || []).map(id => this._generatedNodes[id]).filter(Boolean); }
+  getNodesForTier(ring) { return (this._tiers[ring] || []).map(id => this._generatedNodes[id]).filter(Boolean); }
   getMaxGeneratedTier() { return this._tiers.length - 1; }
 }

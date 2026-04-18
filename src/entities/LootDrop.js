@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CURRENCIES } from '../constants.js';
+import { LOOT, PLAYER } from '../constants.js';
 
 const COLORS = {
   scrapMetal:     0xaaaaaa,
@@ -8,6 +8,14 @@ const COLORS = {
   darkMatter:     0x9b30ff,
   stellarDust:    0xffd700,
 };
+
+// Size by denomination: 1 → 0.08, 10 → 0.12, 100 → 0.18, 1000 → 0.26
+function sizeForAmount(amount) {
+  if (amount >= 1000) return 0.26;
+  if (amount >= 100)  return 0.18;
+  if (amount >= 10)   return 0.12;
+  return 0.08;
+}
 
 export class LootDrop {
   constructor(pos, currencyType, amount, scene) {
@@ -18,7 +26,7 @@ export class LootDrop {
     this._time = Math.random() * Math.PI * 2;
     this._baseY = pos.y + 0.5;
 
-    const geo = new THREE.OctahedronGeometry(0.22, 0);
+    const geo = new THREE.OctahedronGeometry(sizeForAmount(amount), 0);
     const mat = new THREE.MeshBasicMaterial({
       color: COLORS[currencyType] || 0xffffff,
     });
@@ -35,12 +43,41 @@ export class LootDrop {
     this._scene = scene;
   }
 
-  update(delta) {
+  update(delta, playerPos, attraction) {
     if (!this.active) return;
     this._time += delta * 2.5;
-    this.mesh.position.y = this._baseY + Math.sin(this._time) * 0.2;
-    this.mesh.rotation.y += delta * 2;
+
+    // Home toward player so loot can't be stranded far from the ship.
+    if (playerPos) {
+      const dx = playerPos.x - this.mesh.position.x;
+      const dz = playerPos.z - this.mesh.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist > 0.01) {
+        let attractionSpeed;
+        if (typeof attraction === 'number') {
+          attractionSpeed = attraction;
+        } else if (attraction && typeof attraction.magnetRange === 'number') {
+          const mr = attraction.magnetRange;
+          const inMagnet = dist < mr;
+          let mult = 1;
+          if (inMagnet) {
+            const extra = Math.max(0, mr - PLAYER.BASE_MAGNET_RANGE);
+            mult = LOOT.MAGNET_MULT_BASE + extra * LOOT.MAGNET_MULT_PER_RANGE;
+          }
+          attractionSpeed = LOOT.DRIFT_SPEED * mult;
+        } else {
+          attractionSpeed = LOOT.DRIFT_SPEED;
+        }
+        const speed = attractionSpeed * (1 + Math.max(0, 1 - dist / 8));
+        const step = Math.min(dist, speed * delta);
+        this.mesh.position.x += (dx / dist) * step;
+        this.mesh.position.z += (dz / dist) * step;
+        this._baseY = playerPos.y + 0.5;
+      }
+    }
+
     this._light.position.copy(this.mesh.position);
+
     // Pulse light
     this._light.intensity = 0.6 + Math.sin(this._time * 3) * 0.2;
   }

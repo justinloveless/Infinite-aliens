@@ -11,6 +11,12 @@
 <body>
   <canvas id="game-canvas"></canvas>
 
+  <div id="pause-overlay" class="pause-screen hidden" aria-hidden="true">
+    <div class="pause-title">PAUSED</div>
+    <p class="pause-hint">Press <kbd class="pause-kbd">P</kbd> to resume</p>
+    <button type="button" id="pause-resume-btn" class="neon-btn launch">RESUME</button>
+  </div>
+
   <!-- HUD: always visible during combat -->
   <div id="hud" class="hidden">
     <div id="hud-top-left">
@@ -26,24 +32,69 @@
           <div id="shield-bar" class="bar shield-bar"></div>
         </div>
       </div>
+      <div id="heat-container">
+        <div class="bar-label">CANNON</div>
+        <div class="bar-track">
+          <div id="heat-bar" class="bar"></div>
+        </div>
+      </div>
+      <div id="energy-container" style="display:none">
+        <div class="bar-label">ENERGY</div>
+        <div class="bar-track">
+          <div id="energy-bar" class="bar energy-bar"></div>
+        </div>
+      </div>
     </div>
 
     <div id="hud-top-center">
-      <div id="round-display">
-        <span class="round-label">ROUND</span>
+      <div id="run-display">
+        <span class="round-label">SECTOR</span>
         <span id="round-number">1</span>
+      </div>
+      <div id="distance-display">
+        <span class="round-label">DIST </span>
+        <span id="distance-value">0</span>
+      </div>
+      <div id="boss-progress-wrap">
+        <div class="round-label">NEXT BOSS</div>
+        <div id="boss-progress-track">
+          <div id="boss-progress-bar"></div>
+        </div>
       </div>
       <div id="enemies-display">
         <span id="enemies-defeated">0</span>
-        <span class="round-label"> / </span>
-        <span id="enemies-required">5</span>
-        <span class="round-label"> DEFEATED</span>
+        <span class="round-label"> KILLS</span>
       </div>
     </div>
 
     <div id="hud-top-right">
+      <button type="button" id="pause-btn" class="neon-btn small" title="Pause (P)">⏸</button>
       <button id="tech-tree-btn" class="neon-btn">TECH TREE</button>
       <button id="mute-btn" class="neon-btn small">♪</button>
+      <button id="settings-btn" class="neon-btn small">⚙</button>
+    </div>
+
+    <div id="ability-slots" style="display:none">
+      <div class="ability-slot" id="ability-slot-0" data-slot="0">
+        <div class="ability-key">1</div>
+        <div class="ability-icon"></div>
+        <div class="ability-cooldown-overlay"></div>
+      </div>
+      <div class="ability-slot" id="ability-slot-1" data-slot="1">
+        <div class="ability-key">2</div>
+        <div class="ability-icon"></div>
+        <div class="ability-cooldown-overlay"></div>
+      </div>
+      <div class="ability-slot" id="ability-slot-2" data-slot="2">
+        <div class="ability-key">3</div>
+        <div class="ability-icon"></div>
+        <div class="ability-cooldown-overlay"></div>
+      </div>
+      <div class="ability-slot" id="ability-slot-3" data-slot="3">
+        <div class="ability-key">4</div>
+        <div class="ability-icon"></div>
+        <div class="ability-cooldown-overlay"></div>
+      </div>
     </div>
 
     <div id="currency-display">
@@ -82,11 +133,9 @@
       <button id="close-tree-btn" class="neon-btn">✕ CLOSE</button>
     </div>
     <div id="tech-tree-currencies"></div>
+    <div id="tech-tree-stats" class="tech-tree-stats" aria-label="Current ship stats"></div>
     <canvas id="tech-tree-canvas"></canvas>
     <div id="node-tooltip" class="hidden"></div>
-    <div id="tech-tree-footer">
-      <button id="launch-btn" class="neon-btn launch">▶ LAUNCH ROUND</button>
-    </div>
   </div>
 
   <!-- Round Transition -->
@@ -98,12 +147,24 @@
     </div>
   </div>
 
-  <!-- Death Screen -->
+  <!-- Death / Hangar Screen (shown between all runs) -->
   <div id="death-screen" class="overlay hidden">
     <div id="death-content">
       <div id="death-title">SHIP DESTROYED</div>
-      <p>Your materials are safe. Upgrade and try again!</p>
-      <button id="retry-btn" class="neon-btn launch">REPAIR & UPGRADE</button>
+      <div id="death-stats"></div>
+      <div id="death-actions">
+        <button id="view-tree-btn" class="neon-btn">⊕ TECH TREE</button>
+        <button id="death-launch-btn" class="neon-btn launch">▶ LAUNCH</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Warp Gate Selection -->
+  <div id="warp-gate-screen" class="overlay hidden">
+    <div id="warp-gate-content">
+      <div id="warp-gate-title">SELECT WARP GATE</div>
+      <div id="warp-gate-subtitle">Choose your starting sector. Higher sectors mean stronger enemies — and better rewards.</div>
+      <div id="warp-gate-list"></div>
     </div>
   </div>
 
@@ -116,6 +177,12 @@
     </div>
   </div>
 
+  <!-- Debug (Ctrl+Shift+D): full-screen hit-none layer; panel is draggable -->
+  <div id="debug-menu-screen" class="hidden"></div>
+
+  <!-- Settings Screen -->
+  <div id="settings-screen" class="overlay hidden"></div>
+
   <!-- Start Screen -->
   <div id="start-screen" class="overlay">
     <div id="start-content">
@@ -125,6 +192,17 @@
     </div>
   </div>
 
+  <script>
+    // Defensive: unregister any stale service worker from a previous project
+    // that may have been cached on this localhost port. Without this, a SW
+    // from e.g. an old CRA/Next.js app can intercept our requests and serve
+    // phantom chunks like `react-vendor-*.js`.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        for (const r of regs) r.unregister();
+      }).catch(() => {});
+    }
+  </script>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

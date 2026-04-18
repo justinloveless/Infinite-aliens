@@ -1,18 +1,25 @@
-import { PLAYER, GAME } from '../constants.js';
+import { PLAYER, GAME, ENERGY } from '../constants.js';
 
 export function createInitialState() {
   return {
     version: GAME.VERSION,
     seed: Math.floor(Math.random() * 0xffffffff),
 
-    // Round info
+    // Run progression (tier in `current` is derived from distance during combat)
     round: {
       current: 1,
-      phase: 'start',          // 'start' | 'combat' | 'transition' | 'upgrade'
+      phase: 'start',          // 'start' | 'combat' | 'dead'
+      distanceTraveled: 0,
       enemiesDefeated: 0,
-      enemiesRequired: 5,
-      totalEnemiesDefeated: 0,
+      bossesDefeated: 0,
+      bossIsActive: false,
+      killsThisRun: 0,
+      /** When set, auto-attack prefers this enemy until it dies (requires Priority Designator upgrade). */
+      manualFocusEnemyId: null,
     },
+
+    // Stats from the most recently completed run — null on a fresh save
+    lastRun: null,
 
     // Player base stats (upgrades modify computedStats, not these)
     player: {
@@ -31,14 +38,19 @@ export function createInitialState() {
       armor: PLAYER.BASE_ARMOR,
       speed: PLAYER.BASE_SPEED,
       magnetRange: PLAYER.BASE_MAGNET_RANGE,
+      visionRange: PLAYER.BASE_VISION_RANGE,
+      targetingRange: PLAYER.BASE_TARGETING_RANGE,
       lootMultiplier: PLAYER.BASE_LOOT_MULT,
       stellarDustRate: PLAYER.STELLAR_DUST_RATE,
       projectileType: 'laser',  // 'laser' | 'missile' | 'plasma'
       hasDrone: false,
+      /** Continuous aimed turret fire (primary + side turrets + beam); false = manual nose cannon only until upgraded. */
+      hasAutoFire: false,
       hasVampire: false,
       hasDamageReflect: false,
       hasOvercharge: false,
       overchargeCounter: 0,
+      energy: ENERGY.BASE_MAX,
     },
 
     // Computed stats (rebuilt when upgrades change)
@@ -53,13 +65,18 @@ export function createInitialState() {
       stellarDust: 0,
     },
 
-    // Loot earned this round (for transition display)
+    // Loot earned this combat session (HUD / debugging)
     roundLoot: {},
 
     // Tech tree
     techTree: {
       unlockedNodes: {},      // { nodeId: currentLevel }
       generatedTiers: 0,      // how many tiers have been generated
+    },
+
+    // Warp gates (persistent across runs)
+    warpGates: {
+      maxTierReached: 0,   // highest tier ever reached; new gates unlock every 10 tiers
     },
 
     // Timestamps

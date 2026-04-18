@@ -32,7 +32,7 @@ export const ScanlineShader = {
   uniforms: {
     tDiffuse: { value: null },
     time: { value: 0 },
-    intensity: { value: 0.04 },
+    intensity: { value: 0.043 },
     lineFrequency: { value: 800.0 },
   },
   vertexShader: `
@@ -60,7 +60,7 @@ export const ScanlineShader = {
 export const ColorGradeShader = {
   uniforms: {
     tDiffuse: { value: null },
-    vignetteIntensity: { value: 0.45 },
+    vignetteIntensity: { value: 0.47 },
     saturation: { value: 1.15 },
     // Shift shadows toward deep blue, highlights toward cyan/pink
     shadowColor: { value: { x: 0.05, y: 0.0, z: 0.1 } },

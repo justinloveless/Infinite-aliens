@@ -38,8 +38,7 @@ export function setupPostProcessing(renderer, scene, camera) {
   grain.renderToScreen = true;
   composer.addPass(grain);
 
-  // Update grain time each frame
-  composer._grainPass = grain;
+  const postPasses = { bloom, chromatic, colorGrade, scanlines, grain };
 
-  return composer;
+  return { composer, postPasses };
 }

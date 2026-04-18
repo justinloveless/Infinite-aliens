@@ -1,0 +1,2864 @@
+{
+  "categories": {
+    "weapon": {
+      "label": "Weapon",
+      "color": "#ff4444",
+      "glowColor": "#ff0000"
+    },
+    "defense": {
+      "label": "Defense",
+      "color": "#4488ff",
+      "glowColor": "#0044ff"
+    },
+    "utility": {
+      "label": "Utility",
+      "color": "#ffcc00",
+      "glowColor": "#aa8800"
+    },
+    "passive": {
+      "label": "Passive",
+      "color": "#44ff88",
+      "glowColor": "#00aa44"
+    },
+    "special": {
+      "label": "Special",
+      "color": "#cc44ff",
+      "glowColor": "#8800cc"
+    }
+  },
+  "nodes": [
+    {
+      "id": "starter_weapon",
+      "category": "weapon",
+      "name": "Combat Training",
+      "description": "Basic military doctrine sharpens your weapon systems.",
+      "icon": "⚔",
+      "maxLevel": 1,
+      "baseCost": {},
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.1,
+          "statLabel": "Damage"
+        }
+      ]
+    },
+    {
+      "id": "auto_turret",
+      "category": "weapon",
+      "prereqs": [
+        "starter_weapon"
+      ],
+      "name": "Linked Turret",
+      "description": "Brings your fixed forward turret online for continuous aimed fire. Until you install this, only your manual nose cannon fires in combat.",
+      "icon": "⬢",
+      "maxLevel": 1,
+      "baseCost": {
+        "scrapMetal": 8
+      },
+      "effects": [
+        {
+          "type": "special",
+          "stat": "hasAutoFire",
+          "value": true,
+          "scaleMode": "fixed",
+          "specialDesc": "Unlocks automatic main + side turret fire"
+        }
+      ]
+    },
+    {
+      "id": "cannon_cooling_jacket",
+      "category": "weapon",
+      "prereqs": [
+        "starter_weapon"
+      ],
+      "name": "Cooling Jacket",
+      "description": "Thermal routing around the nose cannon barrel dumps waste heat faster so each shot heats the core less.",
+      "icon": "❄",
+      "maxLevel": 6,
+      "baseCost": {
+        "scrapMetal": 10
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "manualGunHeatPerShotMult",
+          "value": 0.9,
+          "scaleMode": "exponential",
+          "statLabel": "Manual heat / shot"
+        }
+      ]
+    },
+    {
+      "id": "cannon_rapid_vent",
+      "category": "weapon",
+      "prereqs": [
+        "starter_weapon"
+      ],
+      "name": "Rapid Vent Valves",
+      "description": "High-flow purge vents cut the time your nose cannon stays offline after a thermal overload.",
+      "icon": "⌛",
+      "maxLevel": 5,
+      "baseCost": {
+        "scrapMetal": 12,
+        "plasmaCrystals": 4
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "manualGunOverheatDurationMult",
+          "value": 0.86,
+          "scaleMode": "exponential",
+          "statLabel": "Overheat downtime"
+        }
+      ]
+    },
+    {
+      "id": "starter_defense",
+      "category": "defense",
+      "name": "Reinforced Frame",
+      "description": "A sturdier chassis gives your hull extra structural integrity.",
+      "icon": "🛡",
+      "maxLevel": 1,
+      "baseCost": {},
+      "effects": [
+        {
+          "type": "add",
+          "stat": "maxHp",
+          "value": 20,
+          "statLabel": "Max Hull"
+        }
+      ]
+    },
+    {
+      "id": "starter_utility",
+      "category": "utility",
+      "name": "Field Engineer",
+      "description": "Practical engineering extends the reach of your loot tether.",
+      "icon": "⊕",
+      "maxLevel": 1,
+      "baseCost": {},
+      "effects": [
+        {
+          "type": "add",
+          "stat": "magnetRange",
+          "value": 2,
+          "statLabel": "Magnet Range"
+        }
+      ]
+    },
+    {
+      "id": "starter_passive",
+      "category": "passive",
+      "name": "Cosmic Attunement",
+      "description": "Attune your sensors to begin passively collecting Stellar Dust.",
+      "icon": "✦",
+      "maxLevel": 1,
+      "baseCost": {},
+      "effects": [
+        {
+          "type": "add",
+          "stat": "stellarDustRate",
+          "value": 0.1,
+          "statLabel": "Stellar/sec"
+        }
+      ]
+    },
+    {
+      "id": "kinetic_damage",
+      "category": "weapon",
+      "prereqs": [
+        "starter_weapon"
+      ],
+      "name": "Kinetic Mass Drivers",
+      "description": "Solid slug throwers boost impact damage. Paid in scrap only.",
+      "icon": "⬡",
+      "maxLevel": 10,
+      "baseCost": {
+        "scrapMetal": 11
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.09,
+          "statLabel": "Damage"
+        }
+      ]
+    },
+    {
+      "id": "attack_speed",
+      "category": "weapon",
+      "prereqs": [
+        "starter_weapon"
+      ],
+      "name": "Fire Control",
+      "description": "Servo-linked triggers and belts increase fire rate.",
+      "icon": "🎯",
+      "maxLevel": 8,
+      "baseCost": {
+        "scrapMetal": 14
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "attackSpeed",
+          "value": 1.1,
+          "statLabel": "Fire Rate"
+        }
+      ]
+    },
+    {
+      "id": "damage_up",
+      "category": "weapon",
+      "prereqs": [
+        "kinetic_damage"
+      ],
+      "name": "Plasma Cannons",
+      "description": "Reinforced energy weapons deal more damage per shot.",
+      "icon": "⚡",
+      "maxLevel": 10,
+      "baseCost": {
+        "plasmaCrystals": 8
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.12,
+          "statLabel": "Damage"
+        }
+      ]
+    },
+    {
+      "id": "proj_speed",
+      "category": "weapon",
+      "prereqs": [
+        "kinetic_damage"
+      ],
+      "name": "Accelerator Coils",
+      "description": "Electromagnetic coils increase projectile velocity.",
+      "icon": "⇒",
+      "maxLevel": 5,
+      "baseCost": {
+        "scrapMetal": 15
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "projectileSpeed",
+          "value": 1.15,
+          "statLabel": "Projectile Speed"
+        }
+      ]
+    },
+    {
+      "id": "crit_chance",
+      "category": "weapon",
+      "prereqs": [
+        "attack_speed"
+      ],
+      "name": "Targeting Matrix",
+      "description": "Precision optics increase critical hit chance.",
+      "icon": "◎",
+      "maxLevel": 6,
+      "baseCost": {
+        "plasmaCrystals": 12,
+        "bioEssence": 6
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "critChance",
+          "value": 0.06,
+          "statLabel": "Crit Chance"
+        }
+      ]
+    },
+    {
+      "id": "laser_type",
+      "category": "weapon",
+      "prereqs": [
+        "attack_speed"
+      ],
+      "name": "Plasma Beam",
+      "description": "Mounts a secondary plasma beam cannon that fires independently from your main weapon.",
+      "icon": "━",
+      "maxLevel": 1,
+      "baseCost": {
+        "scrapMetal": 8
+      },
+      "effects": [
+        {
+          "type": "add_weapon",
+          "value": "laser",
+          "statLabel": "Plasma Beam"
+        }
+      ]
+    },
+    {
+      "id": "multi_shot",
+      "category": "weapon",
+      "prereqs": [
+        "damage_up"
+      ],
+      "name": "Multi-Barrel",
+      "description": "Fire one additional projectile per shot.",
+      "icon": "↑↑",
+      "maxLevel": 4,
+      "baseCost": {
+        "plasmaCrystals": 20,
+        "scrapMetal": 15
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "projectileCount",
+          "value": 1,
+          "statLabel": "Projectiles"
+        }
+      ]
+    },
+    {
+      "id": "crit_damage",
+      "category": "weapon",
+      "prereqs": [
+        "crit_chance"
+      ],
+      "name": "Overclocked Cells",
+      "description": "Critical hits deal significantly more damage.",
+      "icon": "💥",
+      "maxLevel": 5,
+      "baseCost": {
+        "scrapMetal": 20
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "critMultiplier",
+          "value": 1.2,
+          "statLabel": "Crit Damage"
+        }
+      ]
+    },
+    {
+      "id": "missile_type",
+      "category": "weapon",
+      "prereqs": [
+        "laser_type"
+      ],
+      "name": "Homing Missiles",
+      "description": "Adds a homing missile launcher that fires independently from your main weapon.",
+      "icon": "🚀",
+      "maxLevel": 1,
+      "baseCost": {
+        "scrapMetal": 25,
+        "plasmaCrystals": 10
+      },
+      "effects": [
+        {
+          "type": "add_weapon",
+          "value": "missile",
+          "statLabel": "Homing Missiles"
+        }
+      ]
+    },
+    {
+      "id": "plasma_type",
+      "category": "weapon",
+      "prereqs": [
+        "missile_type"
+      ],
+      "name": "Dark Plasma",
+      "description": "Adds a dark plasma cannon that fires independently from your main weapon.",
+      "icon": "◉",
+      "maxLevel": 1,
+      "baseCost": {
+        "darkMatter": 2,
+        "plasmaCrystals": 20
+      },
+      "effects": [
+        {
+          "type": "add_weapon",
+          "value": "plasma",
+          "statLabel": "Dark Plasma"
+        }
+      ]
+    },
+    {
+      "id": "beam_laser",
+      "category": "weapon",
+      "prereqs": [
+        "plasma_type"
+      ],
+      "name": "Continuous Beam Laser",
+      "description": "Mounts a sustained-fire beam laser that locks onto the nearest enemy. Fires for 3 seconds, then recharges for 2 seconds.",
+      "icon": "⟿",
+      "maxLevel": 1,
+      "baseCost": {
+        "plasmaCrystals": 25,
+        "scrapMetal": 20
+      },
+      "effects": [
+        {
+          "type": "add_weapon",
+          "value": "beam",
+          "statLabel": "Beam Laser"
+        }
+      ]
+    },
+    {
+      "id": "hull_plating",
+      "category": "defense",
+      "prereqs": [
+        "starter_defense"
+      ],
+      "name": "Hull Plating",
+      "description": "Reinforced hull plating increases maximum hull integrity.",
+      "icon": "🛡",
+      "maxLevel": 10,
+      "baseCost": {
+        "scrapMetal": 10
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "maxHp",
+          "value": 25,
+          "statLabel": "Max Hull"
+        }
+      ]
+    },
+    {
+      "id": "armor",
+      "category": "defense",
+      "prereqs": [
+        "starter_defense"
+      ],
+      "name": "Composite Armor",
+      "description": "Dense alloy layers reduce all incoming damage.",
+      "icon": "▦",
+      "maxLevel": 8,
+      "baseCost": {
+        "scrapMetal": 15
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "armor",
+          "value": 3,
+          "statLabel": "Armor"
+        }
+      ]
+    },
+    {
+      "id": "shield_gen",
+      "category": "defense",
+      "prereqs": [
+        "hull_plating"
+      ],
+      "name": "Shield Generator",
+      "description": "Electromagnetic shields absorb incoming damage. The shield emitter draws power continuously.",
+      "icon": "◯",
+      "maxLevel": 6,
+      "baseCost": {
+        "plasmaCrystals": 18,
+        "scrapMetal": 8
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "maxShieldHp",
+          "value": 30,
+          "statLabel": "Shield HP"
+        },
+        {
+          "type": "add",
+          "stat": "energyDrain",
+          "value": 2,
+          "scaleMode": "linear",
+          "statLabel": "Energy/sec"
+        }
+      ]
+    },
+    {
+      "id": "hp_regen",
+      "category": "defense",
+      "prereqs": [
+        "armor"
+      ],
+      "name": "Nanobots",
+      "description": "Self-replicating nanobots slowly repair hull damage.",
+      "icon": "⬡",
+      "maxLevel": 5,
+      "baseCost": {
+        "bioEssence": 12,
+        "scrapMetal": 8
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "hpRegen",
+          "value": 1,
+          "statLabel": "HP/sec"
+        }
+      ]
+    },
+    {
+      "id": "shield_regen",
+      "category": "defense",
+      "prereqs": [
+        "shield_gen"
+      ],
+      "name": "Shield Capacitors",
+      "description": "Improved capacitors regenerate shields over time.",
+      "icon": "↺",
+      "maxLevel": 5,
+      "baseCost": {
+        "plasmaCrystals": 15,
+        "scrapMetal": 10
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "shieldRegen",
+          "value": 2,
+          "statLabel": "Shield/sec"
+        }
+      ]
+    },
+    {
+      "id": "salvage_winch",
+      "category": "utility",
+      "prereqs": [
+        "starter_utility"
+      ],
+      "name": "Salvage Winch",
+      "description": "Mechanical tow lines pull in debris from farther away.",
+      "icon": "⊗",
+      "maxLevel": 6,
+      "baseCost": {
+        "scrapMetal": 13
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "magnetRange",
+          "value": 1.8,
+          "statLabel": "Magnet Range"
+        }
+      ]
+    },
+    {
+      "id": "speed",
+      "category": "utility",
+      "prereqs": [
+        "starter_utility"
+      ],
+      "name": "Thruster Upgrade",
+      "description": "Enhanced thrusters increase ship agility.",
+      "icon": "▶",
+      "maxLevel": 5,
+      "baseCost": {
+        "scrapMetal": 14
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "speed",
+          "value": 1.15,
+          "statLabel": "Speed"
+        }
+      ]
+    },
+    {
+      "id": "magnet",
+      "category": "utility",
+      "prereqs": [
+        "salvage_winch"
+      ],
+      "name": "Gravity Tether",
+      "description": "Increases the range at which loot is auto-collected.",
+      "icon": "⊕",
+      "maxLevel": 6,
+      "baseCost": {
+        "scrapMetal": 12,
+        "bioEssence": 5
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "magnetRange",
+          "value": 2.5,
+          "statLabel": "Magnet Range"
+        }
+      ]
+    },
+    {
+      "id": "loot_mult",
+      "category": "utility",
+      "prereqs": [
+        "speed"
+      ],
+      "name": "Salvage Protocols",
+      "description": "Advanced salvage algorithms extract more resources.",
+      "icon": "⊞",
+      "maxLevel": 8,
+      "baseCost": {
+        "bioEssence": 10,
+        "scrapMetal": 8
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "lootMultiplier",
+          "value": 1.15,
+          "statLabel": "Loot"
+        }
+      ]
+    },
+    {
+      "id": "priority_designator",
+      "category": "utility",
+      "prereqs": [
+        "loot_mult"
+      ],
+      "name": "Priority Designator",
+      "description": "During a run, click an enemy to designate it as your primary target. While you have automatic turrets unlocked, auto-fire and the beam laser focus it until it is destroyed, then targeting returns to automatic. Clicking empty space still fires your nose cannon.",
+      "icon": "◇",
+      "maxLevel": 1,
+      "baseCost": {
+        "scrapMetal": 35,
+        "plasmaCrystals": 15
+      },
+      "effects": [
+        {
+          "type": "toggle",
+          "stat": "manualTargetFocusEnabled",
+          "statLabel": "Click-to-focus targeting"
+        }
+      ]
+    },
+    {
+      "id": "stellar_gen",
+      "category": "passive",
+      "prereqs": [
+        "starter_passive"
+      ],
+      "name": "Stellar Collector",
+      "description": "Cosmic array passively generates Stellar Dust.",
+      "icon": "★",
+      "maxLevel": 8,
+      "baseCost": {
+        "plasmaCrystals": 20,
+        "stellarDust": 5
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "stellarDustRate",
+          "value": 0.15,
+          "statLabel": "Stellar/sec"
+        }
+      ]
+    },
+    {
+      "id": "scrap_boost",
+      "category": "passive",
+      "prereqs": [
+        "starter_passive"
+      ],
+      "name": "Scrap Magnet",
+      "description": "Enhanced salvage systems extract more Scrap Metal.",
+      "icon": "⚙+",
+      "maxLevel": 6,
+      "baseCost": {
+        "scrapMetal": 20
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "lootMultiplier",
+          "value": 1.08,
+          "statLabel": "Loot Mult"
+        }
+      ]
+    },
+    {
+      "id": "plasma_boost",
+      "category": "passive",
+      "prereqs": [
+        "scrap_boost"
+      ],
+      "name": "Plasma Refinery",
+      "description": "Crystal resonators amplify Plasma Crystal yields.",
+      "icon": "◆+",
+      "maxLevel": 6,
+      "baseCost": {
+        "plasmaCrystals": 15,
+        "bioEssence": 8
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "lootMultiplier",
+          "value": 1.1,
+          "statLabel": "Loot Mult"
+        }
+      ]
+    },
+    {
+      "id": "bio_boost",
+      "category": "passive",
+      "prereqs": [
+        "plasma_boost"
+      ],
+      "name": "Bio Harvester",
+      "description": "Organic extractors collect more Bio Essence.",
+      "icon": "✦+",
+      "maxLevel": 6,
+      "baseCost": {
+        "bioEssence": 18
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "lootMultiplier",
+          "value": 1.1,
+          "statLabel": "Loot Mult"
+        }
+      ]
+    },
+    {
+      "id": "wing_cannons",
+      "category": "special",
+      "betweenCategories": [
+        "weapon",
+        "defense"
+      ],
+      "prereqs": [
+        "kinetic_damage",
+        "hull_plating"
+      ],
+      "name": "Wing Cannons",
+      "description": "Reinforced wing struts mount heavy forward cannons, visibly widening the ship profile.",
+      "icon": "⟺",
+      "maxLevel": 2,
+      "baseCost": {
+        "scrapMetal": 35,
+        "plasmaCrystals": 15
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.12,
+          "statLabel": "Damage"
+        }
+      ],
+      "presentation": {
+        "rarity": "uncommon",
+        "badge": "WNG",
+        "flavorText": "More wing. More firepower. Simple math."
+      },
+      "visual": {
+        "modifiers": [
+          {
+            "target": "wing_left",
+            "property": "scale_x",
+            "op": "multiply",
+            "value": 1.2
+          },
+          {
+            "target": "wing_right",
+            "property": "scale_x",
+            "op": "multiply",
+            "value": 1.2
+          },
+          {
+            "target": "wing_left",
+            "property": "emissive",
+            "op": "set",
+            "value": "#aa6600"
+          },
+          {
+            "target": "wing_right",
+            "property": "emissive",
+            "op": "set",
+            "value": "#aa6600"
+          },
+          {
+            "target": "wing_left",
+            "property": "emissiveIntensity",
+            "op": "set",
+            "value": 0.9
+          },
+          {
+            "target": "wing_right",
+            "property": "emissiveIntensity",
+            "op": "set",
+            "value": 0.9
+          }
+        ],
+        "attachments": [
+          {
+            "id": "wing_cannon_left",
+            "anchor": "wing_left",
+            "offset": {
+              "x": -0.3,
+              "y": 0,
+              "z": -0.2
+            },
+            "mesh": {
+              "geometry": {
+                "type": "cylinder",
+                "params": [
+                  0.06,
+                  0.06,
+                  0.55,
+                  6
+                ]
+              },
+              "material": {
+                "type": "standard",
+                "color": "#886633",
+                "emissive": "#ff8800",
+                "emissiveIntensity": 0.6,
+                "metalness": 0.7,
+                "roughness": 0.3
+              },
+              "rotation": {
+                "x": 1.5707963267948966,
+                "y": 0,
+                "z": 0
+              }
+            }
+          },
+          {
+            "id": "wing_cannon_right",
+            "anchor": "wing_right",
+            "offset": {
+              "x": 0.3,
+              "y": 0,
+              "z": -0.2
+            },
+            "mesh": {
+              "geometry": {
+                "type": "cylinder",
+                "params": [
+                  0.06,
+                  0.06,
+                  0.55,
+                  6
+                ]
+              },
+              "material": {
+                "type": "standard",
+                "color": "#886633",
+                "emissive": "#ff8800",
+                "emissiveIntensity": 0.6,
+                "metalness": 0.7,
+                "roughness": 0.3
+              },
+              "rotation": {
+                "x": 1.5707963267948966,
+                "y": 0,
+                "z": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "anti_scout_doctrine",
+      "category": "special",
+      "betweenCategories": [
+        "weapon",
+        "defense"
+      ],
+      "prereqs": [
+        "kinetic_damage",
+        "armor"
+      ],
+      "name": "Anti-Scout Doctrine",
+      "description": "Scouts move slower and your weapons punch through their thin hulls.",
+      "icon": "⊘",
+      "maxLevel": 3,
+      "baseCost": {
+        "scrapMetal": 18,
+        "bioEssence": 8
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "scout.speedMult",
+          "value": 0.75,
+          "target": "enemy",
+          "scaleMode": "fixed",
+          "statLabel": "Scout Speed"
+        },
+        {
+          "type": "multiply",
+          "stat": "scout.damageReceivedMult",
+          "value": 1.3,
+          "target": "enemy",
+          "scaleMode": "exponential",
+          "statLabel": "Scout Vuln"
+        }
+      ],
+      "presentation": {
+        "rarity": "uncommon",
+        "badge": "ASD",
+        "flavorText": "Fast ships die fastest when you know where to aim."
+      }
+    },
+    {
+      "id": "drone",
+      "category": "special",
+      "betweenCategories": [
+        "weapon",
+        "defense"
+      ],
+      "prereqs": [
+        "damage_up",
+        "shield_gen"
+      ],
+      "name": "Drone Companion",
+      "description": "A loyal combat drone orbits your ship and assists in battle.",
+      "icon": "🤖",
+      "maxLevel": 1,
+      "baseCost": {
+        "darkMatter": 2,
+        "scrapMetal": 40,
+        "plasmaCrystals": 20
+      },
+      "effects": [
+        {
+          "type": "special",
+          "stat": "hasDrone",
+          "value": true,
+          "specialDesc": "Unlocks combat drone"
+        }
+      ],
+      "synergies": [
+        {
+          "requires": [
+            "drone",
+            "vampire"
+          ],
+          "label": "Drone Vampire",
+          "desc": "Drone kills also trigger vampiric healing.",
+          "effects": [
+            {
+              "type": "add",
+              "stat": "hpRegen",
+              "value": 0.5,
+              "scaleMode": "fixed",
+              "statLabel": "HP/sec (Drone Vamp)"
+            }
+          ]
+        }
+      ],
+      "presentation": {
+        "rarity": "epic",
+        "badge": "DRN",
+        "flavorText": "It was lonely out here. Not anymore.",
+        "synergyHints": [
+          "vampire"
+        ]
+      },
+      "visual": {
+        "attachments": [
+          {
+            "id": "drone_companion",
+            "anchor": "ship",
+            "orbit": {
+              "radius": 2.5,
+              "speed": 1.2,
+              "tilt": 0.3
+            },
+            "mesh": {
+              "geometry": {
+                "type": "octahedron",
+                "params": [
+                  0.3
+                ]
+              },
+              "material": {
+                "type": "standard",
+                "color": "#0088ff",
+                "emissive": "#0044aa",
+                "emissiveIntensity": 1.2,
+                "metalness": 0.6,
+                "roughness": 0.3
+              },
+              "light": {
+                "color": "#0088ff",
+                "intensity": 0.8,
+                "distance": 3
+              },
+              "children": [
+                {
+                  "geometry": {
+                    "type": "sphere",
+                    "params": [
+                      0.08,
+                      6,
+                      6
+                    ]
+                  },
+                  "material": {
+                    "type": "basic",
+                    "color": "#aaffff"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "vampire",
+      "category": "special",
+      "betweenCategories": [
+        "passive",
+        "weapon"
+      ],
+      "prereqs": [
+        "scrap_boost",
+        "crit_chance"
+      ],
+      "name": "Vampiric Rounds",
+      "description": "On-kill: restore hull integrity equal to 3% of the enemy's max HP. Bonus heal at low hull.",
+      "icon": "♥",
+      "maxLevel": 3,
+      "baseCost": {
+        "darkMatter": 1,
+        "bioEssence": 35
+      },
+      "effects": [
+        {
+          "type": "special",
+          "stat": "hasVampire",
+          "value": true,
+          "scaleMode": "fixed",
+          "specialDesc": "On-kill: heal 3% of enemy max HP"
+        }
+      ],
+      "triggers": [
+        {
+          "event": "enemy:killed",
+          "action": {
+            "type": "heal_player",
+            "value": {
+              "base": 2,
+              "perLevel": 1
+            }
+          },
+          "cooldown": 0
+        }
+      ],
+      "presentation": {
+        "rarity": "rare",
+        "badge": "VMP",
+        "flavorText": "Death feeds the living.",
+        "synergyHints": [
+          "drone"
+        ]
+      }
+    },
+    {
+      "id": "reflect",
+      "category": "special",
+      "betweenCategories": [
+        "defense",
+        "utility"
+      ],
+      "prereqs": [
+        "shield_gen",
+        "salvage_winch"
+      ],
+      "name": "Damage Reflection",
+      "description": "Deflector plating reflects 20% of contact damage.",
+      "icon": "↩",
+      "maxLevel": 1,
+      "baseCost": {
+        "darkMatter": 1,
+        "scrapMetal": 50
+      },
+      "effects": [
+        {
+          "type": "special",
+          "stat": "hasDamageReflect",
+          "value": true,
+          "specialDesc": "Reflect 20% contact damage"
+        }
+      ]
+    },
+    {
+      "id": "stellar_burst",
+      "category": "special",
+      "betweenCategories": [
+        "utility",
+        "passive"
+      ],
+      "prereqs": [
+        "magnet",
+        "stellar_gen"
+      ],
+      "name": "Stellar Nova",
+      "description": "Periodically releases a burst of stellar energy.",
+      "icon": "✸",
+      "maxLevel": 3,
+      "baseCost": {
+        "stellarDust": 20,
+        "darkMatter": 1
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "damage",
+          "value": 8,
+          "statLabel": "Damage"
+        }
+      ]
+    },
+    {
+      "id": "bio_harvester_mk2",
+      "category": "special",
+      "betweenCategories": [
+        "utility",
+        "passive"
+      ],
+      "prereqs": [
+        "loot_mult",
+        "plasma_boost"
+      ],
+      "name": "Bio Harvester Mk II",
+      "description": "Next-generation bio extractors massively increase Bio Essence yields. Synergy discount with Bio Boost.",
+      "icon": "✦⬆",
+      "maxLevel": 5,
+      "baseCost": {
+        "bioEssence": 30,
+        "plasmaCrystals": 12
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "loot.bioEssence",
+          "value": 1.25,
+          "target": "currency",
+          "statLabel": "Bio Essence Loot"
+        },
+        {
+          "type": "add",
+          "stat": "loot.bioEssence",
+          "value": 0.15,
+          "target": "currency",
+          "scaleMode": "linear",
+          "condition": {
+            "type": "round_gte",
+            "threshold": 10
+          },
+          "statLabel": "Bio Rate (Round 10+)"
+        }
+      ],
+      "costModifiers": [
+        {
+          "type": "synergy_discount",
+          "requires": [
+            "bio_boost"
+          ],
+          "discount": 0.25,
+          "altLabel": "25% off with Bio Boost"
+        }
+      ],
+      "presentation": {
+        "rarity": "uncommon",
+        "badge": "BIO",
+        "flavorText": "Life, compressed and monetized.",
+        "synergyHints": [
+          "bio_boost"
+        ]
+      }
+    },
+    {
+      "id": "overcharge",
+      "category": "special",
+      "betweenCategories": [
+        "weapon",
+        "defense"
+      ],
+      "prereqs": [
+        "multi_shot",
+        "armor"
+      ],
+      "name": "Overcharge",
+      "description": "Every 10th shot deals massive burst damage.",
+      "icon": "⚡⚡",
+      "maxLevel": 1,
+      "baseCost": {
+        "darkMatter": 1,
+        "plasmaCrystals": 30
+      },
+      "effects": [
+        {
+          "type": "special",
+          "stat": "hasOvercharge",
+          "value": true,
+          "specialDesc": "Every 10th shot deals 5x damage"
+        }
+      ]
+    },
+    {
+      "id": "crit_mastery",
+      "category": "special",
+      "betweenCategories": [
+        "weapon",
+        "defense"
+      ],
+      "prereqs": [
+        "crit_damage",
+        "shield_regen"
+      ],
+      "name": "Crit Mastery",
+      "description": "Advanced targeting theory pushes critical hit capability to its physical limit.",
+      "icon": "◎+",
+      "maxLevel": 5,
+      "baseCost": {
+        "plasmaCrystals": 25,
+        "bioEssence": 10
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "critChance",
+          "value": 0.05,
+          "scaleMode": "diminishing",
+          "diminishingBase": 0.18,
+          "statLabel": "Crit Chance"
+        },
+        {
+          "type": "multiply",
+          "stat": "critMultiplier",
+          "value": 1.08,
+          "scaleMode": "exponential",
+          "statLabel": "Crit Mult"
+        }
+      ],
+      "synergies": [
+        {
+          "requires": [
+            "crit_mastery",
+            "crit_damage"
+          ],
+          "label": "Precision Carnage",
+          "desc": "Crits also trigger a small AoE blast.",
+          "effects": [
+            {
+              "type": "add",
+              "stat": "damage",
+              "value": 5,
+              "scaleMode": "fixed",
+              "statLabel": "AoE Crit Dmg"
+            }
+          ]
+        }
+      ],
+      "presentation": {
+        "rarity": "rare",
+        "badge": "CRT",
+        "borderAnim": "pulse",
+        "flavorText": "Precision is a state of mind.",
+        "synergyHints": [
+          "crit_damage"
+        ]
+      }
+    },
+    {
+      "id": "round_accelerator",
+      "category": "special",
+      "betweenCategories": [
+        "defense",
+        "utility"
+      ],
+      "prereqs": [
+        "shield_regen",
+        "loot_mult"
+      ],
+      "name": "Round Accelerator",
+      "description": "Enemy spawns are faster and more plentiful, but loot pours in proportionally.",
+      "icon": "⏩",
+      "maxLevel": 3,
+      "baseCost": {
+        "darkMatter": 1,
+        "stellarDust": 15
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "spawnInterval",
+          "value": 0.85,
+          "target": "round",
+          "scaleMode": "exponential",
+          "statLabel": "Spawn Interval"
+        },
+        {
+          "type": "multiply",
+          "stat": "maxConcurrent",
+          "value": 1.2,
+          "target": "round",
+          "scaleMode": "exponential",
+          "statLabel": "Max Enemies"
+        },
+        {
+          "type": "multiply",
+          "stat": "lootMultiplier",
+          "value": 1.1,
+          "statLabel": "Loot Mult"
+        }
+      ],
+      "costModifiers": [
+        {
+          "type": "round_scale",
+          "factor": 0.12
+        }
+      ],
+      "presentation": {
+        "rarity": "rare",
+        "badge": "ACL",
+        "borderAnim": "pulse",
+        "flavorText": "More targets. More glory. More scrap."
+      }
+    },
+    {
+      "id": "nova_core",
+      "category": "special",
+      "betweenCategories": [
+        "passive",
+        "weapon"
+      ],
+      "prereqs": [
+        "bio_boost",
+        "multi_shot"
+      ],
+      "name": "Nova Core",
+      "description": "A miniature stellar core that amplifies all combat and triggers powerful on-kill chain reactions.",
+      "icon": "✺",
+      "maxLevel": 1,
+      "baseCost": {
+        "darkMatter": 4,
+        "stellarDust": 50,
+        "plasmaCrystals": 40
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.35,
+          "scaleMode": "fixed",
+          "statLabel": "Damage"
+        },
+        {
+          "type": "multiply",
+          "stat": "all.hpMult",
+          "value": 0.8,
+          "target": "enemy",
+          "scaleMode": "fixed",
+          "statLabel": "Enemy HP"
+        },
+        {
+          "type": "add",
+          "stat": "critChance",
+          "value": 0.1,
+          "scaleMode": "fixed",
+          "statLabel": "Crit Chance"
+        }
+      ],
+      "triggers": [
+        {
+          "event": "enemy:killed",
+          "action": {
+            "type": "emit_damage",
+            "value": 30,
+            "radius": 3.5
+          },
+          "cooldown": 0.4,
+          "chance": 0.5
+        },
+        {
+          "event": "round:started",
+          "action": {
+            "type": "add_currency",
+            "currency": "stellarDust",
+            "value": 5
+          }
+        }
+      ],
+      "presentation": {
+        "rarity": "legendary",
+        "badge": "★",
+        "borderAnim": "rainbow",
+        "flavorText": "You carry a dying star. It is not at peace."
+      }
+    },
+    {
+      "id": "plasma_core",
+      "category": "special",
+      "betweenCategories": [
+        "weapon",
+        "defense"
+      ],
+      "prereqs": [
+        "plasma_type",
+        "shield_gen"
+      ],
+      "name": "Plasma Core",
+      "description": "A supercharged plasma cell amplifies your dark plasma cannon with visibly larger, brighter bolts.",
+      "icon": "◉+",
+      "maxLevel": 3,
+      "baseCost": {
+        "plasmaCrystals": 22,
+        "darkMatter": 1
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.15,
+          "statLabel": "Damage"
+        }
+      ],
+      "presentation": {
+        "rarity": "rare",
+        "badge": "PLS",
+        "flavorText": "The bolts leave scorch-light even after impact."
+      },
+      "visual": {
+        "projectile": {
+          "type": "plasma",
+          "geometry": {
+            "type": "sphere",
+            "params": [
+              0.22,
+              8,
+              8
+            ]
+          },
+          "color": "#ff00ff",
+          "emissive": "#880088",
+          "emissiveIntensity": 2,
+          "scale": 1.5
+        }
+      }
+    },
+    {
+      "id": "quantum_tunneling",
+      "category": "weapon",
+      "prereqs": [
+        "proj_speed"
+      ],
+      "name": "Quantum Tunneling",
+      "description": "Phase-shifted rounds punch through enemies instead of stopping on first contact.",
+      "icon": "⟫",
+      "maxLevel": 3,
+      "baseCost": {
+        "plasmaCrystals": 18
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "projectilePierces",
+          "value": 1,
+          "scaleMode": "linear",
+          "statLabel": "Pierce Count"
+        }
+      ]
+    },
+    {
+      "id": "incendiary_warheads",
+      "category": "weapon",
+      "prereqs": [
+        "damage_up"
+      ],
+      "name": "Incendiary Warheads",
+      "description": "Shots coat enemies in burning plasma that deals 4 DPS for 3 seconds.",
+      "icon": "🔥",
+      "maxLevel": 5,
+      "baseCost": {
+        "plasmaCrystals": 20,
+        "bioEssence": 8
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.04,
+          "statLabel": "Damage"
+        }
+      ],
+      "triggers": [
+        {
+          "event": "enemy:damaged",
+          "action": {
+            "type": "apply_status",
+            "statusType": "burn",
+            "dps": {
+              "base": 4,
+              "perLevel": 2
+            },
+            "duration": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "cryo_rounds",
+      "category": "weapon",
+      "prereqs": [
+        "crit_chance"
+      ],
+      "name": "Cryo Rounds",
+      "description": "40% chance on hit to slow targets to 60% speed for 2 seconds.",
+      "icon": "❄",
+      "maxLevel": 4,
+      "baseCost": {
+        "bioEssence": 15
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "critChance",
+          "value": 1.05,
+          "statLabel": "Crit Chance"
+        }
+      ],
+      "triggers": [
+        {
+          "event": "enemy:damaged",
+          "chance": 0.4,
+          "cooldown": 0.5,
+          "action": {
+            "type": "apply_status",
+            "statusType": "slow",
+            "slowMult": {
+              "base": 0.6,
+              "perLevel": -0.05
+            },
+            "duration": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "reactive_plating",
+      "category": "defense",
+      "prereqs": [
+        "armor"
+      ],
+      "name": "Reactive Plating",
+      "description": "Impact-reactive hull plating detonates a shockwave when struck. 1.5s cooldown.",
+      "icon": "💥",
+      "maxLevel": 4,
+      "baseCost": {
+        "scrapMetal": 20
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "armor",
+          "value": 2,
+          "scaleMode": "linear",
+          "statLabel": "Armor"
+        }
+      ],
+      "triggers": [
+        {
+          "event": "player:damaged",
+          "cooldown": 1.5,
+          "action": {
+            "type": "emit_damage",
+            "value": {
+              "base": 15,
+              "perLevel": 8
+            },
+            "radius": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "hull_nanites",
+      "category": "defense",
+      "prereqs": [
+        "hp_regen"
+      ],
+      "name": "Hull Nanites",
+      "description": "Self-repairing nanobots accelerate hull restoration.",
+      "icon": "⬡",
+      "maxLevel": 5,
+      "baseCost": {
+        "bioEssence": 18
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "hpRegen",
+          "value": 1.5,
+          "scaleMode": "linear",
+          "statLabel": "HP Regen/sec"
+        }
+      ]
+    },
+    {
+      "id": "cargo_expander",
+      "category": "utility",
+      "prereqs": [
+        "salvage_winch"
+      ],
+      "name": "Cargo Expander",
+      "description": "Modular cargo bays increase loot earned from every kill.",
+      "icon": "⊞",
+      "maxLevel": 5,
+      "baseCost": {
+        "scrapMetal": 16
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "lootMultiplier",
+          "value": 1.1,
+          "statLabel": "Loot Multiplier"
+        }
+      ]
+    },
+    {
+      "id": "debris_field",
+      "category": "utility",
+      "prereqs": [
+        "magnet"
+      ],
+      "name": "Debris Field",
+      "description": "Killed enemies have a 40% chance to leave volatile wreckage that harms nearby foes.",
+      "icon": "💣",
+      "maxLevel": 4,
+      "baseCost": {
+        "scrapMetal": 22,
+        "plasmaCrystals": 10
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "lootMultiplier",
+          "value": 1.06,
+          "statLabel": "Loot Multiplier"
+        }
+      ],
+      "triggers": [
+        {
+          "event": "enemy:killed",
+          "chance": 0.4,
+          "action": {
+            "type": "emit_damage",
+            "value": {
+              "base": 20,
+              "perLevel": 10
+            },
+            "radius": 3.5
+          }
+        }
+      ]
+    },
+    {
+      "id": "dark_matter_antenna",
+      "category": "passive",
+      "prereqs": [
+        "plasma_boost"
+      ],
+      "name": "Dark Matter Antenna",
+      "description": "Exotic resonance collectors passively accumulate dark matter.",
+      "icon": "◈",
+      "maxLevel": 5,
+      "baseCost": {
+        "plasmaCrystals": 25,
+        "bioEssence": 15
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "currency",
+          "stat": "passive.darkMatter",
+          "value": 0.002,
+          "scaleMode": "linear",
+          "statLabel": "Dark Matter/sec"
+        }
+      ]
+    },
+    {
+      "id": "interest_accrual",
+      "category": "passive",
+      "prereqs": [
+        "scrap_boost"
+      ],
+      "name": "Interest Accrual",
+      "description": "Before each run launches, earn 2% of your stored Scrap Metal as bonus income.",
+      "icon": "✦",
+      "maxLevel": 5,
+      "baseCost": {
+        "scrapMetal": 18,
+        "plasmaCrystals": 8
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "interestRate",
+          "value": 0.02,
+          "scaleMode": "linear",
+          "statLabel": "Interest Rate"
+        }
+      ]
+    },
+    {
+      "id": "resonance_field",
+      "category": "passive",
+      "prereqs": [
+        "stellar_gen"
+      ],
+      "name": "Resonance Field",
+      "description": "+5% damage per 10 kills this run. Stacks up to +50%. Resets each run.",
+      "icon": "◉",
+      "maxLevel": 5,
+      "baseCost": {
+        "stellarDust": 30
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "resonanceFieldLevel",
+          "value": 1,
+          "scaleMode": "linear",
+          "statLabel": "Kill Stack Bonus"
+        }
+      ]
+    },
+    {
+      "id": "momentum_engine",
+      "category": "passive",
+      "prereqs": [
+        "stellar_gen"
+      ],
+      "name": "Momentum Engine",
+      "description": "The faster you fly, the more Stellar Dust your collectors harvest.",
+      "icon": "⚡",
+      "maxLevel": 1,
+      "baseCost": {
+        "stellarDust": 50,
+        "plasmaCrystals": 20
+      },
+      "effects": [
+        {
+          "type": "toggle",
+          "stat": "momentumEngineActive",
+          "statLabel": "Momentum Engine"
+        }
+      ]
+    },
+    {
+      "id": "corrosive_aura",
+      "category": "special",
+      "prereqs": [
+        "magnet",
+        "plasma_boost"
+      ],
+      "betweenCategories": [
+        "utility",
+        "passive"
+      ],
+      "name": "Corrosive Aura",
+      "description": "Enemies within your gravity tether range are continuously damaged by corrosive plasma.",
+      "icon": "☣",
+      "maxLevel": 5,
+      "baseCost": {
+        "plasmaCrystals": 30,
+        "bioEssence": 20
+      },
+      "effects": [
+        {
+          "type": "add",
+          "stat": "corrosiveAuraDps",
+          "value": 6,
+          "scaleMode": "linear",
+          "statLabel": "Aura DPS"
+        }
+      ]
+    },
+    {
+      "id": "gravity_well",
+      "category": "special",
+      "prereqs": [
+        "shield_gen",
+        "magnet"
+      ],
+      "betweenCategories": [
+        "defense",
+        "utility"
+      ],
+      "name": "Gravity Well",
+      "description": "Your shields project a graviton field that slows all enemies within magnet range to 45% speed.",
+      "icon": "⊗",
+      "maxLevel": 1,
+      "baseCost": {
+        "plasmaCrystals": 25,
+        "scrapMetal": 20
+      },
+      "effects": [
+        {
+          "type": "toggle",
+          "stat": "gravityWellActive",
+          "statLabel": "Gravity Well"
+        },
+        {
+          "type": "multiply",
+          "stat": "magnetRange",
+          "value": 1.25,
+          "statLabel": "Magnet Range"
+        }
+      ]
+    },
+    {
+      "id": "berserker_protocol",
+      "category": "special",
+      "prereqs": [
+        "crit_damage",
+        "scrap_boost"
+      ],
+      "betweenCategories": [
+        "passive",
+        "weapon"
+      ],
+      "name": "Berserker Protocol",
+      "description": "Each kill grants a 5-second attack speed frenzy. Stacks with rapid kills.",
+      "icon": "⚔",
+      "maxLevel": 5,
+      "baseCost": {
+        "darkMatter": 3,
+        "plasmaCrystals": 20
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.03,
+          "statLabel": "Damage"
+        }
+      ],
+      "triggers": [
+        {
+          "event": "enemy:killed",
+          "action": {
+            "type": "boost_stat",
+            "stat": "attackSpeed",
+            "value": {
+              "base": 1.04,
+              "perLevel": 0.01
+            },
+            "duration": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "glass_cannon",
+      "category": "special",
+      "prereqs": [
+        "damage_up",
+        "scrap_boost"
+      ],
+      "betweenCategories": [
+        "passive",
+        "weapon"
+      ],
+      "name": "Glass Cannon",
+      "description": "Massively increases damage output, but your hull is paper-thin. You hit like a comet and shatter like one too.",
+      "icon": "💥",
+      "maxLevel": 3,
+      "baseCost": {
+        "darkMatter": 5,
+        "scrapMetal": 300
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.6,
+          "statLabel": "Damage"
+        },
+        {
+          "type": "multiply",
+          "stat": "maxHp",
+          "value": 0.5,
+          "statLabel": "Max HP"
+        },
+        {
+          "type": "multiply",
+          "stat": "speed",
+          "value": 1.25,
+          "scaleMode": "fixed",
+          "statLabel": "Speed"
+        }
+      ]
+    },
+    {
+      "id": "siege_engine",
+      "category": "weapon",
+      "prereqs": [
+        "damage_up"
+      ],
+      "name": "Siege Engine",
+      "description": "Converts your ship into a slow-moving artillery platform. Enormous firepower, but you can barely maneuver.",
+      "icon": "🏹",
+      "maxLevel": 3,
+      "baseCost": {
+        "darkMatter": 4,
+        "plasmaCrystals": 25
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.7,
+          "statLabel": "Damage"
+        },
+        {
+          "type": "multiply",
+          "stat": "speed",
+          "value": 0.35,
+          "statLabel": "Speed"
+        }
+      ]
+    },
+    {
+      "id": "frenzied_assault",
+      "category": "weapon",
+      "prereqs": [
+        "attack_speed"
+      ],
+      "name": "Frenzied Assault",
+      "description": "Overclock your weapons to a blistering rate of fire. Loot magnetism collapses — you're too busy shooting to collect.",
+      "icon": "🌀",
+      "maxLevel": 3,
+      "baseCost": {
+        "darkMatter": 3,
+        "plasmaCrystals": 15
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "attackSpeed",
+          "value": 1.5,
+          "statLabel": "Attack Speed"
+        },
+        {
+          "type": "max",
+          "stat": "magnetRange",
+          "value": 1.5,
+          "statLabel": "Magnet Range (capped)"
+        }
+      ]
+    },
+    {
+      "id": "juggernaut",
+      "category": "special",
+      "prereqs": [
+        "shield_gen",
+        "speed"
+      ],
+      "betweenCategories": [
+        "defense",
+        "utility"
+      ],
+      "name": "Juggernaut",
+      "description": "Reinforce your hull to armored fortress levels. You become a slow, nigh-unkillable behemoth.",
+      "icon": "🛡",
+      "maxLevel": 3,
+      "baseCost": {
+        "darkMatter": 5,
+        "bioEssence": 30
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "maxHp",
+          "value": 2,
+          "statLabel": "Max HP"
+        },
+        {
+          "type": "add",
+          "stat": "armor",
+          "value": 12,
+          "statLabel": "Armor"
+        },
+        {
+          "type": "multiply",
+          "stat": "speed",
+          "value": 0.35,
+          "statLabel": "Speed"
+        }
+      ]
+    },
+    {
+      "id": "predator_instinct",
+      "category": "special",
+      "prereqs": [
+        "loot_mult",
+        "plasma_boost"
+      ],
+      "betweenCategories": [
+        "utility",
+        "passive"
+      ],
+      "name": "Predator Instinct",
+      "description": "Enemies sense your aggression and press harder — but so do the rewards. More danger, more spoils.",
+      "icon": "🦅",
+      "maxLevel": 3,
+      "baseCost": {
+        "darkMatter": 4,
+        "bioEssence": 25
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "lootMultiplier",
+          "value": 1.8,
+          "statLabel": "Loot Multiplier"
+        },
+        {
+          "type": "multiply",
+          "target": "enemy",
+          "stat": "all.speedMult",
+          "value": 1.25,
+          "statLabel": "Enemy Speed"
+        }
+      ]
+    },
+    {
+      "id": "overclocked_capacitors",
+      "category": "special",
+      "prereqs": [
+        "attack_speed",
+        "shield_gen"
+      ],
+      "betweenCategories": [
+        "weapon",
+        "defense"
+      ],
+      "name": "Overclocked Capacitors",
+      "description": "Divert all shield energy into the weapon array. Shields offline permanently — but weapons fire without mercy.",
+      "icon": "⚡",
+      "maxLevel": 3,
+      "baseCost": {
+        "darkMatter": 4,
+        "plasmaCrystals": 20
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "attackSpeed",
+          "value": 1.55,
+          "statLabel": "Attack Speed"
+        },
+        {
+          "type": "max",
+          "stat": "maxShieldHp",
+          "value": 0,
+          "statLabel": "Shield (disabled)"
+        }
+      ]
+    },
+    {
+      "id": "blood_price",
+      "category": "special",
+      "prereqs": [
+        "kinetic_damage",
+        "hp_regen"
+      ],
+      "betweenCategories": [
+        "weapon",
+        "defense"
+      ],
+      "name": "Blood Price",
+      "description": "Your weapons feed on your own life force. Damage climbs while your HP slowly drains. Never outright lethal.",
+      "icon": "🩸",
+      "maxLevel": 4,
+      "baseCost": {
+        "darkMatter": 4,
+        "bioEssence": 20
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "damage",
+          "value": 1.25,
+          "statLabel": "Damage"
+        },
+        {
+          "type": "add",
+          "stat": "hpRegen",
+          "value": -1,
+          "statLabel": "HP Drain/s"
+        }
+      ]
+    },
+
+    {
+      "id": "reactor",
+      "category": "passive",
+      "prereqs": ["starter_passive"],
+      "name": "Reactor Core",
+      "description": "A compact fission reactor powers your ship's high-energy systems, generating a steady stream of energy.",
+      "icon": "⚛",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 60, "plasmaCrystals": 10 },
+      "effects": [
+        { "type": "add", "stat": "energyRegen", "value": 8, "scaleMode": "fixed", "statLabel": "Energy/sec" }
+      ]
+    },
+    {
+      "id": "reactor_running_hot",
+      "category": "passive",
+      "prereqs": ["reactor"],
+      "name": "Running Hot",
+      "description": "Push the reactor past safe limits for massive energy output — but the excess heat bleeds into your cannon.",
+      "icon": "🔥",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 80, "plasmaCrystals": 15 },
+      "effects": [
+        { "type": "add", "stat": "energyRegen", "value": 12, "scaleMode": "fixed", "statLabel": "Energy/sec" },
+        { "type": "max", "stat": "manualGunHeatPerShotMult", "value": 0.5, "statLabel": "Max heat/shot cap" }
+      ]
+    },
+    {
+      "id": "solar_cells",
+      "category": "passive",
+      "prereqs": ["starter_passive"],
+      "name": "Solar Cells",
+      "description": "Arrays of photovoltaic panels harvest starlight for clean, scalable energy generation.",
+      "icon": "☀",
+      "maxLevel": 15,
+      "baseCost": { "scrapMetal": 18 },
+      "effects": [
+        { "type": "add", "stat": "energyRegen", "value": 2, "scaleMode": "linear", "statLabel": "Energy/sec" }
+      ]
+    },
+    {
+      "id": "bioreactor",
+      "category": "passive",
+      "prereqs": ["reactor"],
+      "name": "Bioreactor",
+      "description": "Converts bio essence into high-energy plasma. Generates significant power at the cost of bio essence reserves.",
+      "icon": "🧬",
+      "maxLevel": 1,
+      "baseCost": { "bioEssence": 30, "scrapMetal": 50 },
+      "effects": [
+        { "type": "add", "stat": "energyRegen", "value": 15, "scaleMode": "fixed", "statLabel": "Energy/sec" },
+        { "type": "add", "target": "currency", "stat": "passive.bioEssence", "value": -0.02, "scaleMode": "fixed", "statLabel": "Bio Drain/s" }
+      ]
+    },
+    {
+      "id": "antimatter_engine",
+      "category": "passive",
+      "prereqs": ["reactor"],
+      "betweenCategories": ["passive", "special"],
+      "name": "Antimatter Engine",
+      "description": "Annihilates dark matter for extraordinary energy. The most powerful generator in the galaxy.",
+      "icon": "💠",
+      "maxLevel": 1,
+      "baseCost": { "darkMatter": 20, "plasmaCrystals": 40 },
+      "effects": [
+        { "type": "add", "stat": "energyRegen", "value": 50, "scaleMode": "fixed", "statLabel": "Energy/sec" },
+        { "type": "add", "target": "currency", "stat": "passive.darkMatter", "value": -0.002, "scaleMode": "fixed", "statLabel": "Dark Matter Drain/s" }
+      ]
+    },
+    {
+      "id": "bio_lab",
+      "category": "passive",
+      "prereqs": ["starter_passive"],
+      "name": "Bio Lab",
+      "description": "A pressurized cultivation chamber generates bio essence passively from stellar radiation.",
+      "icon": "🔬",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 40, "plasmaCrystals": 8 },
+      "effects": [
+        { "type": "add", "target": "currency", "stat": "passive.bioEssence", "value": 0.05, "scaleMode": "linear", "statLabel": "Bio Essence/sec" },
+        { "type": "add", "stat": "energyDrain", "value": 3, "scaleMode": "linear", "statLabel": "Energy Drain/s" }
+      ]
+    },
+    {
+      "id": "bio_lab_bioweapon",
+      "category": "passive",
+      "prereqs": ["bio_lab"],
+      "name": "Bioweapon Rounds",
+      "description": "Weaponizes bio cultures: each projectile hit applies corrosive bio-toxin to the target.",
+      "icon": "☣",
+      "maxLevel": 3,
+      "baseCost": { "bioEssence": 20, "scrapMetal": 30 },
+      "triggers": [
+        {
+          "event": "enemy:damaged",
+          "action": {
+            "type": "apply_status",
+            "statusType": "burn",
+            "dps": { "base": 5, "perLevel": 3 },
+            "duration": 3
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "id": "plasma_farm",
+      "category": "passive",
+      "prereqs": ["starter_passive"],
+      "name": "Plasma Farm",
+      "description": "Magnetic coils harvest trace plasma from engine exhaust, slowly crystallizing it into usable currency.",
+      "icon": "◆",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 55, "plasmaCrystals": 12 },
+      "effects": [
+        { "type": "add", "target": "currency", "stat": "passive.plasmaCrystals", "value": 0.03, "scaleMode": "linear", "statLabel": "Plasma/sec" },
+        { "type": "add", "stat": "energyDrain", "value": 5, "scaleMode": "linear", "statLabel": "Energy Drain/s" }
+      ]
+    },
+    {
+      "id": "particle_collider",
+      "category": "passive",
+      "prereqs": ["starter_passive"],
+      "betweenCategories": ["passive", "special"],
+      "name": "Particle Collider",
+      "description": "A ring-shaped accelerator smashes particles together, producing trace amounts of dark matter as a byproduct.",
+      "icon": "⊕",
+      "maxLevel": 3,
+      "baseCost": { "plasmaCrystals": 30, "darkMatter": 3 },
+      "effects": [
+        { "type": "add", "target": "currency", "stat": "passive.darkMatter", "value": 0.004, "scaleMode": "linear", "statLabel": "Dark Matter/sec" },
+        { "type": "add", "stat": "energyDrain", "value": 20, "scaleMode": "linear", "statLabel": "Energy Drain/s" }
+      ]
+    },
+
+    {
+      "id": "repulser",
+      "category": "utility",
+      "prereqs": ["speed"],
+      "name": "Repulser Field",
+      "description": "A periodic electromagnetic pulse violently pushes nearby enemies away from your ship.",
+      "icon": "↔",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 45, "plasmaCrystals": 10 },
+      "effects": [
+        { "type": "special", "stat": "repulserActive", "value": true, "scaleMode": "fixed", "specialDesc": "Enables repulser pulse every 6 seconds" }
+      ]
+    },
+    {
+      "id": "repulser_frequency",
+      "category": "utility",
+      "prereqs": ["repulser"],
+      "name": "Repulser Frequency",
+      "description": "Tuned resonance circuits charge the repulser faster.",
+      "icon": "↕",
+      "maxLevel": 4,
+      "baseCost": { "scrapMetal": 30, "plasmaCrystals": 8 },
+      "effects": [
+        { "type": "multiply", "stat": "repulserInterval", "value": 0.8, "scaleMode": "exponential", "statLabel": "Pulse Interval" }
+      ]
+    },
+    {
+      "id": "repulser_range",
+      "category": "utility",
+      "prereqs": ["repulser"],
+      "name": "Repulser Range",
+      "description": "Extends the effective radius of the repulser field.",
+      "icon": "⊙",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 35, "plasmaCrystals": 10 },
+      "effects": [
+        { "type": "add", "stat": "repulserRadius", "value": 3, "scaleMode": "linear", "statLabel": "Range" }
+      ]
+    },
+    {
+      "id": "repulser_damage",
+      "category": "utility",
+      "prereqs": ["repulser"],
+      "name": "Repulser Damage",
+      "description": "Charges the repulser field with lethal energy — enemies caught in the pulse take direct damage.",
+      "icon": "⚡",
+      "maxLevel": 4,
+      "baseCost": { "scrapMetal": 40, "plasmaCrystals": 12 },
+      "effects": [
+        { "type": "add", "stat": "repulserDamage", "value": 20, "scaleMode": "linear", "statLabel": "Pulse Damage" }
+      ]
+    },
+
+    {
+      "id": "scanner",
+      "category": "utility",
+      "prereqs": ["loot_mult"],
+      "name": "Combat Scanner",
+      "description": "Deep-scan sensors extend your vision range and reveal enemy weak points, increasing critical hit chance.",
+      "icon": "📡",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 50, "plasmaCrystals": 15 },
+      "effects": [
+        { "type": "add", "stat": "visionRange", "value": 20, "scaleMode": "fixed", "statLabel": "Vision Range" },
+        { "type": "add", "stat": "critChance", "value": 0.05, "scaleMode": "fixed", "statLabel": "Crit Chance" }
+      ]
+    },
+    {
+      "id": "scanner_weaknesses",
+      "category": "utility",
+      "prereqs": ["scanner"],
+      "name": "Structural Analysis",
+      "description": "AI-assisted structural mapping actively highlights enemy vulnerabilities in real-time.",
+      "icon": "🔍",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 60, "plasmaCrystals": 20 },
+      "effects": [
+        { "type": "special", "stat": "scannerActive", "value": true, "scaleMode": "fixed", "specialDesc": "Enables detailed enemy vulnerability display" },
+        { "type": "add", "stat": "critChance", "value": 0.05, "scaleMode": "fixed", "statLabel": "Crit Chance" }
+      ]
+    },
+
+    {
+      "id": "phoenix_drive",
+      "category": "defense",
+      "prereqs": ["hp_regen"],
+      "betweenCategories": ["defense", "special"],
+      "name": "Phoenix Drive",
+      "description": "An emergency resurrection system. When your hull is destroyed, the Phoenix Drive triggers a one-time revival. Has a long recharge.",
+      "icon": "🔁",
+      "maxLevel": 1,
+      "baseCost": { "darkMatter": 15, "plasmaCrystals": 30 },
+      "effects": [
+        { "type": "special", "stat": "phoenixDriveActive", "value": true, "scaleMode": "fixed", "specialDesc": "Auto-revive on death (5 min cooldown)" }
+      ]
+    },
+    {
+      "id": "phoenix_drive_cd",
+      "category": "defense",
+      "prereqs": ["phoenix_drive"],
+      "name": "Phoenix Overclock",
+      "description": "Optimized recharge circuitry reduces the Phoenix Drive's cooldown.",
+      "icon": "⏩",
+      "maxLevel": 3,
+      "baseCost": { "darkMatter": 8, "plasmaCrystals": 20 },
+      "effects": [
+        { "type": "multiply", "stat": "phoenixDriveCooldown", "value": 0.75, "scaleMode": "exponential", "statLabel": "Cooldown" }
+      ]
+    },
+    {
+      "id": "phoenix_drive_nova",
+      "category": "defense",
+      "prereqs": ["phoenix_drive"],
+      "name": "Phoenix Nova",
+      "description": "The revival explosion deals massive damage to all nearby enemies.",
+      "icon": "💥",
+      "maxLevel": 2,
+      "baseCost": { "darkMatter": 10, "plasmaCrystals": 25 },
+      "effects": [
+        { "type": "add", "stat": "phoenixDriveCorona", "value": 150, "scaleMode": "linear", "statLabel": "Revival Damage" }
+      ]
+    },
+
+    {
+      "id": "salvaging_beam",
+      "category": "utility",
+      "prereqs": ["salvage_winch"],
+      "betweenCategories": ["utility", "weapon"],
+      "name": "Salvaging Beam",
+      "description": "A tractor beam tears scrap from destroyed enemies, converting it directly into hull repairs.",
+      "icon": "⊘",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 70, "plasmaCrystals": 18 },
+      "effects": [
+        { "type": "special", "stat": "salvagingBeamActive", "value": true, "scaleMode": "fixed", "specialDesc": "Converts kill loot into HP" },
+        { "type": "add", "stat": "energyDrain", "value": 5, "scaleMode": "fixed", "statLabel": "Energy Drain/s" }
+      ]
+    },
+    {
+      "id": "salvaging_beam_count",
+      "category": "utility",
+      "prereqs": ["salvaging_beam"],
+      "name": "Dual Salvage Beams",
+      "description": "An additional beam doubles your salvage rate.",
+      "icon": "⊗",
+      "maxLevel": 2,
+      "baseCost": { "scrapMetal": 50, "plasmaCrystals": 15 },
+      "effects": [
+        { "type": "add", "stat": "salvagingBeamCount", "value": 1, "scaleMode": "linear", "statLabel": "Beam Count" }
+      ]
+    },
+    {
+      "id": "salvaging_beam_efficiency",
+      "category": "utility",
+      "prereqs": ["salvaging_beam"],
+      "name": "Salvage Efficiency",
+      "description": "Improved targeting algorithms extract more hull material per salvage cycle.",
+      "icon": "🔧",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 40, "plasmaCrystals": 12 },
+      "effects": [
+        { "type": "multiply", "stat": "salvagingBeamHealRatio", "value": 1.25, "scaleMode": "exponential", "statLabel": "Heal Ratio" }
+      ]
+    },
+
+    {
+      "id": "mining_laser",
+      "category": "utility",
+      "prereqs": ["salvage_winch"],
+      "name": "Mining Laser",
+      "description": "A high-powered cutting laser extracts rare minerals from asteroids, boosting resource yields.",
+      "icon": "🔦",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 55, "plasmaCrystals": 12 },
+      "effects": [
+        { "type": "special", "stat": "miningLaserActive", "value": true, "scaleMode": "fixed", "specialDesc": "Bonus yield from asteroid strikes" }
+      ]
+    },
+    {
+      "id": "mining_laser_yield",
+      "category": "utility",
+      "prereqs": ["mining_laser"],
+      "name": "Mining Yield",
+      "description": "Enhanced extraction heads increase ore yield per asteroid.",
+      "icon": "💎",
+      "maxLevel": 4,
+      "baseCost": { "scrapMetal": 35 },
+      "effects": [
+        { "type": "multiply", "stat": "miningYield", "value": 1.3, "scaleMode": "exponential", "statLabel": "Mining Yield" }
+      ]
+    },
+    {
+      "id": "mining_laser_double",
+      "category": "utility",
+      "prereqs": ["mining_laser"],
+      "name": "Twin Mining Arrays",
+      "description": "A second mining laser doubles your extraction capacity.",
+      "icon": "⛏",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 60, "plasmaCrystals": 15 },
+      "effects": [
+        { "type": "add", "stat": "miningLaserCount", "value": 1, "scaleMode": "fixed", "statLabel": "Laser Count" }
+      ]
+    },
+
+    {
+      "id": "auto_cannon_double",
+      "category": "weapon",
+      "prereqs": ["auto_turret"],
+      "name": "Twin Auto Cannons",
+      "description": "Mounts a second auto cannon turret, doubling your automated fire coverage.",
+      "icon": "🔫",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 80, "plasmaCrystals": 20 },
+      "effects": [
+        { "type": "add_weapon", "stat": "extraWeapons", "value": "laser", "scaleMode": "fixed", "specialDesc": "Second auto cannon turret" }
+      ]
+    },
+    {
+      "id": "auto_cannon_fire_rate",
+      "category": "weapon",
+      "prereqs": ["auto_turret"],
+      "name": "Rapid Cycler",
+      "description": "High-cycle feeds push the auto cannons past their rated fire limits.",
+      "icon": "⚙",
+      "maxLevel": 5,
+      "baseCost": { "scrapMetal": 30, "plasmaCrystals": 8 },
+      "effects": [
+        { "type": "multiply", "stat": "attackSpeed", "value": 1.08, "scaleMode": "exponential", "statLabel": "Attack Speed" }
+      ]
+    },
+    {
+      "id": "auto_cannon_explosive",
+      "category": "weapon",
+      "prereqs": ["auto_cannon_double"],
+      "name": "Explosive Rounds",
+      "description": "Shells detonate on impact, dealing splash damage to nearby enemies.",
+      "icon": "💣",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 50, "plasmaCrystals": 15 },
+      "triggers": [
+        {
+          "event": "enemy:damaged",
+          "action": {
+            "type": "emit_damage",
+            "value": { "base": 15, "perLevel": 10 },
+            "radius": 2.5
+          }
+        }
+      ],
+      "effects": []
+    },
+
+    {
+      "id": "missile_double",
+      "category": "weapon",
+      "prereqs": ["missile_type"],
+      "name": "Twin Missile Racks",
+      "description": "A second rack of homing missiles provides continuous saturation fire.",
+      "icon": "🚀",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 70, "plasmaCrystals": 25 },
+      "effects": [
+        { "type": "add_weapon", "stat": "extraWeapons", "value": "missile", "scaleMode": "fixed", "specialDesc": "Second missile launcher" }
+      ]
+    },
+    {
+      "id": "missile_high_explosive",
+      "category": "weapon",
+      "prereqs": ["missile_type"],
+      "name": "HE Warheads",
+      "description": "High-explosive warheads create devastating kill-zone explosions.",
+      "icon": "💥",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 55, "plasmaCrystals": 20 },
+      "triggers": [
+        {
+          "event": "enemy:killed",
+          "action": {
+            "type": "emit_damage",
+            "value": { "base": 30, "perLevel": 20 },
+            "radius": 5
+          }
+        }
+      ],
+      "effects": []
+    },
+
+    {
+      "id": "laser_focus",
+      "category": "weapon",
+      "prereqs": ["laser_type"],
+      "name": "Focus Crystal",
+      "description": "A resonance crystal focuses laser energy on a sustained target, ramping damage the longer it stays locked.",
+      "icon": "🔮",
+      "maxLevel": 3,
+      "baseCost": { "plasmaCrystals": 20, "scrapMetal": 30 },
+      "effects": [
+        { "type": "special", "stat": "laserFocusActive", "value": true, "scaleMode": "fixed", "specialDesc": "Laser damage ramps on focused target" },
+        { "type": "multiply", "stat": "damage", "value": 1.08, "scaleMode": "exponential", "statLabel": "Damage" }
+      ]
+    },
+    {
+      "id": "laser_splitter",
+      "category": "weapon",
+      "prereqs": ["laser_type"],
+      "name": "Beam Splitter",
+      "description": "A prismatic lens splits your laser beam into multiple simultaneous targets.",
+      "icon": "✦",
+      "maxLevel": 2,
+      "baseCost": { "plasmaCrystals": 25, "scrapMetal": 40 },
+      "effects": [
+        { "type": "add", "stat": "laserSplitCount", "value": 1, "scaleMode": "linear", "statLabel": "Split Beams" }
+      ]
+    },
+
+    {
+      "id": "rail_gun",
+      "category": "weapon",
+      "prereqs": ["auto_turret"],
+      "betweenCategories": ["weapon", "passive"],
+      "name": "Rail Gun",
+      "description": "A magnetic accelerator that builds up charge before unleashing a devastating piercing shot. Draws significant energy.",
+      "icon": "⬛",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 90, "plasmaCrystals": 25 },
+      "effects": [
+        { "type": "special", "stat": "railgunActive", "value": true, "scaleMode": "fixed", "specialDesc": "Charges and fires a high-damage piercing shot" }
+      ]
+    },
+    {
+      "id": "rail_gun_override",
+      "category": "weapon",
+      "prereqs": ["rail_gun"],
+      "name": "Cannon Override",
+      "description": "Replaces your manual nose cannon with the rail gun for maximum penetration power.",
+      "icon": "🔩",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 60, "plasmaCrystals": 20 },
+      "effects": [
+        { "type": "special", "stat": "manualGunSwapped", "value": true, "scaleMode": "fixed", "specialDesc": "Manual cannon replaced by rail gun" }
+      ]
+    },
+    {
+      "id": "rail_gun_charge",
+      "category": "weapon",
+      "prereqs": ["rail_gun"],
+      "name": "Fast Charger",
+      "description": "Superconducting rails reduce the charge buildup time.",
+      "icon": "⚡",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 45, "plasmaCrystals": 15 },
+      "effects": [
+        { "type": "multiply", "stat": "railgunChargeTime", "value": 0.8, "scaleMode": "exponential", "statLabel": "Charge Time" }
+      ]
+    },
+
+    {
+      "id": "targeting_multi",
+      "category": "utility",
+      "prereqs": ["priority_designator"],
+      "name": "Multi-Target Array",
+      "description": "Distributed targeting logic allows each weapon turret to independently track a different enemy.",
+      "icon": "⊛",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 65, "plasmaCrystals": 18 },
+      "effects": [
+        { "type": "special", "stat": "multiTargetActive", "value": true, "scaleMode": "fixed", "specialDesc": "Turrets independently acquire separate targets" }
+      ]
+    },
+    {
+      "id": "targeting_lock_speed",
+      "category": "utility",
+      "prereqs": ["targeting_multi"],
+      "name": "Lock-On Accelerator",
+      "description": "Neural prediction algorithms reduce target acquisition lag.",
+      "icon": "🎯",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 40, "plasmaCrystals": 12 },
+      "effects": [
+        { "type": "multiply", "stat": "targetAcquisitionSpeed", "value": 1.3, "scaleMode": "exponential", "statLabel": "Acquisition Speed" }
+      ]
+    },
+
+    {
+      "id": "speed_booster",
+      "category": "utility",
+      "prereqs": ["speed"],
+      "betweenCategories": ["utility", "special"],
+      "name": "Speed Booster",
+      "description": "An afterburner that temporarily doubles your thrust for rapid repositioning. Press [1] to activate.",
+      "icon": "💨",
+      "maxLevel": 1,
+      "baseCost": { "scrapMetal": 50, "plasmaCrystals": 12 },
+      "effects": [
+        { "type": "special", "stat": "speedBoosterUnlocked", "value": true, "scaleMode": "fixed", "specialDesc": "+80% speed for 3s (20s cooldown, 15 energy)" }
+      ]
+    },
+    {
+      "id": "speed_booster_amount",
+      "category": "utility",
+      "prereqs": ["speed_booster"],
+      "name": "Thrust Amplifier",
+      "description": "Boosts the speed multiplier on the afterburner.",
+      "icon": "🚀",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 35, "plasmaCrystals": 10 },
+      "effects": [
+        { "type": "add", "stat": "speedBoostMult", "value": 0.2, "scaleMode": "linear", "statLabel": "Speed Mult" }
+      ]
+    },
+    {
+      "id": "speed_booster_regen",
+      "category": "utility",
+      "prereqs": ["speed_booster"],
+      "name": "Afterburner Cooldown",
+      "description": "Faster capacitor recharge cuts the cooldown on the speed booster.",
+      "icon": "⏱",
+      "maxLevel": 3,
+      "baseCost": { "scrapMetal": 30, "plasmaCrystals": 8 },
+      "effects": [
+        { "type": "multiply", "stat": "speedBoostCooldown", "value": 0.8, "scaleMode": "exponential", "statLabel": "Cooldown" }
+      ]
+    },
+
+    {
+      "id": "emp",
+      "category": "special",
+      "prereqs": ["starter_passive"],
+      "name": "EMP Burst",
+      "description": "A massive electromagnetic pulse stuns all enemies for several seconds. Press [2] to activate.",
+      "icon": "☇",
+      "maxLevel": 1,
+      "baseCost": { "plasmaCrystals": 30, "scrapMetal": 60 },
+      "effects": [
+        { "type": "special", "stat": "empUnlocked", "value": true, "scaleMode": "fixed", "specialDesc": "Stun all enemies 3s (25s cooldown, 30 energy)" }
+      ]
+    },
+    {
+      "id": "emp_cooldown",
+      "category": "special",
+      "prereqs": ["emp"],
+      "name": "EMP Capacitors",
+      "description": "High-density capacitors recharge the EMP faster.",
+      "icon": "🔋",
+      "maxLevel": 3,
+      "baseCost": { "plasmaCrystals": 18, "scrapMetal": 35 },
+      "effects": [
+        { "type": "multiply", "stat": "empCooldown", "value": 0.8, "scaleMode": "exponential", "statLabel": "Cooldown" }
+      ]
+    },
+    {
+      "id": "emp_duration",
+      "category": "special",
+      "prereqs": ["emp"],
+      "name": "Extended Stun",
+      "description": "Tuned frequency output extends the EMP stun duration.",
+      "icon": "⏳",
+      "maxLevel": 3,
+      "baseCost": { "plasmaCrystals": 15, "scrapMetal": 30 },
+      "effects": [
+        { "type": "add", "stat": "empDuration", "value": 1, "scaleMode": "linear", "statLabel": "Stun Duration" }
+      ]
+    },
+    {
+      "id": "emp_damage",
+      "category": "special",
+      "prereqs": ["emp"],
+      "name": "EM Damage Field",
+      "description": "The EMP burst deals direct damage to all enemies it stuns.",
+      "icon": "⚡",
+      "maxLevel": 3,
+      "baseCost": { "plasmaCrystals": 20, "scrapMetal": 40 },
+      "effects": [
+        { "type": "add", "stat": "empDamage", "value": 40, "scaleMode": "linear", "statLabel": "EMP Damage" }
+      ]
+    },
+
+    {
+      "id": "warp_drive",
+      "category": "special",
+      "prereqs": ["speed"],
+      "betweenCategories": ["utility", "special"],
+      "name": "Warp Drive",
+      "description": "Teleports your ship forward instantly, phasing through danger. Press [3] to activate.",
+      "icon": "⌖",
+      "maxLevel": 1,
+      "baseCost": { "plasmaCrystals": 25, "darkMatter": 5 },
+      "effects": [
+        { "type": "special", "stat": "warpDriveUnlocked", "value": true, "scaleMode": "fixed", "specialDesc": "Teleport 10 units forward (15s cooldown, 20 energy)" }
+      ]
+    },
+    {
+      "id": "warp_drive_cooldown",
+      "category": "special",
+      "prereqs": ["warp_drive"],
+      "name": "Warp Efficiency",
+      "description": "Optimized field coils reduce warp capacitor recharge time.",
+      "icon": "⏩",
+      "maxLevel": 3,
+      "baseCost": { "plasmaCrystals": 15, "darkMatter": 3 },
+      "effects": [
+        { "type": "multiply", "stat": "warpDriveCooldown", "value": 0.75, "scaleMode": "exponential", "statLabel": "Cooldown" }
+      ]
+    },
+
+    {
+      "id": "gravity_bomb",
+      "category": "special",
+      "prereqs": ["starter_passive"],
+      "betweenCategories": ["passive", "special"],
+      "name": "Gravity Bomb",
+      "description": "Detonates a localized gravity singularity that pulls all nearby enemies inward. Press [4] to activate.",
+      "icon": "◉",
+      "maxLevel": 1,
+      "baseCost": { "darkMatter": 10, "plasmaCrystals": 20 },
+      "effects": [
+        { "type": "special", "stat": "gravityBombUnlocked", "value": true, "scaleMode": "fixed", "specialDesc": "5s pull radius 8 (30s cooldown, 25 energy)" }
+      ]
+    },
+    {
+      "id": "gravity_bomb_radius",
+      "category": "special",
+      "prereqs": ["gravity_bomb"],
+      "name": "Gravity Well",
+      "description": "Expands the gravity bomb's singularity radius.",
+      "icon": "🌀",
+      "maxLevel": 3,
+      "baseCost": { "darkMatter": 6, "plasmaCrystals": 12 },
+      "effects": [
+        { "type": "add", "stat": "gravityBombRadius", "value": 3, "scaleMode": "linear", "statLabel": "Radius" }
+      ]
+    },
+    {
+      "id": "gravity_bomb_cooldown",
+      "category": "special",
+      "prereqs": ["gravity_bomb"],
+      "name": "Gravity Compression",
+      "description": "Compressed singularity formation reduces cooldown.",
+      "icon": "⏱",
+      "maxLevel": 3,
+      "baseCost": { "darkMatter": 5, "plasmaCrystals": 10 },
+      "effects": [
+        { "type": "multiply", "stat": "gravityBombCooldown", "value": 0.8, "scaleMode": "exponential", "statLabel": "Cooldown" }
+      ]
+    },
+    {
+      "id": "gravity_bomb_damage",
+      "category": "special",
+      "prereqs": ["gravity_bomb"],
+      "name": "Gravity Shear",
+      "description": "Tidal forces at the singularity boundary deal direct damage to pulled enemies.",
+      "icon": "💫",
+      "maxLevel": 3,
+      "baseCost": { "darkMatter": 7, "plasmaCrystals": 15 },
+      "effects": [
+        { "type": "add", "stat": "gravityBombDamage", "value": 30, "scaleMode": "linear", "statLabel": "Tidal Damage" }
+      ]
+    },
+
+    {
+      "id": "decoy",
+      "category": "special",
+      "prereqs": ["starter_passive"],
+      "name": "Combat Decoy",
+      "description": "Projects a holographic duplicate of your ship that draws enemy fire. Press last available slot to activate.",
+      "icon": "◈",
+      "maxLevel": 1,
+      "baseCost": { "plasmaCrystals": 20, "scrapMetal": 50 },
+      "effects": [
+        { "type": "special", "stat": "decoyUnlocked", "value": true, "scaleMode": "fixed", "specialDesc": "Decoy lasts 5s (40s cooldown, 20 energy)" }
+      ]
+    },
+    {
+      "id": "decoy_duration",
+      "category": "special",
+      "prereqs": ["decoy"],
+      "name": "Decoy Uptime",
+      "description": "More robust holographic emitters extend decoy lifetime.",
+      "icon": "⏳",
+      "maxLevel": 3,
+      "baseCost": { "plasmaCrystals": 12, "scrapMetal": 30 },
+      "effects": [
+        { "type": "add", "stat": "decoyDuration", "value": 2, "scaleMode": "linear", "statLabel": "Duration" }
+      ]
+    },
+    {
+      "id": "decoy_count",
+      "category": "special",
+      "prereqs": ["decoy"],
+      "name": "Decoy Array",
+      "description": "Deploy multiple decoys simultaneously for wider distraction coverage.",
+      "icon": "◇",
+      "maxLevel": 2,
+      "baseCost": { "plasmaCrystals": 18, "scrapMetal": 45 },
+      "effects": [
+        { "type": "add", "stat": "decoyCount", "value": 1, "scaleMode": "linear", "statLabel": "Decoy Count" }
+      ]
+    },
+    {
+      "id": "decoy_energy_cost",
+      "category": "special",
+      "prereqs": ["decoy"],
+      "name": "Hologram Efficiency",
+      "description": "More efficient emitter algorithms reduce the energy cost of deploying a decoy.",
+      "icon": "💡",
+      "maxLevel": 2,
+      "baseCost": { "plasmaCrystals": 10, "scrapMetal": 25 },
+      "effects": [
+        { "type": "multiply", "stat": "decoyEnergyCost", "value": 0.75, "scaleMode": "exponential", "statLabel": "Energy Cost" }
+      ]
+    }
+  ]
+}

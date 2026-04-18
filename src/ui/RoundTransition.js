@@ -5,9 +5,14 @@ export class RoundTransition {
     this._el = document.getElementById('round-transition');
     this._roundEl = document.getElementById('transition-round');
     this._lootEl = document.getElementById('transition-loot');
+    this._timeoutId = null;
   }
 
   show(round, loot, onComplete) {
+    if (this._timeoutId !== null) {
+      clearTimeout(this._timeoutId);
+      this._timeoutId = null;
+    }
     this._roundEl.textContent = round;
     this._lootEl.innerHTML = '';
 
@@ -31,13 +36,18 @@ export class RoundTransition {
 
     this._el.classList.remove('hidden');
 
-    setTimeout(() => {
+    this._timeoutId = setTimeout(() => {
+      this._timeoutId = null;
       this._el.classList.add('hidden');
       if (onComplete) onComplete();
     }, 2500);
   }
 
   hide() {
+    if (this._timeoutId !== null) {
+      clearTimeout(this._timeoutId);
+      this._timeoutId = null;
+    }
     this._el.classList.add('hidden');
   }
 }

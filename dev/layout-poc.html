@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tech Tree Layout POC</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #07070f; color: #ccc; font-family: monospace; overflow: hidden; }
+#tabs { display: flex; gap: 4px; padding: 8px 10px; background: #0d0d1a; border-bottom: 1px solid #1a1a33; flex-wrap: wrap; }
+.tab {
+  padding: 7px 18px; cursor: pointer; border: 1px solid #222;
+  background: #111; color: #556; font-size: 12px; letter-spacing: 1px;
+  transition: all 0.15s;
+}
+.tab:hover { color: #88aacc; border-color: #334; }
+.tab.active { background: #0a1a2e; color: #4af; border-color: #2af; }
+.tab.store-tab { border-color: #332211; color: #776644; }
+.tab.store-tab:hover { color: #ffcc66; border-color: #554422; }
+.tab.store-tab.active { background: #1a1200; color: #ffcc44; border-color: #cc9922; }
+#canvas-wrap { position: relative; width: 100vw; height: calc(100vh - 44px); }
+canvas { display: block; cursor: grab; }
+canvas.panning { cursor: grabbing; }
+
+/* ── Store panel ──────────────────────────────────────────────── */
+#store-panel {
+  display: none; width: 100vw; height: calc(100vh - 44px);
+  background: #07070f; flex-direction: column; overflow: hidden;
+}
+#store-panel.visible { display: flex; }
+#store-toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  background: #0a0a14; border-bottom: 1px solid #1a1a2a; flex-shrink: 0;
+}
+#store-toolbar .cat-btn {
+  padding: 5px 14px; border: 1px solid #222; background: #111;
+  color: #556; font-size: 11px; cursor: pointer; letter-spacing: 1px;
+  font-family: monospace; transition: all 0.12s;
+}
+#store-toolbar .cat-btn:hover { color: #aac; border-color: #445; }
+#store-toolbar .cat-btn.active { color: #fff; }
+#store-toolbar .sep { width: 1px; height: 20px; background: #1a1a2a; margin: 0 4px; }
+#store-toolbar label { color: #445; font-size: 11px; margin-right: 2px; }
+#sort-select {
+  background: #111; border: 1px solid #222; color: #778; font-size: 11px;
+  font-family: monospace; padding: 4px 8px; cursor: pointer;
+}
+#store-search {
+  background: #0d0d1a; border: 1px solid #1a1a33; color: #aac;
+  font-size: 11px; font-family: monospace; padding: 5px 10px; width: 160px;
+}
+#store-search::placeholder { color: #334; }
+#store-scroll { flex: 1; overflow-y: auto; padding: 14px 16px; }
+#store-scroll::-webkit-scrollbar { width: 6px; }
+#store-scroll::-webkit-scrollbar-track { background: #0a0a14; }
+#store-scroll::-webkit-scrollbar-thumb { background: #1a2a3a; border-radius: 3px; }
+#store-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.store-section-header {
+  grid-column: 1 / -1; color: #334; font-size: 10px; letter-spacing: 2px;
+  text-transform: uppercase; padding: 10px 0 4px; border-bottom: 1px solid #111;
+  margin-bottom: 2px;
+}
+.node-card {
+  background: #0d0d1a; border: 1px solid #1a1a2a;
+  padding: 12px 13px; cursor: default; transition: border-color 0.12s, background 0.12s;
+  display: flex; flex-direction: column; gap: 7px; position: relative;
+}
+.node-card:hover { background: #0f0f22; }
+.node-card.locked { opacity: 0.45; }
+.node-card .card-header { display: flex; align-items: center; gap: 8px; }
+.node-card .card-icon {
+  font-size: 20px; width: 32px; height: 32px; display: flex;
+  align-items: center; justify-content: center; border-radius: 50%;
+  border: 1px solid; flex-shrink: 0;
+}
+.node-card .card-title { font-size: 12px; color: #cce; line-height: 1.3; }
+.node-card .card-cat { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
+.node-card .card-desc { font-size: 10px; color: #556; line-height: 1.5; flex: 1; }
+.node-card .card-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.node-card .ring-badge {
+  font-size: 9px; color: #445; border: 1px solid #1a1a2a;
+  padding: 1px 6px; letter-spacing: 1px;
+}
+.node-card .req-tag {
+  font-size: 9px; padding: 1px 6px; border: 1px solid #2a1a1a; color: #664;
+  background: #110a0a;
+}
+.node-card .prereq-section { font-size: 9px; color: #4a3a2a; }
+.node-card .prereq-section span { color: #776655; }
+.store-note {
+  grid-column: 1 / -1; color: #334; font-size: 11px; text-align: center;
+  padding: 20px; line-height: 1.8;
+}
+#store-footer {
+  background: #0a0a14; border-top: 1px solid #1a1a2a; padding: 8px 14px;
+  font-size: 10px; color: #334; letter-spacing: 1px; flex-shrink: 0;
+  display: flex; justify-content: space-between; align-items: center;
+}
+#store-footer .verdict { color: #4a6688; }
+#tooltip {
+  position: absolute; pointer-events: none;
+  background: rgba(4,8,20,0.95); border: 1px solid #2a3a5a;
+  padding: 9px 13px; font-size: 12px; color: #aac; max-width: 220px;
+  display: none; z-index: 10; line-height: 1.5;
+}
+#tooltip .t-name { color: #fff; font-size: 13px; margin-bottom: 3px; }
+#tooltip .t-cat { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px; }
+#tooltip .t-ring { color: #556; font-size: 10px; }
+#hint { position: absolute; bottom: 10px; right: 14px; color: #334; font-size: 10px; pointer-events: none; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<div id="tabs">
+  <button class="tab active" data-layout="constellation">1 · Constellation Map</button>
+  <button class="tab" data-layout="vertical">2 · Vertical Branch</button>
+  <button class="tab" data-layout="spiral">3 · Galaxy Spiral</button>
+  <button class="tab" data-layout="hex">4 · Hex Grid</button>
+  <button class="tab" data-layout="linear">5 · Linear Timeline</button>
+  <button class="tab store-tab" data-layout="store">6 · Tech Catalog (Store)</button>
+</div>
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+  <div id="tooltip"></div>
+  <div id="hint">scroll to zoom · drag to pan</div>
+</div>
+
+<!-- ── Store Panel ──────────────────────────────────────────────── -->
+<div id="store-panel">
+  <div id="store-toolbar">
+    <button class="cat-btn active" data-cat="all">All</button>
+    <button class="cat-btn" data-cat="weapon"  style="color:#ff4455;border-color:#331122">Weapon</button>
+    <button class="cat-btn" data-cat="defense" style="color:#4488ff;border-color:#112233">Defense</button>
+    <button class="cat-btn" data-cat="utility" style="color:#ffcc00;border-color:#332200">Utility</button>
+    <button class="cat-btn" data-cat="passive" style="color:#44ff88;border-color:#003322">Passive</button>
+    <button class="cat-btn" data-cat="special" style="color:#cc44ff;border-color:#221133">Special</button>
+    <div class="sep"></div>
+    <label>Sort</label>
+    <select id="sort-select">
+      <option value="tier">By Tier (shallow first)</option>
+      <option value="category">By Category</option>
+      <option value="name">Alphabetical</option>
+    </select>
+    <div class="sep"></div>
+    <input id="store-search" type="text" placeholder="search upgrades…">
+  </div>
+  <div id="store-scroll">
+    <div id="store-grid"></div>
+  </div>
+  <div id="store-footer">
+    <span id="store-count"></span>
+    <span class="verdict">Catalog view · prerequisites still enforced · no spatial navigation needed</span>
+  </div>
+</div>
+
+<script>
+// ─── Data ─────────────────────────────────────────────────────────────────────
+
+const CATS = {
+  weapon:  { label: 'Weapon',  color: '#ff4455', glow: '#ff0022' },
+  defense: { label: 'Defense', color: '#4488ff', glow: '#0044ff' },
+  utility: { label: 'Utility', color: '#ffcc00', glow: '#aa8800' },
+  passive: { label: 'Passive', color: '#44ff88', glow: '#00aa44' },
+  special: { label: 'Special', color: '#cc44ff', glow: '#8800cc' },
+};
+
+// [id, category, name, icon, prereqs[]]
+const RAW = [
+  ['starter_weapon','weapon','Combat Training','⚔',[]],
+  ['auto_turret','weapon','Linked Turret','⬢',['starter_weapon']],
+  ['cannon_cooling_jacket','weapon','Cooling Jacket','❄',['starter_weapon']],
+  ['cannon_rapid_vent','weapon','Rapid Vent','⌛',['starter_weapon']],
+  ['kinetic_damage','weapon','Kinetic Drivers','⬡',['starter_weapon']],
+  ['attack_speed','weapon','Fire Control','🎯',['starter_weapon']],
+  ['damage_up','weapon','Plasma Cannons','⚡',['kinetic_damage']],
+  ['proj_speed','weapon','Accelerator Coils','⇒',['kinetic_damage']],
+  ['crit_chance','weapon','Targeting Matrix','◎',['attack_speed']],
+  ['laser_type','weapon','Plasma Beam','━',['attack_speed']],
+  ['multi_shot','weapon','Multi-Shot','⊞',['damage_up']],
+  ['crit_damage','weapon','Crit Amplifier','✦',['crit_chance']],
+  ['missile_type','weapon','Missiles','⊿',['laser_type']],
+  ['quantum_tunneling','weapon','Quantum Tunneling','◈',['proj_speed']],
+  ['incendiary_warheads','weapon','Incendiary','🔥',['damage_up']],
+  ['cryo_rounds','weapon','Cryo Rounds','❅',['crit_chance']],
+  ['plasma_type','weapon','Plasma Charge','◉',['missile_type']],
+  ['siege_engine','weapon','Siege Engine','⚙',['damage_up']],
+  ['frenzied_assault','weapon','Frenzied Assault','⚡',['attack_speed']],
+  ['beam_laser','weapon','Beam Laser','═',['plasma_type']],
+  ['starter_defense','defense','Reinforced Frame','🛡',[]],
+  ['hull_plating','defense','Hull Plating','▣',['starter_defense']],
+  ['armor','defense','Ablative Armor','◰',['starter_defense']],
+  ['shield_gen','defense','Shield Generator','◯',['hull_plating']],
+  ['hp_regen','defense','HP Regen','♥',['armor']],
+  ['shield_regen','defense','Shield Regen','◎',['shield_gen']],
+  ['reactive_plating','defense','Reactive Plating','◲',['armor']],
+  ['hull_nanites','defense','Hull Nanites','✤',['hp_regen']],
+  ['starter_utility','utility','Field Engineer','⊕',[]],
+  ['salvage_winch','utility','Salvage Winch','⊗',['starter_utility']],
+  ['speed','utility','Boosters','→',['starter_utility']],
+  ['magnet','utility','Loot Magnet','⊛',['salvage_winch']],
+  ['loot_mult','utility','Loot Multiplier','⊜',['speed']],
+  ['priority_designator','utility','Priority Target','◬',['loot_mult']],
+  ['cargo_expander','utility','Cargo Expander','⊞',['salvage_winch']],
+  ['debris_field','utility','Debris Field','⊠',['magnet']],
+  ['starter_passive','passive','Cosmic Attunement','✦',[]],
+  ['stellar_gen','passive','Stellar Generator','★',['starter_passive']],
+  ['scrap_boost','passive','Scrap Recycler','◆',['starter_passive']],
+  ['plasma_boost','passive','Plasma Collector','◈',['scrap_boost']],
+  ['bio_boost','passive','Bio Processor','✿',['plasma_boost']],
+  ['dark_matter_antenna','passive','Dark Matter Antenna','◉',['plasma_boost']],
+  ['interest_accrual','passive','Interest Accrual','₿',['scrap_boost']],
+  ['resonance_field','passive','Resonance Field','◌',['stellar_gen']],
+  ['momentum_engine','passive','Momentum Engine','⋙',['stellar_gen']],
+  ['wing_cannons','special','Wing Cannons','⊹',['kinetic_damage','hull_plating']],
+  ['anti_scout_doctrine','special','Anti-Scout Doctrine','⊷',['kinetic_damage','armor']],
+  ['drone','special','Combat Drone','⊜',['damage_up','shield_gen']],
+  ['vampire','special','Vampire Protocol','⊝',['scrap_boost','crit_chance']],
+  ['reflect','special','Damage Reflect','◫',['shield_gen','salvage_winch']],
+  ['stellar_burst','special','Stellar Burst','✺',['magnet','stellar_gen']],
+  ['bio_harvester_mk2','special','Bio Harvester Mk2','✿',['loot_mult','plasma_boost']],
+  ['overcharge','special','Overcharge','⚡',['multi_shot','armor']],
+  ['crit_mastery','special','Crit Mastery','◎',['crit_damage','shield_regen']],
+  ['round_accelerator','special','Round Accelerator','⊳',['shield_regen','loot_mult']],
+  ['nova_core','special','Nova Core','✸',['bio_boost','multi_shot']],
+  ['plasma_core','special','Plasma Core','◉',['plasma_type','shield_gen']],
+  ['corrosive_aura','special','Corrosive Aura','⊶',['magnet','plasma_boost']],
+  ['gravity_well','special','Gravity Well','⊚',['shield_gen','magnet']],
+  ['berserker_protocol','special','Berserker Protocol','⚔',['crit_damage','scrap_boost']],
+  ['glass_cannon','special','Glass Cannon','⊘',['damage_up','scrap_boost']],
+  ['juggernaut','special','Juggernaut','⊛',['shield_gen','speed']],
+  ['predator_instinct','special','Predator Instinct','⊹',['loot_mult','plasma_boost']],
+  ['overclocked_capacitors','special','Overclocked Caps','⚙',['attack_speed','shield_gen']],
+  ['blood_price','special','Blood Price','⊝',['kinetic_damage','hp_regen']],
+];
+
+// Build node objects + compute ring depths
+const nodeMap = {};
+RAW.forEach(([id,cat,name,icon,prereqs]) => {
+  nodeMap[id] = { id, cat, name, icon, prereqs };
+});
+function getRing(id, memo = {}) {
+  if (id in memo) return memo[id];
+  const n = nodeMap[id];
+  if (!n || n.prereqs.length === 0) return (memo[id] = 0);
+  return (memo[id] = Math.max(...n.prereqs.map(p => getRing(p, memo))) + 1);
+}
+const ringMemo = {};
+const NODES = RAW.map(([id,cat,name,icon,prereqs]) => ({
+  id, cat, name, icon, prereqs,
+  ring: getRing(id, ringMemo),
+}));
+const maxRing = Math.max(...NODES.map(n => n.ring));
+
+// Group by category
+const bycat = {};
+NODES.forEach(n => { (bycat[n.cat] = bycat[n.cat]||[]).push(n); });
+// Group by ring+category
+const byRingCat = {};
+NODES.forEach(n => {
+  const k = `${n.ring}:${n.cat}`;
+  (byRingCat[k] = byRingCat[k]||[]).push(n);
+});
+
+// Simple deterministic hash for jitter
+function hash(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
+  return h;
+}
+
+// ─── Canvas setup ─────────────────────────────────────────────────────────────
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('canvas-wrap');
+const tooltip = document.getElementById('tooltip');
+
+let W, H;
+function resize() {
+  W = canvas.width = wrap.clientWidth;
+  H = canvas.height = wrap.clientHeight;
+  render();
+}
+window.addEventListener('resize', resize);
+
+// Pan / zoom
+let panX = 0, panY = 0, zoom = 1;
+let dragging = false, lastMX = 0, lastMY = 0;
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 0.909;
+  const mx = e.offsetX, my = e.offsetY;
+  panX = mx - (mx - panX) * factor;
+  panY = my - (my - panY) * factor;
+  zoom *= factor;
+  render();
+}, { passive: false });
+
+canvas.addEventListener('mousedown', e => {
+  dragging = true; lastMX = e.clientX; lastMY = e.clientY;
+  canvas.classList.add('panning');
+});
+window.addEventListener('mousemove', e => {
+  if (dragging) {
+    panX += e.clientX - lastMX;
+    panY += e.clientY - lastMY;
+    lastMX = e.clientX; lastMY = e.clientY;
+    render();
+  }
+  handleHover(e);
+});
+window.addEventListener('mouseup', () => { dragging = false; canvas.classList.remove('panning'); });
+
+// ─── Node positions per layout ────────────────────────────────────────────────
+
+let layoutPositions = {}; // id -> {x, y}
+let layoutEdges = [];     // [{from, to}]
+let hoveredId = null;
+
+// Shared: build edge list from prereqs
+function buildEdges() {
+  layoutEdges = [];
+  NODES.forEach(n => {
+    n.prereqs.forEach(p => {
+      if (nodeMap[p]) layoutEdges.push({ from: p, to: n.id });
+    });
+  });
+}
+
+// ─── Layout 1: Constellation Map ─────────────────────────────────────────────
+function layoutConstellation() {
+  buildEdges();
+  const cx = 0, cy = 0;
+  // Branch anchor angles: weapon=top, defense=right, utility=bottom, passive=left
+  const branchAngle = { weapon: -Math.PI/2, defense: 0, utility: Math.PI/2, passive: Math.PI };
+  const ringR = r => 120 + r * 110;
+
+  // Assign angular spread per ring+cat
+  const sliceHalf = Math.PI / 4.5;
+
+  NODES.forEach(n => {
+    let baseAngle;
+    if (n.cat === 'special') {
+      // average angles of prereq branches
+      const prereqCats = [...new Set(n.prereqs.map(p => nodeMap[p]?.cat).filter(Boolean).filter(c => c !== 'special'))];
+      if (prereqCats.length >= 2) {
+        const a1 = branchAngle[prereqCats[0]] ?? 0;
+        const a2 = branchAngle[prereqCats[1]] ?? 0;
+        const vx = Math.cos(a1) + Math.cos(a2);
+        const vy = Math.sin(a1) + Math.sin(a2);
+        baseAngle = Math.atan2(vy, vx);
+      } else {
+        baseAngle = branchAngle[prereqCats[0]] ?? (hash(n.id) * 0.001);
+      }
+    } else {
+      baseAngle = branchAngle[n.cat] ?? 0;
+    }
+
+    // spread nodes in same ring+cat angularly
+    const k = `${n.ring}:${n.cat}`;
+    const siblings = byRingCat[k] || [n];
+    const idx = siblings.indexOf(n);
+    const count = siblings.length;
+    const spread = count > 1 ? sliceHalf * 2 : 0;
+    const angleOffset = count > 1 ? -sliceHalf + (idx / (count - 1)) * spread : 0;
+    const angle = baseAngle + angleOffset;
+    const r = ringR(n.ring);
+
+    // Small jitter from hash
+    const h = hash(n.id);
+    const jx = ((h & 0xff) - 128) * 0.12;
+    const jy = (((h >> 8) & 0xff) - 128) * 0.12;
+
+    layoutPositions[n.id] = {
+      x: cx + Math.cos(angle) * r + jx,
+      y: cy + Math.sin(angle) * r + jy,
+    };
+  });
+}
+
+// ─── Layout 2: Vertical Branch Tree ──────────────────────────────────────────
+function layoutVertical() {
+  buildEdges();
+  const cols = { weapon: -480, defense: -160, utility: 160, passive: 480 };
+  const rowH = 110;
+  const nodeW = 120, halfW = nodeW / 2;
+
+  // Count nodes per ring+cat for horizontal spread
+  NODES.forEach(n => {
+    if (n.cat === 'special') {
+      // Place between the two parent branch columns
+      const prereqCats = [...new Set(n.prereqs.map(p => nodeMap[p]?.cat).filter(c => c in cols))];
+      let sx = 0;
+      if (prereqCats.length >= 2) {
+        sx = (cols[prereqCats[0]] + cols[prereqCats[1]]) / 2;
+      } else if (prereqCats.length === 1) {
+        sx = cols[prereqCats[0]];
+      }
+      const k = `${n.ring}:special:${prereqCats.sort().join('+')}`;
+      const siblings = (byRingCat[`${n.ring}:special`] || []).filter(s => {
+        const sc = [...new Set(s.prereqs.map(p => nodeMap[p]?.cat).filter(c => c in cols))];
+        return sc.sort().join('+') === prereqCats.sort().join('+');
+      });
+      const idx = siblings.indexOf(n);
+      const count = siblings.length;
+      const xOff = count > 1 ? (idx - (count-1)/2) * 70 : 0;
+      layoutPositions[n.id] = { x: sx + xOff, y: n.ring * rowH };
+    } else {
+      const siblings = byRingCat[`${n.ring}:${n.cat}`] || [n];
+      const idx = siblings.indexOf(n);
+      const count = siblings.length;
+      const xOff = count > 1 ? (idx - (count-1)/2) * 70 : 0;
+      layoutPositions[n.id] = { x: cols[n.cat] + xOff, y: n.ring * rowH };
+    }
+  });
+}
+
+// ─── Layout 3: Galaxy Spiral ──────────────────────────────────────────────────
+function layoutSpiral() {
+  buildEdges();
+  // 4 arms at 0°,90°,180°,270° for weapon,defense,utility,passive
+  const armBase = { weapon: -Math.PI/2, defense: 0, utility: Math.PI/2, passive: Math.PI };
+  const a = 0.25; // spiral tightness per ring
+
+  NODES.forEach(n => {
+    if (n.cat === 'special') {
+      // average of prereq positions (set after mains are placed, defer)
+      layoutPositions[n.id] = { x: 0, y: 0, deferred: true };
+      return;
+    }
+    const base = armBase[n.cat] ?? 0;
+    const k = `${n.ring}:${n.cat}`;
+    const siblings = byRingCat[k] || [n];
+    const idx = siblings.indexOf(n);
+    const count = siblings.length;
+    const spread = count > 1 ? 0.3 : 0;
+    const angleOff = count > 1 ? -spread/2 + (idx/(count-1))*spread : 0;
+
+    const theta = base + n.ring * a * 1.4 + angleOff;
+    const r = 80 + n.ring * 90;
+
+    layoutPositions[n.id] = {
+      x: Math.cos(theta) * r,
+      y: Math.sin(theta) * r,
+    };
+  });
+
+  // Place specials at average of prereq positions
+  NODES.filter(n => n.cat === 'special').forEach(n => {
+    const prereqPositions = n.prereqs.map(p => layoutPositions[p]).filter(Boolean);
+    if (prereqPositions.length > 0) {
+      const ax = prereqPositions.reduce((s, p) => s + p.x, 0) / prereqPositions.length;
+      const ay = prereqPositions.reduce((s, p) => s + p.y, 0) / prereqPositions.length;
+      // push slightly outward from center
+      const angle = Math.atan2(ay, ax);
+      const dist = Math.sqrt(ax*ax + ay*ay);
+      const h = hash(n.id);
+      const jitter = ((h & 0xff) - 128) * 0.3;
+      layoutPositions[n.id] = {
+        x: Math.cos(angle + jitter*0.02) * (dist + 20),
+        y: Math.sin(angle + jitter*0.02) * (dist + 20),
+      };
+    } else {
+      layoutPositions[n.id] = { x: 0, y: 0 };
+    }
+  });
+}
+
+// ─── Layout 4: Hex Grid ───────────────────────────────────────────────────────
+function layoutHex() {
+  buildEdges();
+  const HEX_SIZE = 44;
+  const hexW = HEX_SIZE * Math.sqrt(3);
+  const hexH = HEX_SIZE * 2;
+
+  // Convert axial hex coords to pixel
+  function hexToPixel(q, r) {
+    return {
+      x: hexW * (q + r/2),
+      y: hexH * (3/4) * r,
+    };
+  }
+
+  // Assign nodes to hex grid positions
+  // Each branch occupies a 90° sector. We'll spiral outward ring by ring.
+  // Starters at ring 0 hex positions adjacent to center:
+  const starterHex = {
+    weapon:  { q:  0, r: -1 },
+    defense: { q:  1, r:  0 },
+    utility: { q:  0, r:  1 },
+    passive: { q: -1, r:  0 },
+  };
+
+  // For ring r nodes in each branch, we fan out from the starter direction
+  const branchDir = {
+    weapon:  [{ q:  0, r: -1 }, { q:  1, r: -1 }, { q: -1, r:  0 }],
+    defense: [{ q:  1, r:  0 }, { q:  1, r: -1 }, { q:  0, r:  1 }],
+    utility: [{ q:  0, r:  1 }, { q: -1, r:  1 }, { q:  1, r:  0 }],
+    passive: [{ q: -1, r:  0 }, { q: -1, r:  1 }, { q:  0, r: -1 }],
+  };
+
+  // Track used hex positions to avoid collisions
+  const usedHex = new Set();
+  function hexKey(q, r) { return `${q},${r}`; }
+
+  function findFreeHex(startQ, startR, prefDirs) {
+    // Try center, then expanding rings
+    if (!usedHex.has(hexKey(startQ, startR))) return { q: startQ, r: startR };
+    for (let dist = 1; dist <= 10; dist++) {
+      for (const d of prefDirs) {
+        const q = startQ + d.q * dist;
+        const r = startR + d.r * dist;
+        if (!usedHex.has(hexKey(q, r))) return { q, r };
+      }
+    }
+    return { q: startQ, r: startR };
+  }
+
+  // Place starters
+  ['weapon','defense','utility','passive'].forEach(cat => {
+    const h = starterHex[cat];
+    usedHex.add(hexKey(h.q, h.r));
+  });
+
+  // Place non-special nodes ring by ring
+  for (let ring = 0; ring <= maxRing; ring++) {
+    ['weapon','defense','utility','passive'].forEach(cat => {
+      const nodes = (byRingCat[`${ring}:${cat}`] || []);
+      nodes.forEach(n => {
+        if (ring === 0) {
+          const h = starterHex[cat];
+          layoutPositions[n.id] = hexToPixel(h.q, h.r);
+          return;
+        }
+        const base = starterHex[cat];
+        const dirs = branchDir[cat];
+        // Primary direction for this ring
+        const pri = dirs[0];
+        const startQ = base.q + pri.q * ring;
+        const startR = base.r + pri.r * ring;
+        const k = findFreeHex(startQ, startR, dirs);
+        usedHex.add(hexKey(k.q, k.r));
+        layoutPositions[n.id] = hexToPixel(k.q, k.r);
+      });
+    });
+  }
+
+  // Place specials near average of prereqs
+  NODES.filter(n => n.cat === 'special').forEach(n => {
+    const prereqPos = n.prereqs.map(p => layoutPositions[p]).filter(Boolean);
+    if (prereqPos.length > 0) {
+      const ax = prereqPos.reduce((s, p) => s + p.x, 0) / prereqPos.length;
+      const ay = prereqPos.reduce((s, p) => s + p.y, 0) / prereqPos.length;
+      // Convert to approximate hex
+      const q = Math.round((ax / hexW) - (ay / (hexH * 3/4)) / 2);
+      const r = Math.round(ay / (hexH * 3/4));
+      const freeH = findFreeHex(q, r, [{ q:0,r:0},{q:1,r:0},{q:0,r:1},{q:-1,r:0},{q:0,r:-1}]);
+      usedHex.add(hexKey(freeH.q, freeH.r));
+      layoutPositions[n.id] = hexToPixel(freeH.q, freeH.r);
+    } else {
+      layoutPositions[n.id] = { x: 0, y: 0 };
+    }
+  });
+}
+
+// ─── Layout 5: Linear Timeline ────────────────────────────────────────────────
+function layoutLinear() {
+  buildEdges();
+  const laneY = { weapon: -300, defense: -100, utility: 100, passive: 300 };
+  const colX = r => r * 130;
+
+  // Track per-ring-lane slot to offset overlapping nodes
+  const slotCount = {};
+  function getSlotX(ring, lane) {
+    const k = `${ring}:${lane}`;
+    slotCount[k] = (slotCount[k] || 0);
+    const slot = slotCount[k];
+    slotCount[k]++;
+    return colX(ring) + (slot - 0) * 0;
+  }
+
+  // Place main branches
+  NODES.filter(n => n.cat !== 'special').forEach(n => {
+    const y = laneY[n.cat];
+    const k = `${n.ring}:${n.cat}`;
+    const siblings = byRingCat[k] || [n];
+    const idx = siblings.indexOf(n);
+    const count = siblings.length;
+    const xOff = count > 1 ? (idx - (count-1)/2) * 55 : 0;
+    layoutPositions[n.id] = { x: colX(n.ring) + xOff, y };
+  });
+
+  // Specials: midpoint between their two parent lanes
+  NODES.filter(n => n.cat === 'special').forEach(n => {
+    const prereqYs = n.prereqs
+      .map(p => nodeMap[p])
+      .filter(Boolean)
+      .map(p => p.cat === 'special' ? null : laneY[p.cat])
+      .filter(v => v != null);
+    const avgY = prereqYs.length > 0
+      ? prereqYs.reduce((a, b) => a + b) / prereqYs.length
+      : 0;
+    const k = `${n.ring}:special`;
+    const siblings = byRingCat[k] || [n];
+    const idx = siblings.indexOf(n);
+    const count = siblings.length;
+    // Spread vertically within their "zone"
+    const yOff = count > 1 ? (idx - (count-1)/2) * 50 : 0;
+    layoutPositions[n.id] = { x: colX(n.ring) + 65, y: avgY + yOff };
+  });
+}
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
+
+const NODE_R = 16;
+
+function worldToScreen(x, y) {
+  return { sx: x * zoom + panX + W/2, sy: y * zoom + panY + H/2 };
+}
+
+function screenToWorld(sx, sy) {
+  return { x: (sx - W/2 - panX) / zoom, y: (sy - H/2 - panY) / zoom };
+}
+
+function drawStarfield(density = 200) {
+  // Deterministic stars based on pan so they're fixed in world space
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < density; i++) {
+    const h1 = hash(i * 7919);
+    const h2 = hash(i * 6271 + 1);
+    const wx = ((h1 & 0xffff) / 0xffff - 0.5) * 3000;
+    const wy = ((h2 & 0xffff) / 0xffff - 0.5) * 3000;
+    const { sx, sy } = worldToScreen(wx, wy);
+    if (sx < 0 || sx > W || sy < 0 || sy > H) continue;
+    const r = 0.5 + (hash(i * 31) & 3) * 0.4;
+    const alpha = 0.2 + (hash(i * 17) & 0xff) / 0xff * 0.5;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawEdge(fromId, toId, alpha = 0.35, dashed = false) {
+  const fp = layoutPositions[fromId];
+  const tp = layoutPositions[toId];
+  if (!fp || !tp) return;
+  const { sx: fx, sy: fy } = worldToScreen(fp.x, fp.y);
+  const { sx: tx, sy: ty } = worldToScreen(tp.x, tp.y);
+  ctx.beginPath();
+  if (dashed) ctx.setLineDash([4, 6]);
+  ctx.moveTo(fx, fy);
+  ctx.lineTo(tx, ty);
+  ctx.strokeStyle = `rgba(80,100,140,${alpha})`;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawNode(n, highlight = false) {
+  const p = layoutPositions[n.id];
+  if (!p) return;
+  const { sx, sy } = worldToScreen(p.x, p.y);
+  if (sx < -60 || sx > W + 60 || sy < -60 || sy > H + 60) return;
+
+  const cat = CATS[n.cat];
+  const r = n.ring === 0 ? NODE_R + 4 : NODE_R;
+  const isHovered = n.id === hoveredId;
+
+  // Glow
+  if (isHovered || highlight) {
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 3.5);
+    grad.addColorStop(0, cat.color + '55');
+    grad.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  // Outer glow ring
+  const outerGrad = ctx.createRadialGradient(sx, sy, r * 0.6, sx, sy, r * 2);
+  outerGrad.addColorStop(0, cat.color + '33');
+  outerGrad.addColorStop(1, 'transparent');
+  ctx.beginPath();
+  ctx.arc(sx, sy, r * 2, 0, Math.PI * 2);
+  ctx.fillStyle = outerGrad;
+  ctx.fill();
+
+  // Circle fill
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  const inner = ctx.createRadialGradient(sx - r*0.3, sy - r*0.3, 0, sx, sy, r);
+  inner.addColorStop(0, cat.color + 'aa');
+  inner.addColorStop(1, '#0a0a18');
+  ctx.fillStyle = inner;
+  ctx.fill();
+
+  // Border
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = isHovered ? '#fff' : cat.color;
+  ctx.lineWidth = isHovered ? 2 : 1.2;
+  ctx.stroke();
+
+  // Icon
+  ctx.fillStyle = isHovered ? '#fff' : cat.color;
+  ctx.font = `${Math.round(r * 0.9)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(n.icon, sx, sy + 1);
+
+  // Label (only when zoomed in enough)
+  if (zoom > 0.65) {
+    ctx.fillStyle = isHovered ? '#fff' : '#889';
+    ctx.font = `${Math.round(10 * zoom)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const label = n.name.length > 14 ? n.name.slice(0, 12) + '…' : n.name;
+    ctx.fillText(label, sx, sy + r + 3);
+  }
+}
+
+// Draw hex cell background for hex layout
+function drawHexCell(wx, wy, cat) {
+  const { sx, sy } = worldToScreen(wx, wy);
+  const hs = 40 * zoom;
+  const c = CATS[cat];
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (Math.PI / 3) * i - Math.PI / 6;
+    const px = sx + hs * Math.cos(a);
+    const py = sy + hs * Math.sin(a);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = c.color + '22';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = c.color + '08';
+  ctx.fill();
+}
+
+// Draw vertical lane background
+function drawLane(y, cat) {
+  const { sy } = worldToScreen(0, y);
+  const lh = 80 * zoom;
+  const c = CATS[cat];
+  ctx.fillStyle = c.color + '08';
+  ctx.fillRect(0, sy - lh/2, W, lh);
+  ctx.fillStyle = c.color;
+  ctx.font = `11px monospace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.globalAlpha = 0.3;
+  ctx.fillText(c.label.toUpperCase(), 8, sy);
+  ctx.globalAlpha = 1;
+}
+
+// Draw column headers for vertical layout
+function drawColumnHeader(x, cat) {
+  const { sx } = worldToScreen(x, 0);
+  const c = CATS[cat];
+  ctx.fillStyle = c.color + '15';
+  ctx.fillRect(sx - 90 * zoom, 0, 180 * zoom, H);
+  ctx.fillStyle = c.color;
+  ctx.font = `12px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.globalAlpha = 0.5;
+  ctx.fillText(c.label.toUpperCase(), sx, 10);
+  ctx.globalAlpha = 1;
+}
+
+// Draw spiral arm glow
+function drawSpiralArm(cat, armBase, color) {
+  const a = 0.25 * 1.4;
+  ctx.beginPath();
+  let first = true;
+  for (let t = 0; t <= maxRing + 1; t += 0.05) {
+    const theta = armBase + t * a;
+    const r = 80 + t * 90;
+    const wx = Math.cos(theta) * r;
+    const wy = Math.sin(theta) * r;
+    const { sx, sy } = worldToScreen(wx, wy);
+    first ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+    first = false;
+  }
+  ctx.strokeStyle = color + '18';
+  ctx.lineWidth = 30 * zoom;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.lineWidth = 1;
+}
+
+// ─── Main render dispatch ─────────────────────────────────────────────────────
+
+let currentLayout = 'constellation';
+const LABELS = {
+  constellation: 'Constellation Map — nodes in space quadrants, edges as star-chart lines',
+  vertical: 'Vertical Branch Tree — 4 columns by branch, rows by unlock depth',
+  spiral: 'Galaxy Spiral — 4 arms of an Archimedean spiral, one per branch',
+  hex: 'Hex Grid — hexagonal cells, each branch in its sector',
+  linear: 'Linear Timeline — horizontal swim-lanes per branch, specials bridge lanes',
+};
+
+function computeLayout() {
+  layoutPositions = {};
+  if (currentLayout === 'constellation') layoutConstellation();
+  else if (currentLayout === 'vertical') layoutVertical();
+  else if (currentLayout === 'spiral') layoutSpiral();
+  else if (currentLayout === 'hex') layoutHex();
+  else if (currentLayout === 'linear') layoutLinear();
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#07070f';
+  ctx.fillRect(0, 0, W, H);
+
+  if (currentLayout === 'constellation' || currentLayout === 'spiral') {
+    drawStarfield(300);
+  }
+
+  // Layout-specific backgrounds
+  if (currentLayout === 'vertical') {
+    ['weapon','defense','utility','passive'].forEach(c => {
+      drawColumnHeader({ weapon: -480, defense: -160, utility: 160, passive: 480 }[c], c);
+    });
+  }
+  if (currentLayout === 'linear') {
+    ['weapon','defense','utility','passive'].forEach(c => {
+      drawLane({ weapon: -300, defense: -100, utility: 100, passive: 300 }[c], c);
+    });
+  }
+  if (currentLayout === 'spiral') {
+    const armBase = { weapon: -Math.PI/2, defense: 0, utility: Math.PI/2, passive: Math.PI };
+    Object.entries(armBase).forEach(([cat, angle]) => {
+      drawSpiralArm(cat, angle, CATS[cat].color);
+    });
+  }
+  if (currentLayout === 'hex') {
+    NODES.forEach(n => {
+      const p = layoutPositions[n.id];
+      if (p) drawHexCell(p.x, p.y, n.cat);
+    });
+  }
+
+  // Edges
+  layoutEdges.forEach(({ from, to }) => {
+    const isHighlighted = from === hoveredId || to === hoveredId;
+    const isDashed = currentLayout === 'constellation';
+    drawEdge(from, to, isHighlighted ? 0.8 : 0.28, isDashed);
+  });
+
+  // Nodes (specials last so they draw on top)
+  const mainNodes = NODES.filter(n => n.cat !== 'special');
+  const specialNodes = NODES.filter(n => n.cat === 'special');
+  [...mainNodes, ...specialNodes].forEach(n => drawNode(n));
+
+  // Description bar
+  ctx.fillStyle = '#0d0d1a';
+  ctx.fillRect(0, H - 26, W, 26);
+  ctx.fillStyle = '#334';
+  ctx.fillRect(0, H - 27, W, 1);
+  ctx.fillStyle = '#446688';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(LABELS[currentLayout], W/2, H - 13);
+}
+
+// ─── Hover / tooltip ──────────────────────────────────────────────────────────
+
+function handleHover(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const { x: wx, y: wy } = screenToWorld(mx, my);
+
+  let found = null;
+  for (const n of NODES) {
+    const p = layoutPositions[n.id];
+    if (!p) continue;
+    const dx = wx - p.x, dy = wy - p.y;
+    const r = (n.ring === 0 ? NODE_R + 4 : NODE_R) / zoom;
+    if (dx*dx + dy*dy < r*r*1.5) { found = n; break; }
+  }
+
+  if (found !== hoveredId) {
+    hoveredId = found ? found.id : null;
+    render();
+  }
+
+  if (found) {
+    const cat = CATS[found.cat];
+    tooltip.style.display = 'block';
+    tooltip.style.left = (mx + 18) + 'px';
+    tooltip.style.top = Math.min(my - 10, H - 120) + 'px';
+    tooltip.innerHTML = `
+      <div class="t-name">${found.icon} ${found.name}</div>
+      <div class="t-cat" style="color:${cat.color}">${cat.label}</div>
+      <div class="t-ring">Ring ${found.ring} · ${found.prereqs.length ? 'Requires: ' + found.prereqs.map(p=>nodeMap[p]?.name||p).join(', ') : 'No prerequisites'}</div>
+    `;
+  } else {
+    tooltip.style.display = 'none';
+  }
+}
+
+// ─── Store / Tech Catalog ─────────────────────────────────────────────────────
+
+let storeFilter = 'all';
+let storeSort = 'tier';
+let storeSearch = '';
+
+const TIER_NAMES = ['Core', 'Tier 1', 'Tier 2', 'Tier 3', 'Tier 4', 'Tier 5+'];
+function tierName(r) { return r < TIER_NAMES.length ? TIER_NAMES[r] : `Tier ${r}`; }
+
+function renderStore() {
+  const grid = document.getElementById('store-grid');
+  const countEl = document.getElementById('store-count');
+
+  let nodes = [...NODES];
+
+  // Filter
+  if (storeFilter !== 'all') nodes = nodes.filter(n => n.cat === storeFilter);
+
+  // Search
+  if (storeSearch) {
+    const q = storeSearch.toLowerCase();
+    nodes = nodes.filter(n => n.name.toLowerCase().includes(q) || n.id.includes(q));
+  }
+
+  // Sort
+  if (storeSort === 'tier') nodes.sort((a, b) => a.ring - b.ring || a.cat.localeCompare(b.cat));
+  else if (storeSort === 'category') nodes.sort((a, b) => a.cat.localeCompare(b.cat) || a.ring - b.ring);
+  else if (storeSort === 'name') nodes.sort((a, b) => a.name.localeCompare(b.name));
+
+  countEl.textContent = `${nodes.length} of ${NODES.length} upgrades`;
+
+  // Group by current sort's primary dimension for section headers
+  let sections = [];
+  if (storeSort === 'tier' && storeFilter === 'all') {
+    const byRing = {};
+    nodes.forEach(n => { (byRing[n.ring] = byRing[n.ring]||[]).push(n); });
+    Object.entries(byRing).sort(([a],[b]) => +a - +b).forEach(([r, ns]) => {
+      sections.push({ header: tierName(+r), nodes: ns });
+    });
+  } else if (storeSort === 'category' && storeFilter === 'all') {
+    const byCat = {};
+    nodes.forEach(n => { (byCat[n.cat] = byCat[n.cat]||[]).push(n); });
+    const catOrder = ['weapon','defense','utility','passive','special'];
+    catOrder.filter(c => byCat[c]).forEach(c => {
+      sections.push({ header: CATS[c].label, nodes: byCat[c] });
+    });
+  } else {
+    sections = [{ header: null, nodes }];
+  }
+
+  grid.innerHTML = '';
+
+  if (nodes.length === 0) {
+    grid.innerHTML = '<div class="store-note">No upgrades match your filter.</div>';
+    return;
+  }
+
+  sections.forEach(({ header, nodes: sectionNodes }) => {
+    if (header) {
+      const h = document.createElement('div');
+      h.className = 'store-section-header';
+      h.textContent = header;
+      grid.appendChild(h);
+    }
+
+    sectionNodes.forEach(n => {
+      const cat = CATS[n.cat];
+      const prereqNames = n.prereqs.map(p => nodeMap[p]?.name || p);
+      const isLocked = n.prereqs.length > 0; // visual hint only — no real state here
+
+      const card = document.createElement('div');
+      card.className = 'node-card' + (isLocked ? ' locked' : '');
+      card.style.borderColor = cat.color + '30';
+      card.style.setProperty('--cat-color', cat.color);
+
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="card-icon" style="border-color:${cat.color}44;background:${cat.color}11;color:${cat.color}">
+            ${n.icon}
+          </div>
+          <div>
+            <div class="card-title">${n.name}</div>
+            <div class="card-cat" style="color:${cat.color}99">${cat.label}</div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="ring-badge">${tierName(n.ring)}</span>
+          ${prereqNames.length ? `<span class="req-tag">⊸ ${prereqNames.slice(0,2).join(', ')}${prereqNames.length > 2 ? ' +' + (prereqNames.length-2) : ''}</span>` : '<span class="ring-badge" style="color:#2a4a2a;border-color:#1a2a1a">No prereqs</span>'}
+        </div>
+      `;
+
+      // Hover: highlight border
+      card.addEventListener('mouseenter', () => {
+        card.style.borderColor = cat.color + '88';
+        card.style.background = cat.color + '0a';
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.borderColor = cat.color + '30';
+        card.style.background = '';
+      });
+
+      grid.appendChild(card);
+    });
+  });
+}
+
+// Store toolbar events
+document.querySelectorAll('.cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    storeFilter = btn.dataset.cat;
+    renderStore();
+  });
+});
+document.getElementById('sort-select').addEventListener('change', e => {
+  storeSort = e.target.value;
+  renderStore();
+});
+document.getElementById('store-search').addEventListener('input', e => {
+  storeSearch = e.target.value.trim();
+  renderStore();
+});
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+
+const canvasWrap = document.getElementById('canvas-wrap');
+const storePanel = document.getElementById('store-panel');
+
+// Per-layout default zoom/pan for a nice initial view
+const DEFAULT_VIEWS = {
+  constellation: { zoom: 0.72, panX: 0, panY: 0 },
+  vertical:      { zoom: 0.7,  panX: 160, panY: 30 },
+  spiral:        { zoom: 0.7,  panX: 0,  panY: 0 },
+  hex:           { zoom: 0.9,  panX: 0,  panY: 0 },
+  linear:        { zoom: 0.65, panX: -200, panY: 0 },
+};
+
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    currentLayout = btn.dataset.layout;
+
+    if (currentLayout === 'store') {
+      canvasWrap.style.display = 'none';
+      storePanel.classList.add('visible');
+      renderStore();
+    } else {
+      canvasWrap.style.display = '';
+      storePanel.classList.remove('visible');
+      const v = DEFAULT_VIEWS[currentLayout] || { zoom: 1, panX: 0, panY: 0 };
+      zoom = v.zoom; panX = v.panX; panY = v.panY;
+      computeLayout();
+      render();
+    }
+  });
+});
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+resize();
+const v = DEFAULT_VIEWS[currentLayout];
+zoom = v.zoom; panX = v.panX; panY = v.panY;
+computeLayout();
+render();
+</script>
+</body>
+</html>

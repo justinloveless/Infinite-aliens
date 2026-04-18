@@ -21,6 +21,15 @@ export class CurrencySystem {
     eventBus.emit(EVENTS.CURRENCY_CHANGED, { type, amount, total: this._state.currencies[type] });
   }
 
+  /** Add multiple currency types at once (e.g. sell refunds). Amounts are floored; zero/negative skipped. */
+  addCosts(amounts) {
+    for (const [type, raw] of Object.entries(amounts)) {
+      const n = Math.floor(Number(raw) || 0);
+      if (n <= 0) continue;
+      this.add(type, n);
+    }
+  }
+
   subtract(costs) {
     // Validate first
     for (const [type, amount] of Object.entries(costs)) {
@@ -44,12 +53,14 @@ export class CurrencySystem {
     return true;
   }
 
-  // Generate loot from an enemy kill
-  generateLoot(enemy, lootMultiplier = 1.0) {
+  // Generate loot from an enemy kill.
+  // lootRates: optional per-currency multiplier map from computed.lootRates
+  generateLoot(enemy, lootMultiplier = 1.0, lootRates = null) {
     const drops = [];
     for (const entry of enemy.lootTable) {
       const base = entry.min + Math.floor(Math.random() * (entry.max - entry.min + 1));
-      const amount = Math.ceil(base * lootMultiplier);
+      const currencyRate = lootRates?.[entry.currency] ?? 1.0;
+      const amount = Math.ceil(base * lootMultiplier * currencyRate);
       if (amount > 0) {
         drops.push({ currency: entry.currency, amount });
       }

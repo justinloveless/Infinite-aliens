@@ -4,26 +4,6 @@ import * as THREE from 'three';
 export class SynthGrid {
   constructor(scene) {
     this._time = 0;
-    this._mesh = null;
-    this._createGrid(scene);
-  }
-
-  _createGrid(scene) {
-    // Use a grid helper approach with a custom scrolling shader
-    const geo = new THREE.PlaneGeometry(120, 120, 30, 30);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xff00ff,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.15,
-    });
-
-    this._mesh = new THREE.Mesh(geo, mat);
-    this._mesh.rotation.x = -Math.PI / 2;
-    this._mesh.position.set(0, -3.5, -20);
-    scene.add(this._mesh);
-
-    // Horizontal lines only grid using LineSegments for sharper look
     this._createLines(scene);
   }
 
@@ -61,8 +41,10 @@ export class SynthGrid {
     scene.add(this._lines);
   }
 
-  update(delta) {
-    this._time += delta * 8;
+  /** @param {number} speedScale - matches player run speed vs base (combat only in main) */
+  update(delta, speedScale = 1) {
+    const s = Math.max(0, speedScale);
+    this._time += delta * 8 * s;
     // Scroll horizontal lines forward
     const posAttr = this._lines.geometry.getAttribute('position');
     const arr = posAttr.array;

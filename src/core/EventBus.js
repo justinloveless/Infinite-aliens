@@ -37,10 +37,17 @@ export const EVENTS = {
   ROUND_STARTED:       'round:started',
   ROUND_COMPLETE:      'round:complete',
   UPGRADE_PURCHASED:   'upgrade:purchased',
+  UPGRADE_SOLD:        'upgrade:sold',
   CURRENCY_CHANGED:    'currency:changed',
   PLAYER_DAMAGED:      'player:damaged',
   PLAYER_HEALED:       'player:healed',
   PLAYER_DIED:         'player:died',
   STATS_UPDATED:       'stats:updated',
   GAME_SAVED:          'game:saved',
+  STELLAR_NOVA:        'stellar:nova',
+  MANUAL_FIRED:        'manual:fired',
+  ASTEROID_BROKEN:     'asteroid:broken',    // { position }
+  ASTEROID_HIT_ENEMY:  'asteroid:hitEnemy',  // { position, damage }
+  EMP_FIRED:           'emp:fired',          // { duration, damage }
+  PHOENIX_REVIVED:     'phoenix:revived',    // {}
 };

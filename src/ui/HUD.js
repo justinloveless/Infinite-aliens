@@ -1,13 +1,16 @@
 import { eventBus, EVENTS } from '../core/EventBus.js';
-import { CURRENCIES } from '../constants.js';
+import { CURRENCIES, RUN } from '../constants.js';
 
 export class HUD {
   constructor() {
     this._hpBar = document.getElementById('hp-bar');
     this._shieldBar = document.getElementById('shield-bar');
+    this._heatBar = document.getElementById('heat-bar');
+    this._energyBar = document.getElementById('energy-bar');
     this._roundNum = document.getElementById('round-number');
+    this._distanceVal = document.getElementById('distance-value');
+    this._bossBar = document.getElementById('boss-progress-bar');
     this._enemiesDefeated = document.getElementById('enemies-defeated');
-    this._enemiesRequired = document.getElementById('enemies-required');
     this._amtEls = {};
 
     for (const key of Object.keys(CURRENCIES)) {
@@ -29,17 +32,15 @@ export class HUD {
   show() { document.getElementById('hud').classList.remove('hidden'); }
   hide() { document.getElementById('hud').classList.add('hidden'); }
 
-  update(state, computed) {
+  update(state, computed, heatState) {
     if (!state) return;
     const p = state.player;
 
-    // HP bar
     const hpPct = computed
       ? (p.hp / computed.maxHp) * 100
       : (p.hp / p.maxHp) * 100;
     this._hpBar.style.width = `${Math.max(0, Math.min(100, hpPct))}%`;
 
-    // Change color based on HP
     if (hpPct > 50) {
       this._hpBar.style.background = 'linear-gradient(90deg, #39ff14, #00f5ff)';
     } else if (hpPct > 25) {
@@ -48,7 +49,24 @@ export class HUD {
       this._hpBar.style.background = 'linear-gradient(90deg, #ff2200, #ff0055)';
     }
 
-    // Shield bar
+    if (this._heatBar && heatState) {
+      const pct = (heatState.heat / heatState.max) * 100;
+      this._heatBar.style.width = `${Math.min(100, pct)}%`;
+      if (heatState.overheated) {
+        this._heatBar.style.background = 'linear-gradient(90deg, #ff0000, #ff4400)';
+        this._heatBar.style.opacity = Math.sin(Date.now() * 0.012) * 0.4 + 0.6;
+      } else if (pct > 70) {
+        this._heatBar.style.background = 'linear-gradient(90deg, #ff4400, #ffaa00)';
+        this._heatBar.style.opacity = 1;
+      } else if (pct > 40) {
+        this._heatBar.style.background = 'linear-gradient(90deg, #ffaa00, #ffee00)';
+        this._heatBar.style.opacity = 1;
+      } else {
+        this._heatBar.style.background = 'linear-gradient(90deg, #00ff88, #00f5ff)';
+        this._heatBar.style.opacity = 1;
+      }
+    }
+
     if (computed && computed.maxShieldHp > 0) {
       const shieldPct = (p.shieldHp / computed.maxShieldHp) * 100;
       this._shieldBar.style.width = `${Math.max(0, Math.min(100, shieldPct))}%`;
@@ -57,12 +75,32 @@ export class HUD {
       document.getElementById('shield-container').style.display = 'none';
     }
 
-    // Round info
-    this._roundNum.textContent = state.round.current;
-    this._enemiesDefeated.textContent = state.round.enemiesDefeated;
-    this._enemiesRequired.textContent = state.round.enemiesRequired;
+    if (this._energyBar && computed && computed.energyRegen > 0) {
+      const energyPct = (p.energy / computed.maxEnergy) * 100;
+      this._energyBar.style.width = `${Math.max(0, Math.min(100, energyPct))}%`;
+      document.getElementById('energy-container').style.display = '';
+    } else if (this._energyBar) {
+      document.getElementById('energy-container').style.display = 'none';
+    }
 
-    // Currencies
+    const r = state.round;
+    this._roundNum.textContent = r.current;
+    if (this._distanceVal) {
+      this._distanceVal.textContent = Math.floor(r.distanceTraveled || 0);
+    }
+
+    if (this._bossBar) {
+      const bd = r.bossesDefeated || 0;
+      const prevAt = bd * RUN.BOSS_DISTANCE_INTERVAL;
+      const nextAt = (bd + 1) * RUN.BOSS_DISTANCE_INTERVAL;
+      const span = nextAt - prevAt;
+      const d = r.distanceTraveled || 0;
+      const t = span > 0 ? Math.min(1, Math.max(0, (d - prevAt) / span)) : 0;
+      this._bossBar.style.width = `${(r.bossIsActive ? 1 : t) * 100}%`;
+    }
+
+    this._enemiesDefeated.textContent = r.enemiesDefeated;
+
     for (const [key, amt] of Object.entries(state.currencies)) {
       if (this._amtEls[key]) {
         this._amtEls[key].textContent = this._formatNum(amt);
