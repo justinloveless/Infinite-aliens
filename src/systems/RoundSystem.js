@@ -121,13 +121,24 @@ export class RoundSystem {
     const lootRates = this._state._computed?.lootRates || null;
     const drops = this._currency.generateLoot(enemy, lootMult, lootRates);
     for (const drop of drops) {
-      const loot = new LootDrop(
-        enemy.group.position.clone(),
-        drop.currency,
-        drop.amount,
-        this._scene
-      );
-      this._lootDrops.push(loot);
+      const basePos = enemy.group.position.clone();
+      let remaining = drop.amount;
+      const denoms = [
+        { value: 1000, spread: 2.5 },
+        { value: 100,  spread: 2.0 },
+        { value: 10,   spread: 1.5 },
+        { value: 1,    spread: 1.5 },
+      ];
+      for (const { value, spread } of denoms) {
+        const count = Math.floor(remaining / value);
+        remaining %= value;
+        for (let i = 0; i < count; i++) {
+          const pos = basePos.clone();
+          pos.x += (Math.random() - 0.5) * spread;
+          pos.z += (Math.random() - 0.5) * spread;
+          this._lootDrops.push(new LootDrop(pos, drop.currency, value, this._scene));
+        }
+      }
     }
 
     const color = enemy.type === 'boss' ? 0xaa00ff : 0xff6600;

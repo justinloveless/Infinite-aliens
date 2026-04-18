@@ -9,6 +9,14 @@ const COLORS = {
   stellarDust:    0xffd700,
 };
 
+// Size by denomination: 1 → 0.08, 10 → 0.12, 100 → 0.18, 1000 → 0.26
+function sizeForAmount(amount) {
+  if (amount >= 1000) return 0.26;
+  if (amount >= 100)  return 0.18;
+  if (amount >= 10)   return 0.12;
+  return 0.08;
+}
+
 export class LootDrop {
   constructor(pos, currencyType, amount, scene) {
     this.currencyType = currencyType;
@@ -18,7 +26,7 @@ export class LootDrop {
     this._time = Math.random() * Math.PI * 2;
     this._baseY = pos.y + 0.5;
 
-    const geo = new THREE.OctahedronGeometry(0.22, 0);
+    const geo = new THREE.OctahedronGeometry(sizeForAmount(amount), 0);
     const mat = new THREE.MeshBasicMaterial({
       color: COLORS[currencyType] || 0xffffff,
     });
