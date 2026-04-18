@@ -3,11 +3,14 @@ import { eventBus, EVENTS } from '../core/EventBus.js';
 import { EnemyFactory } from '../entities/EnemyFactory.js';
 import { LootDrop } from '../entities/LootDrop.js';
 import { Explosion } from '../entities/Explosion.js';
+import { MovementSystem } from './MovementSystem.js';
 
 export class RoundSystem {
-  constructor(currencySystem) {
+  constructor(currencySystem, world) {
     this._currency = currencySystem;
+    this._world = world;
     this._factory = new EnemyFactory();
+    this._movement = new MovementSystem();
     this._enemies = [];
     this._lootDrops = [];
     this._explosions = [];
@@ -78,12 +81,13 @@ export class RoundSystem {
       this._lootDrops.push(loot);
     }
 
-    // Explosion
-    const color = enemy.type === 'boss' ? 0xaa00ff : 0xff6600;
-    const scale = enemy.type === 'boss' ? 2.5 : (enemy.type === 'tank' ? 1.5 : 1.0);
-    const exp = new Explosion(enemy.group.position.clone(), color, scale, this._scene);
+    // Explosion — config lives on the entity, not branched by type
+    const cfg = this._world.getComponent(enemy.entityId, 'ExplosionConfig')
+      ?? { color: 0xff6600, scale: 1.0 };
+    const exp = new Explosion(enemy.group.position.clone(), cfg.color, cfg.scale, this._scene);
     this._explosions.push(exp);
 
+    this._world.destroyEntity(enemy.entityId);
     enemy.remove(this._scene);
     const idx = this._enemies.indexOf(enemy);
     if (idx !== -1) this._enemies.splice(idx, 1);
@@ -110,6 +114,7 @@ export class RoundSystem {
 
   _clearEnemies() {
     for (const e of this._enemies) {
+      this._world.destroyEntity(e.entityId);
       e.remove(this._scene);
     }
     this._enemies.length = 0;
@@ -143,7 +148,7 @@ export class RoundSystem {
 
     if (state.round.phase !== 'combat') return;
 
-    // Update enemies
+    // Update enemy visuals (HP bar billboard + rotation)
     const playerPos = this._scene.groups.player.children[0]?.position || { x: 0, z: 0 };
     for (let i = this._enemies.length - 1; i >= 0; i--) {
       const e = this._enemies[i];
@@ -151,8 +156,11 @@ export class RoundSystem {
         this._enemies.splice(i, 1);
         continue;
       }
-      e.update(delta, playerPos);
+      e.update(delta);
     }
+
+    // Movement is handled by the MovementSystem using ECS components
+    this._movement.update(delta, this._enemies, playerPos, this._world);
 
     // Spawn logic
     const required = state.round.enemiesRequired;
@@ -168,9 +176,9 @@ export class RoundSystem {
         let newEnemies;
         // Spawn boss on the last enemy of a boss round
         if (isBoss && this._spawnedThisRound === required - 1) {
-          newEnemies = this._factory.spawnBoss(state.round.current, this._scene);
+          newEnemies = this._factory.spawnBoss(state.round.current, this._scene, this._world);
         } else {
-          newEnemies = this._factory.spawnRandom(state.round.current, this._scene);
+          newEnemies = this._factory.spawnRandom(state.round.current, this._scene, this._world);
         }
         this._enemies.push(...newEnemies);
         this._spawnedThisRound += newEnemies.length;

@@ -6,7 +6,6 @@ export class Enemy {
     this.id = `enemy_${Date.now()}_${Math.random()}`;
     this.collisionRadius = def.collisionRadius;
     this.lootTable = def.loot;
-    this.behaviorType = def.behavior;
 
     // Scale stats with round
     const hpScale = Math.pow(1.12, round - 1);
@@ -18,12 +17,10 @@ export class Enemy {
     this.contactDamage = def.baseDamage;
     this.attackSpeed = def.attackSpeed || 0;
     this._attackTimer = 0;
-    this._behaviorTimer = 0;
-    this._zigzagDir = 1;
-    this._keepRangeDist = def.keepRangeDist || 12;
 
     this.active = true;
     this.group = new THREE.Group();
+    this.entityId = null; // assigned by EnemyFactory after ECS registration
     this._buildMesh(def);
     this._buildHpBar();
     scene.groups.enemies.add(this.group);
@@ -107,82 +104,13 @@ export class Enemy {
     else this._hpBarMat.color.setHex(0xff2200);
   }
 
-  update(delta, playerPos) {
+  update(delta) {
     if (!this.active) return;
 
-    this._behaviorTimer += delta;
-
-    const dx = playerPos.x - this.group.position.x;
-    const dz = playerPos.z - this.group.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-
-    switch (this.behaviorType) {
-      case 'charge':
-        if (dist > 0.1) {
-          this.group.position.x += (dx / dist) * this.speed * delta;
-          this.group.position.z += (dz / dist) * this.speed * delta;
-        }
-        break;
-
-      case 'steady':
-        if (dist > 0.1) {
-          this.group.position.x += (dx / dist) * this.speed * delta;
-          this.group.position.z += (dz / dist) * this.speed * delta;
-        }
-        break;
-
-      case 'zigzag': {
-        if (this._behaviorTimer > 0.6) {
-          this._behaviorTimer = 0;
-          this._zigzagDir *= -1;
-        }
-        if (dist > 0.1) {
-          this.group.position.x += ((dx / dist) * this.speed + this._zigzagDir * this.speed * 0.8) * delta;
-          this.group.position.z += (dz / dist) * this.speed * delta;
-        }
-        break;
-      }
-
-      case 'keepRange':
-        if (dist < this._keepRangeDist) {
-          this.group.position.x -= (dx / dist) * this.speed * delta * 0.5;
-          this.group.position.z -= (dz / dist) * this.speed * delta * 0.5;
-        } else if (dist > this._keepRangeDist + 4) {
-          this.group.position.x += (dx / dist) * this.speed * delta;
-          this.group.position.z += (dz / dist) * this.speed * delta;
-        }
-        break;
-
-      case 'boss': {
-        const phase = Math.floor(this._behaviorTimer / 4) % 3;
-        if (phase === 0) {
-          if (dist > 0.1) {
-            this.group.position.x += (dx / dist) * this.speed * delta;
-            this.group.position.z += (dz / dist) * this.speed * delta;
-          }
-        } else if (phase === 1) {
-          this.group.position.x += Math.sin(this._behaviorTimer * 2) * this.speed * 1.5 * delta;
-          this.group.position.z += (dz / dist) * this.speed * 0.3 * delta;
-        } else {
-          if (dist < 8) {
-            this.group.position.x -= (dx / dist) * this.speed * 0.5 * delta;
-            this.group.position.z -= (dz / dist) * this.speed * 0.5 * delta;
-          } else {
-            this.group.position.x += (dx / dist) * this.speed * delta;
-            this.group.position.z += (dz / dist) * this.speed * delta;
-          }
-        }
-        // Boss spin
-        this.group.rotation.y += delta * 0.8;
-        break;
-      }
-    }
-
     // Billboard HP bar to camera
-    this._hpTrack.rotation.copy(this.group.parent.parent ?
-      this.group.parent.parent.rotation : new THREE.Euler());
+    this._hpTrack.rotation.copy(this.group.parent?.parent?.rotation ?? new THREE.Euler());
 
-    // Slow rotation for variety
+    // Slow rotation for variety (boss rotation is handled by its movement component)
     if (this.type !== 'boss') {
       this.group.rotation.y += delta * 0.6;
     }
