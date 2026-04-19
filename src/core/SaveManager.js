@@ -101,6 +101,9 @@ export class SaveManager {
           data.player.energy = 100;
         }
       }
+      // v13: ECS refactor — entity state no longer round-trips through `player`.
+      // Old saves are incompatible because `computed` fields moved onto components.
+      if (data.version === 12) return null;
       if (data.version !== GAME.VERSION) return null;
       return data;
     } catch {

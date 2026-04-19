@@ -1,6 +1,6 @@
 import { CURRENCIES } from '../constants.js';
-import { reticleDebug } from '../entities/Enemy.js';
-import { DEBUG_ENEMY_SPAWN_TYPES } from '../entities/EnemyFactory.js';
+import { reticleDebug } from '../components/enemy/EnemyVisualsComponent.js';
+import { DEBUG_ENEMY_SPAWN_TYPES } from '../components/enemy/EnemyDefs.js';
 
 const CURRENCY_KEYS = Object.keys(CURRENCIES);
 const DEBUG_MENU_POS_KEY = 'infinite_aliens_debug_menu_pos';
@@ -38,10 +38,15 @@ export class DebugMenuUI {
     const panel = document.getElementById('debug-menu-panel');
     if (panel) this._clampPanelPosition(panel);
     this._panel.classList.remove('hidden');
+    // Promote perf overlay to detailed view while the menu is open.
+    this._game.perfOverlay?.setDetailed(true);
+    this._startPerfPoll();
   }
 
   close() {
     this._panel.classList.add('hidden');
+    this._game.perfOverlay?.setDetailed(false);
+    this._stopPerfPoll();
   }
 
   get isOpen() {
@@ -103,6 +108,7 @@ export class DebugMenuUI {
 
     this._buildSpawnSection(wrap);
 
+    this._buildPerformanceSection(wrap);
     this._buildVisualSection(wrap);
     this._buildTargetingSection(wrap);
 
@@ -365,6 +371,115 @@ export class DebugMenuUI {
     }
     sec.appendChild(row);
     wrap.appendChild(sec);
+  }
+
+  _buildPerformanceSection(wrap) {
+    const g = this._game;
+    const sec = document.createElement('div');
+    sec.className = 'debug-menu-visual';
+    this._sectionTitle(sec, 'PERFORMANCE');
+
+    const stats = document.createElement('div');
+    stats.className = 'debug-perf-stats';
+    this._perfStatsEl = stats;
+    stats.textContent = 'fps — | ms — | draw — | tris — | entities —';
+    sec.appendChild(stats);
+
+    const qRow = document.createElement('div');
+    qRow.className = 'debug-menu-spawn-btns';
+    const label = document.createElement('span');
+    label.style.marginRight = '6px';
+    label.style.fontSize = '0.7rem';
+    label.textContent = 'QUALITY:';
+    qRow.appendChild(label);
+    this._qualityBtns = {};
+    for (const opt of ['auto', 'high', 'medium', 'low']) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'neon-btn small';
+      btn.textContent = opt.toUpperCase();
+      btn.addEventListener('click', () => {
+        g.settings.setGraphicsQuality(opt);
+        this._syncQualityButtons();
+      });
+      this._qualityBtns[opt] = btn;
+      qRow.appendChild(btn);
+    }
+    sec.appendChild(qRow);
+
+    const ppRow = document.createElement('div');
+    ppRow.className = 'debug-menu-actions';
+    ppRow.style.borderTop = 'none';
+    ppRow.style.paddingTop = '4px';
+    const ppBtn = document.createElement('button');
+    ppBtn.className = 'neon-btn small';
+    ppBtn.textContent = 'TOGGLE POST-PROCESSING';
+    ppBtn.addEventListener('click', () => {
+      const cur = g.qualityController.postProcessingEnabled;
+      g.qualityController.setPostProcessingEnabled(!cur);
+      ppBtn.textContent = g.qualityController.postProcessingEnabled
+        ? 'POST-PROCESSING: ON'
+        : 'POST-PROCESSING: OFF';
+    });
+    ppBtn.textContent = g.qualityController.postProcessingEnabled
+      ? 'POST-PROCESSING: ON'
+      : 'POST-PROCESSING: OFF';
+    ppRow.appendChild(ppBtn);
+
+    const logBtn = document.createElement('button');
+    logBtn.className = 'neon-btn small';
+    const syncLogBtn = () => {
+      logBtn.textContent = g._perfLogEnabled
+        ? 'PERF LOGGING: ON'
+        : 'PERF LOGGING: OFF';
+    };
+    logBtn.addEventListener('click', () => {
+      g.setPerfLogEnabled(!g._perfLogEnabled);
+      syncLogBtn();
+    });
+    syncLogBtn();
+    ppRow.appendChild(logBtn);
+
+    sec.appendChild(ppRow);
+
+    this._visualSyncers.push(() => {
+      this._syncQualityButtons();
+      syncLogBtn();
+    });
+    wrap.appendChild(sec);
+  }
+
+  _syncQualityButtons() {
+    if (!this._qualityBtns) return;
+    const active = this._game.settings.graphicsQuality;
+    for (const [opt, btn] of Object.entries(this._qualityBtns)) {
+      const on = opt === active;
+      btn.style.borderColor = on ? 'var(--cyan)' : '';
+      btn.style.color       = on ? 'var(--cyan)' : '';
+      btn.style.boxShadow   = on ? 'var(--glow-cyan)' : 'none';
+    }
+  }
+
+  _startPerfPoll() {
+    if (this._perfPollTimer != null) return;
+    const tick = () => {
+      if (!this.isOpen) return;
+      const s = this._game.perfOverlay?.getStats?.();
+      if (s && this._perfStatsEl) {
+        const tier = this._game.qualityController?.currentTier ?? '-';
+        this._perfStatsEl.textContent =
+          `fps ${Math.round(s.fps)} | ${s.frameMs.toFixed(1)} ms | gap ${s.maxGapMs.toFixed(0)} ms | work ${s.maxWorkMs.toFixed(0)} ms | draw ${s.drawCalls} | tris ${s.triangles.toLocaleString()} | entities ${s.entities} | tier ${tier}`;
+      }
+    };
+    tick();
+    this._perfPollTimer = window.setInterval(tick, 250);
+  }
+
+  _stopPerfPoll() {
+    if (this._perfPollTimer != null) {
+      window.clearInterval(this._perfPollTimer);
+      this._perfPollTimer = null;
+    }
   }
 
   _buildTargetingSection(wrap) {

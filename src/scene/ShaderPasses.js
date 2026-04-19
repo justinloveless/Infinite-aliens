@@ -81,7 +81,7 @@ export const ColorGradeShader = {
     uniform vec3 highlightColor;
     varying vec2 vUv;
 
-    vec3 saturate(vec3 c, float s) {
+    vec3 applySaturation(vec3 c, float s) {
       float lum = dot(c, vec3(0.299, 0.587, 0.114));
       return mix(vec3(lum), c, s);
     }
@@ -90,7 +90,7 @@ export const ColorGradeShader = {
       vec4 color = texture2D(tDiffuse, vUv);
 
       // Saturation boost
-      color.rgb = saturate(color.rgb, saturation);
+      color.rgb = applySaturation(color.rgb, saturation);
 
       // Color grading: push shadows blue, highlights cyan-pink
       float lum = dot(color.rgb, vec3(0.299, 0.587, 0.114));

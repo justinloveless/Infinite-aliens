@@ -573,6 +573,46 @@
       ]
     },
     {
+      "id": "warp_throttle",
+      "category": "utility",
+      "prereqs": [
+        "speed"
+      ],
+      "name": "Warp Throttle",
+      "description": "Push your sublight engines into overdrive. You tear through space faster — but enemies close the gap quicker and sector traffic thickens.",
+      "icon": "»",
+      "maxLevel": 5,
+      "baseCost": {
+        "scrapMetal": 30,
+        "plasmaCrystals": 6
+      },
+      "effects": [
+        {
+          "type": "multiply",
+          "stat": "speed",
+          "value": 1.18,
+          "scaleMode": "exponential",
+          "statLabel": "Ship Speed"
+        },
+        {
+          "type": "multiply",
+          "target": "enemy",
+          "stat": "all.speedMult",
+          "value": 1.12,
+          "scaleMode": "exponential",
+          "statLabel": "Enemy Speed"
+        },
+        {
+          "type": "multiply",
+          "target": "round",
+          "stat": "spawnInterval",
+          "value": 0.9,
+          "scaleMode": "exponential",
+          "statLabel": "Spawn Interval"
+        }
+      ]
+    },
+    {
       "id": "magnet",
       "category": "utility",
       "prereqs": [

@@ -7,10 +7,14 @@ export const KEYBIND_ACTIONS = [
   { id: 'moveRight', label: 'Move Right' },
 ];
 
+export const GRAPHICS_QUALITY_OPTIONS = ['auto', 'high', 'medium', 'low'];
+
 const DEFAULTS = {
   sfxVolume:   0.5,
   musicVolume: 0.25,
   muted:       false,
+  showFps:     false,
+  graphicsQuality: 'auto',
   keybinds: {
     moveUp:    'KeyW',
     moveDown:  'KeyS',
@@ -51,6 +55,11 @@ export class SettingsManager {
   get sfxVolume()   { return this._s.sfxVolume; }
   get musicVolume() { return this._s.musicVolume; }
   get muted()       { return this._s.muted; }
+  get showFps()     { return !!this._s.showFps; }
+  get graphicsQuality() {
+    const v = this._s.graphicsQuality;
+    return GRAPHICS_QUALITY_OPTIONS.includes(v) ? v : 'auto';
+  }
   getKeybind(action) { return this._s.keybinds[action] ?? DEFAULTS.keybinds[action]; }
 
   // ---- Setters (notify listeners + save) ----
@@ -71,6 +80,19 @@ export class SettingsManager {
     this._s.muted = !!v;
     this._save();
     this._emit('muted', this._s.muted);
+  }
+
+  setShowFps(v) {
+    this._s.showFps = !!v;
+    this._save();
+    this._emit('showFps', this._s.showFps);
+  }
+
+  setGraphicsQuality(v) {
+    const next = GRAPHICS_QUALITY_OPTIONS.includes(v) ? v : 'auto';
+    this._s.graphicsQuality = next;
+    this._save();
+    this._emit('graphicsQuality', next);
   }
 
   setKeybind(action, code) {

@@ -1,4 +1,4 @@
-import { KEYBIND_ACTIONS } from '../core/SettingsManager.js';
+import { KEYBIND_ACTIONS, GRAPHICS_QUALITY_OPTIONS } from '../core/SettingsManager.js';
 
 // Human-readable label for a KeyboardEvent.code string
 function codeLabel(code) {
@@ -68,6 +68,9 @@ export class SettingsUI {
 
     // ---- Audio section ----
     wrap.appendChild(this._buildSection('AUDIO', this._buildAudio()));
+
+    // ---- Graphics section ----
+    wrap.appendChild(this._buildSection('GRAPHICS', this._buildGraphics()));
 
     // ---- Controls section ----
     wrap.appendChild(this._buildSection('CONTROLS', this._buildControls()));
@@ -188,6 +191,54 @@ export class SettingsUI {
     return row;
   }
 
+  // ---- Graphics controls ----
+
+  _buildGraphics() {
+    const el = document.createElement('div');
+    el.className = 'settings-audio';
+
+    const fpsRow = document.createElement('div');
+    fpsRow.className = 'settings-row';
+    const fpsLabel = document.createElement('span');
+    fpsLabel.className = 'settings-label';
+    fpsLabel.textContent = 'SHOW FPS (F3)';
+    this._fpsBtn = document.createElement('button');
+    this._fpsBtn.className = 'neon-btn small';
+    this._fpsBtn.onclick = () => {
+      this._settings.setShowFps(!this._settings.showFps);
+      this._syncShowFpsBtn();
+    };
+    fpsRow.appendChild(fpsLabel);
+    fpsRow.appendChild(this._fpsBtn);
+    el.appendChild(fpsRow);
+
+    const qRow = document.createElement('div');
+    qRow.className = 'settings-row';
+    const qLabel = document.createElement('span');
+    qLabel.className = 'settings-label';
+    qLabel.textContent = 'QUALITY';
+    const qBtns = document.createElement('div');
+    qBtns.className = 'settings-quality-btns';
+    this._qualityBtns = {};
+    for (const opt of GRAPHICS_QUALITY_OPTIONS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'neon-btn small';
+      btn.textContent = opt.toUpperCase();
+      btn.onclick = () => {
+        this._settings.setGraphicsQuality(opt);
+        this._syncQualityBtns();
+      };
+      this._qualityBtns[opt] = btn;
+      qBtns.appendChild(btn);
+    }
+    qRow.appendChild(qLabel);
+    qRow.appendChild(qBtns);
+    el.appendChild(qRow);
+
+    return el;
+  }
+
   // ---- Keybind controls ----
 
   _buildControls() {
@@ -258,6 +309,27 @@ export class SettingsUI {
     this._syncSliders();
     this._syncMuteBtn();
     this._syncKeybinds();
+    this._syncShowFpsBtn();
+    this._syncQualityBtns();
+  }
+
+  _syncShowFpsBtn() {
+    if (!this._fpsBtn) return;
+    const on = this._settings.showFps;
+    this._fpsBtn.textContent = on ? 'ON' : 'OFF';
+    this._fpsBtn.style.borderColor = on ? 'var(--green)' : '';
+    this._fpsBtn.style.color       = on ? 'var(--green)' : '';
+  }
+
+  _syncQualityBtns() {
+    if (!this._qualityBtns) return;
+    const q = this._settings.graphicsQuality;
+    for (const [opt, btn] of Object.entries(this._qualityBtns)) {
+      const active = opt === q;
+      btn.style.borderColor = active ? 'var(--cyan)' : '';
+      btn.style.color       = active ? 'var(--cyan)' : 'rgba(255,255,255,0.55)';
+      btn.style.boxShadow   = active ? 'var(--glow-cyan)' : 'none';
+    }
   }
 
   _syncSliders() {

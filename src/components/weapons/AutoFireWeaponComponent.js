@@ -1,0 +1,73 @@
+import * as THREE from 'three';
+import { Component } from '../../ecs/Component.js';
+import { eventBus, EVENTS } from '../../core/EventBus.js';
+import { resolveTarget } from './CombatTargeting.js';
+import { createProjectile } from '../../prefabs/createProjectile.js';
+
+/**
+ * Primary nose auto-fire. Picks nearest enemy, fires `projectileCount` shots
+ * of the player's configured projectileType. Owns its own cadence.
+ */
+export class AutoFireWeaponComponent extends Component {
+  constructor() {
+    super();
+    this._timer = 0;
+  }
+
+  update(dt, ctx) {
+    if (ctx?.state?.round?.phase !== 'combat') { this._timer = 0; return; }
+    const stats = this.entity.get('PlayerStatsComponent');
+    const t = this.entity.get('TransformComponent');
+    if (!stats || !t) return;
+
+    this._timer += dt;
+    const interval = stats.calcFireInterval();
+    if (this._timer < interval) return;
+
+    const target = resolveTarget(ctx.world, t.position, stats, ctx.state.round);
+    if (!target) return;
+    this._timer = 0;
+
+    const { projectileVisuals } = stats;
+    const type = stats.projectileType;
+    const visualOverride = projectileVisuals.get(type) || projectileVisuals.get('all') || null;
+    const pierces = stats.projectilePierces || 0;
+    const count = stats.projectileCount;
+
+    const tgtT = target.get('TransformComponent');
+    const baseDir = new THREE.Vector3().subVectors(tgtT.position, t.position).normalize();
+    const spawnBase = t.position.clone().add(new THREE.Vector3(0, 0, -0.5));
+
+    const killsThisRun = ctx.state.round.killsThisRun || 0;
+    const resonance = ctx.playerEntity?.get('ResonanceFieldComponent')?.level ?? 0;
+    const vampire = stats.vampireHealRatio ?? 0;
+
+    for (let i = 0; i < count; i++) {
+      const { damage, isCrit } = stats.calcDamage({ killsThisRun, resonanceFieldLevel: resonance });
+      const dir = baseDir.clone();
+      if (count > 1) {
+        const spread = (i / (count - 1) - 0.5) * 0.4;
+        dir.x += spread;
+        dir.normalize();
+      }
+      ctx.world.spawn(createProjectile({
+        position: spawnBase.clone(),
+        direction: dir,
+        type,
+        damage,
+        isCrit,
+        isPlayer: true,
+        target: stats.isHoming ? target : null,
+        visualOverride,
+        pierces,
+        onKillHealAmount: vampire > 0 ? vampire : null,
+      }));
+    }
+
+    if (ctx.audio) {
+      const w = type;
+      ctx.audio.play(w === 'missile' ? 'missile' : w === 'plasma' ? 'plasma' : 'laser');
+    }
+    eventBus.emit(EVENTS.PROJECTILE_FIRED);
+  }
+}

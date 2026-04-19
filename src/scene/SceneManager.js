@@ -31,8 +31,12 @@ export class SceneManager {
       canvas: document.getElementById('game-canvas'),
       antialias: true,
       alpha: false,
+      stencil: false,
+      depth: true,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: false,
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -78,7 +82,11 @@ export class SceneManager {
   }
 
   render() {
-    if (this.composer) {
+    // When every post-pass is disabled, skip the composer entirely. Even an
+    // all-disabled EffectComposer still blits its float render target to the
+    // screen, which on some hybrid-GPU Windows setups stalls the driver for
+    // hundreds of ms. Plain renderer.render() avoids that path completely.
+    if (this.composer && !this._bypassComposer) {
       this.composer.render();
     } else {
       this.renderer.render(this.scene, this.camera);
@@ -87,6 +95,11 @@ export class SceneManager {
 
   setComposer(composer) {
     this.composer = composer;
+  }
+
+  /** Fully bypass the composer (not just disable passes). Plain WebGL render. */
+  setBypassComposer(on) {
+    this._bypassComposer = !!on;
   }
 
   _onResize() {

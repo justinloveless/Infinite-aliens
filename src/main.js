@@ -6,25 +6,26 @@ import { Starfield } from './scene/Starfield.js';
 import { SynthGrid } from './scene/SynthGrid.js';
 import { CameraController } from './scene/CameraController.js';
 import { setupPostProcessing } from './scene/PostProcessing.js';
+import { QualityController } from './scene/QualityController.js';
+import { LightPool } from './scene/LightPool.js';
 import { GameLoop } from './core/GameLoop.js';
 import { createInitialState } from './core/GameState.js';
 import { SaveManager } from './core/SaveManager.js';
 import { AudioManager } from './core/AudioManager.js';
 import { eventBus, EVENTS } from './core/EventBus.js';
+import { ProjectileRenderer } from './rendering/ProjectileRenderer.js';
+import { PerfOverlay } from './ui/PerfOverlay.js';
 
-import { Ship } from './entities/Ship.js';
-import { ProjectilePool } from './entities/ProjectilePool.js';
+import { World } from './ecs/World.js';
+import { createPlayer } from './prefabs/createPlayer.js';
+import { createAsteroid } from './prefabs/createAsteroid.js';
 
-import { CollisionSystem } from './systems/CollisionSystem.js';
-import { CombatSystem } from './systems/CombatSystem.js';
-import { RoundSystem } from './systems/RoundSystem.js';
+import { CollisionCoordinator } from './coordinators/CollisionCoordinator.js';
+import { SpawnDirector } from './coordinators/SpawnDirector.js';
+import { UpgradeApplier } from './coordinators/UpgradeApplier.js';
+
 import { CurrencySystem } from './systems/CurrencySystem.js';
-import { UpgradeSystem } from './systems/UpgradeSystem.js';
-
 import { TechTreeState } from './techtree/TechTreeState.js';
-import { AsteroidSystem } from './systems/AsteroidSystem.js';
-import { BeamLaserSystem } from './systems/BeamLaserSystem.js';
-import { AbilitySystem } from './systems/AbilitySystem.js';
 
 import { UIManager } from './ui/UIManager.js';
 import { HUD } from './ui/HUD.js';
@@ -34,21 +35,25 @@ import { DamageNumbers } from './ui/DamageNumbers.js';
 import { BLOOM, PLAYER, RUN, SCENE, WARP } from './constants.js';
 import * as THREE from 'three';
 
-// ============================
-// GAME ORCHESTRATOR
-// ============================
+const NOOP_MARK = () => {};
+
 class Game {
   constructor() {
     this.state = null;
     this.computed = null;
+    this.playerEntity = null;
 
-    // Core
     this.loop = new GameLoop();
     this.saveManager = new SaveManager();
     this.settings = new SettingsManager();
     this.audio = new AudioManager();
 
-    // Scene
+    // Toggles diagnostic perf logging: per-section tick breakdowns on hitches
+    // (>50 ms), the hitch line from PerfOverlay, and the one-time GPU info
+    // line. Off by default; flip it via the Debug Menu or Shift+F3.
+    this._perfLogEnabled = false;
+    this._profMarks = null;
+
     this.scene = new SceneManager();
     this.starfield = new Starfield(this.scene.scene);
     this.synthGrid = new SynthGrid(this.scene.scene);
@@ -63,26 +68,38 @@ class Game {
     this._grainTime = 0;
     this._visualDefaults = this._captureVisualDefaults();
 
-    // Apply saved audio settings before anything plays
     this.audio.setMusicVolume(this.settings.musicVolume);
     this.audio.setSfxVolume(this.settings.sfxVolume);
     this.audio.setMuted(this.settings.muted);
 
-    // Entities
-    this.ship = new Ship(this.scene, this.settings);
-    this.projectilePool = new ProjectilePool(this.scene);
+    this.projectileRenderer = new ProjectileRenderer(this.scene);
+    this.lightPool = new LightPool({ scene: this.scene.scene, capacity: 32 });
 
-    // Systems
-    this.collision = new CollisionSystem();
-    this.combat = new CombatSystem(this.projectilePool, this.collision);
     this.currency = new CurrencySystem();
-    this.upgrade = new UpgradeSystem();
-    this.round = new RoundSystem(this.currency);
-    this.asteroidSystem = new AsteroidSystem(this.scene.scene);
-    this.beamLaser = new BeamLaserSystem(this.scene.scene);
-    this.ability = new AbilitySystem();
+    this.world = new World({
+      scene: this.scene,
+      camera: this.scene.camera,
+      audio: this.audio,
+      eventBus,
+      currency: this.currency,
+      createAsteroid,
+      projectileRenderer: this.projectileRenderer,
+      lightPool: this.lightPool,
+    });
 
-    // UI
+    this.perfOverlay = new PerfOverlay({
+      renderer: this.scene.renderer,
+      world: this.world,
+    });
+    this.qualityController = new QualityController({
+      renderer: this.scene.renderer,
+      composer,
+      postPasses,
+      getFps: () => this.perfOverlay.getStats().fps,
+    });
+    this._applySettingsToPerf();
+    this.perfOverlay.setLoggingEnabled(this._perfLogEnabled);
+
     this.ui = new UIManager();
     this.hud = new HUD();
     this.transition = new RoundTransition();
@@ -90,15 +107,15 @@ class Game {
     this.settingsUI = new SettingsUI(this.settings, this.audio);
     this.debugMenu = new DebugMenuUI(this);
 
-    // These get set up after state is loaded
     this.techTree = null;
     this.techTreeUI = null;
+    this.spawnDirector = null;
+    this.upgradeApplier = null;
+    this.collision = new CollisionCoordinator(this.world);
     this._prevBossMusicActive = false;
     this._paused = false;
     this._techTreeOpen = false;
-
     this.upgradeEditor = null;
-    this._phoenixCooldown = 0;
 
     this._focusPickRaycaster = new THREE.Raycaster();
     this._focusPickNdc = new THREE.Vector2();
@@ -110,157 +127,182 @@ class Game {
     this._setupSettingsButton();
     this._setupDebugMenuHotkey();
     this._setupPauseControls();
-    if (import.meta.env.DEV) {
-      this._setupUpgradeEditor();
+    this._setupPerfOverlayHotkey();
+    this._setupSettingsListener();
+    if (import.meta.env.DEV) this._setupUpgradeEditor();
+  }
+
+  _applySettingsToPerf() {
+    if (this.settings.showFps) this.perfOverlay.show();
+    else this.perfOverlay.hide();
+    this.qualityController.setMode(this.settings.graphicsQuality);
+  }
+
+  _setupSettingsListener() {
+    this.settings.onChange((key) => {
+      if (key === 'showFps') {
+        if (this.settings.showFps) this.perfOverlay.show();
+        else this.perfOverlay.hide();
+      } else if (key === 'graphicsQuality') {
+        this.qualityController.setMode(this.settings.graphicsQuality);
+      } else if (key === 'reset') {
+        this._applySettingsToPerf();
+      }
+    });
+  }
+
+  _setupPerfOverlayHotkey() {
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'F3' || e.repeat) return;
+      if (this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      const next = !this.settings.showFps;
+      this.settings.setShowFps(next);
+    });
+    // Shift+F3: toggle diagnostic perf logging (hitch lines + section breakdowns).
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'F3' || !e.shiftKey || e.repeat) return;
+      if (this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      this.setPerfLogEnabled(!this._perfLogEnabled);
+    });
+    // Alt+F3: toggle full composer bypass. Runs plain renderer.render().
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'F3' || !e.altKey || e.repeat) return;
+      if (this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      this._bypassComposer = !this._bypassComposer;
+      this.scene.setBypassComposer(this._bypassComposer);
+      console.log(`[perf] composer bypass ${this._bypassComposer ? 'ON (plain renderer)' : 'OFF (composer)'}`);
+    });
+  }
+
+  /** Records the time at this label relative to the start of the current tick. */
+  _profMark(label) {
+    if (!this._profMarks) this._profMarks = [];
+    this._profMarks.push([label, performance.now()]);
+  }
+
+  /** At end of tick, if total cost was high enough, log a breakdown. */
+  _profFlush() {
+    const marks = this._profMarks;
+    if (!marks || marks.length < 2) { if (marks) marks.length = 0; return; }
+    if (!this._perfLogEnabled) { marks.length = 0; return; }
+    const total = marks[marks.length - 1][1] - marks[0][1];
+    if (total >= 50) {
+      const parts = [];
+      for (let i = 1; i < marks.length; i++) {
+        const d = marks[i][1] - marks[i - 1][1];
+        if (d >= 1) parts.push(`${marks[i][0]}=${d.toFixed(1)}`);
+      }
+      const draws = this.scene.renderer.info.render.calls;
+      const tris = this.scene.renderer.info.render.triangles;
+      console.warn(`[perf] tick=${total.toFixed(1)}ms ${parts.join(' ')} draw=${draws} tris=${tris}`);
+    }
+    marks.length = 0;
+  }
+
+  /** Toggles all diagnostic perf logging in one place. */
+  setPerfLogEnabled(on) {
+    const next = !!on;
+    if (next === this._perfLogEnabled) return;
+    this._perfLogEnabled = next;
+    this.perfOverlay.setLoggingEnabled(next);
+    if (next) {
+      console.log(`[perf] logging ON (hitches >100ms + section breakdowns >50ms)`);
+      this._logGpuInfo();
+    } else {
+      console.log(`[perf] logging OFF`);
     }
   }
 
+  /** Log WebGL renderer/vendor so we can confirm GPU accel. */
+  _logGpuInfo() {
+    try {
+      const gl = this.scene.renderer.getContext();
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      const vendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
+      const renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      const dpr = window.devicePixelRatio;
+      const pr = this.scene.renderer.getPixelRatio();
+      const size = this.scene.renderer.getSize(new THREE.Vector2());
+      console.log(`[perf] GPU: ${vendor} / ${renderer} | dpr=${dpr} pixelRatio=${pr} size=${size.x}x${size.y}`);
+    } catch (e) { /* ignore */ }
+  }
+
   _setupEventListeners() {
-    // Player damage handler
-    eventBus.on(EVENTS.PLAYER_DAMAGED, ({ amount, source }) => {
-      if (!this.state) return;
-      const s = this.state.player;
-      const c = this.computed;
+    eventBus.on(EVENTS.PLAYER_DIED, () => this._handlePlayerDied());
 
-      // Shield absorbs first
-      if (s.shieldHp > 0 && c?.maxShieldHp > 0) {
-        const shieldDmg = Math.min(s.shieldHp, amount);
-        s.shieldHp -= shieldDmg;
-        const remaining = amount - shieldDmg;
-        if (remaining > 0) {
-          s.hp = Math.max(0, s.hp - remaining);
-          this.ship.flash(0xff0000);
-          this.audio.play('playerDamage');
-        } else {
-          this.audio.play('shieldHit');
-        }
-      } else {
-        s.hp = Math.max(0, s.hp - amount);
-        this.ship.flash(0xff0000);
-        this.audio.play('playerDamage');
-      }
-
-      this.camera.shake(0.35, 0.2);
-
-      if (s.hp <= 0) {
-        eventBus.emit(EVENTS.PLAYER_DIED);
-      }
-    });
-
-    eventBus.on(EVENTS.PLAYER_HEALED, ({ amount }) => {
-      if (!this.state || !this.computed) return;
-      this.state.player.hp = Math.min(
-        this.computed.maxHp,
-        this.state.player.hp + amount
-      );
-    });
-
-    eventBus.on(EVENTS.PLAYER_DIED, () => {
-      // Phoenix Drive: intercept death if active and off cooldown
-      if (this.computed?.phoenixDriveActive) {
-        if (!this._phoenixCooldown || this._phoenixCooldown <= 0) {
-          this._phoenixCooldown = this.computed.phoenixDriveCooldown;
-          const p = this.state.player;
-          p.hp = Math.ceil(this.computed.maxHp * 0.25); // revive at 25% HP
-          // Nova damage on revival
-          if (this.computed.phoenixDriveCorona > 0) {
-            const playerPos = this.ship?.group?.position;
-            if (playerPos) {
-              eventBus.emit('trigger:emit_damage', {
-                position: playerPos.clone(),
-                amount: this.computed.phoenixDriveCorona,
-                radius: 8,
-              });
-            }
-          }
-          eventBus.emit(EVENTS.PHOENIX_REVIVED, {});
-          return; // skip death processing
-        }
-      }
-
-      this.setPaused(false);
-      this.audio.stopMusic();
-      this.audio.play('death');
-
-      // Capture run stats before resetting anything
-      const r = this.state.round;
-      this.state.lastRun = {
-        distance: r.distanceTraveled,
-        tier: r.current,
-        enemiesDefeated: r.enemiesDefeated,
-        bossesDefeated: r.bossesDefeated,
-        loot: { ...this.state.roundLoot },
-      };
-
-      // Update warp gate progress
-      if (!this.state.warpGates) this.state.warpGates = { maxTierReached: 0 };
-      if (r.current > this.state.warpGates.maxTierReached) {
-        this.state.warpGates.maxTierReached = r.current;
-      }
-
-      r.phase = 'dead';
-      r.bossIsActive = false;
-
-      // Close tech tree if it was open during combat
-      if (this._techTreeOpen) {
-        this._techTreeOpen = false;
-        this.ui.hide('techTree');
-        if (this.techTreeUI) this.techTreeUI.close();
-      }
-
-      this.round.purgeCombatWorld();
-      this.projectilePool.clear();
-      this.asteroidSystem.clear();
-      this.beamLaser.clear();
-      this.combat.setEnemies(this.round.enemies);
-      this.combat.setLootDrops(this.round.lootDrops);
-      this.ui.hide('hud');
-
-      this.ui.showDeath(
-        this.state.lastRun,
-        () => this._openTechTree(),
-        () => this._showWarpGateAndLaunch()
-      );
-    });
-
-    eventBus.on(EVENTS.ENEMY_DAMAGED, ({ enemy, damage, isCrit }) => {
-      const screen = this.scene.worldToScreen(enemy.group.position);
+    eventBus.on(EVENTS.ENEMY_DAMAGED, ({ entity, damage, isCrit }) => {
+      const t = entity?.get?.('TransformComponent');
+      if (!t) return;
+      const screen = this.scene.worldToScreen(t.position);
       this.damageNumbers.spawn(screen.x, screen.y, damage, isCrit, false);
     });
 
-    eventBus.on(EVENTS.UPGRADE_PURCHASED, () => {
-      this._rebuildComputed();
-    });
-
-    eventBus.on(EVENTS.UPGRADE_SOLD, () => {
-      this._rebuildComputed();
-    });
+    eventBus.on(EVENTS.UPGRADE_PURCHASED, () => this._rebuildComputed());
+    eventBus.on(EVENTS.UPGRADE_SOLD, () => this._rebuildComputed());
 
     eventBus.on(EVENTS.CURRENCY_CHANGED, () => {
       if (this.techTreeUI) this.techTreeUI.updateCurrencyBar(this.state);
     });
   }
 
+  _handlePlayerDied() {
+    const health = this.playerEntity?.get('HealthComponent');
+    if (health && !health.dead) return;
+    if (!this.state) return;
+
+    this.setPaused(false);
+    this.audio.stopMusic();
+    this.audio.play('death');
+
+    const r = this.state.round;
+    this.state.lastRun = {
+      distance: r.distanceTraveled,
+      tier: r.current,
+      enemiesDefeated: r.enemiesDefeated,
+      bossesDefeated: r.bossesDefeated,
+      loot: { ...this.state.roundLoot },
+    };
+
+    if (!this.state.warpGates) this.state.warpGates = { maxTierReached: 0 };
+    if (r.current > this.state.warpGates.maxTierReached) {
+      this.state.warpGates.maxTierReached = r.current;
+    }
+
+    r.phase = 'dead';
+    r.bossIsActive = false;
+
+    if (this._techTreeOpen) {
+      this._techTreeOpen = false;
+      this.ui.hide('techTree');
+      if (this.techTreeUI) this.techTreeUI.close();
+    }
+
+    this.spawnDirector.purgeCombatWorld();
+    for (const e of this.world.query('projectile_player')) e.destroy();
+    for (const e of this.world.query('projectile_enemy')) e.destroy();
+    for (const e of this.world.query('asteroid')) e.destroy();
+
+    this.ui.hide('hud');
+    this.ui.showDeath(
+      this.state.lastRun,
+      () => this._openTechTree(),
+      () => this._showWarpGateAndLaunch()
+    );
+  }
+
   _setupSettingsButton() {
     const btn = document.getElementById('settings-btn');
-    if (btn) {
-      btn.onclick = () => {
-        if (this.settingsUI.isOpen) this.settingsUI.close();
-        else this.settingsUI.open();
-      };
-    }
+    if (btn) btn.onclick = () => {
+      if (this.settingsUI.isOpen) this.settingsUI.close();
+      else this.settingsUI.open();
+    };
     window.addEventListener('keydown', e => {
-      if (e.code === 'Escape' && this.settingsUI.isOpen) {
-        this.settingsUI.close();
-        return;
-      }
-      if (e.code === 'Escape' && this.debugMenu.isOpen) {
-        this.debugMenu.close();
-        return;
-      }
-      if (e.code === 'Escape' && this._paused && this.state) {
-        this.setPaused(false);
-      }
+      if (e.code === 'Escape' && this.settingsUI.isOpen) { this.settingsUI.close(); return; }
+      if (e.code === 'Escape' && this.debugMenu.isOpen) { this.debugMenu.close(); return; }
+      if (e.code === 'Escape' && this._paused && this.state) this.setPaused(false);
     });
   }
 
@@ -268,10 +310,6 @@ class Game {
     return !!(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable));
   }
 
-  /**
-   * @param {boolean} on
-   * @param {{ showPauseOverlay?: boolean }} [options] - If `showPauseOverlay` is false, pause without the full-screen overlay (e.g. debug menu).
-   */
   setPaused(on, options = {}) {
     const want = !!on;
     if (want === this._paused) return;
@@ -280,13 +318,8 @@ class Game {
     const ov = document.getElementById('pause-overlay');
     const showOverlay = options.showPauseOverlay !== false;
     if (want && this.state) {
-      if (showOverlay) {
-        ov?.classList.remove('hidden');
-        ov?.setAttribute('aria-hidden', 'false');
-      } else {
-        ov?.classList.add('hidden');
-        ov?.setAttribute('aria-hidden', 'true');
-      }
+      if (showOverlay) { ov?.classList.remove('hidden'); ov?.setAttribute('aria-hidden', 'false'); }
+      else { ov?.classList.add('hidden'); ov?.setAttribute('aria-hidden', 'true'); }
       this.audio.pauseMusic();
     } else {
       ov?.classList.add('hidden');
@@ -295,19 +328,14 @@ class Game {
     }
   }
 
-  /** @param {{ showPauseOverlay?: boolean }} [options] - Passed through when entering pause; ignored when unpausing. */
   togglePause(options) {
     if (this._paused) this.setPaused(false);
     else this.setPaused(true, options);
   }
 
   _setupPauseControls() {
-    document.getElementById('pause-resume-btn')?.addEventListener('click', () => {
-      this.setPaused(false);
-    });
-    document.getElementById('pause-btn')?.addEventListener('click', () => {
-      this.togglePause();
-    });
+    document.getElementById('pause-resume-btn')?.addEventListener('click', () => this.setPaused(false));
+    document.getElementById('pause-btn')?.addEventListener('click', () => this.togglePause());
     window.addEventListener('keydown', e => {
       if (e.code !== 'KeyP' || e.repeat) return;
       if (this._isTypingTarget(e.target)) return;
@@ -320,8 +348,7 @@ class Game {
   _setupDebugMenuHotkey() {
     window.addEventListener('keydown', e => {
       if (!e.ctrlKey || !e.shiftKey || e.code !== 'KeyD') return;
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (this._isTypingTarget(e.target)) return;
       e.preventDefault();
       this.debugMenu.toggle();
     });
@@ -337,12 +364,10 @@ class Game {
       );
       window.addEventListener('keydown', e => {
         if (!e.ctrlKey || !e.shiftKey || e.code !== 'KeyU') return;
-        const t = e.target;
-        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (this._isTypingTarget(e.target)) return;
         e.preventDefault();
         this.upgradeEditor.toggle();
       });
-      console.log('[UpgradeEditor] Ready — Ctrl+Shift+U to open');
     } catch (err) {
       console.error('[UpgradeEditor] Failed to load:', err);
     }
@@ -356,15 +381,12 @@ class Game {
     }
   }
 
-  /** Debug menu: spawn enemy pack (swarm spawns 3). Combat phase only. */
   _debugSpawnEnemy(typeName) {
     if (!this.state) return;
-    const spawned = this.round.debugSpawn(typeName, this.computed);
+    const spawned = this.spawnDirector?.debugSpawn(typeName);
     if (spawned === null) {
       window.alert('Spawn only works during an active run (combat phase). Launch from the hangar first.');
-      return;
     }
-    this.combat.setEnemies(this.round.enemies);
   }
 
   _debugResetGame() {
@@ -376,33 +398,23 @@ class Game {
     document.getElementById('start-screen')?.classList.add('hidden');
 
     if (this.state) {
-      this.round.purgeCombatWorld();
-      this.projectilePool.clear();
-      this.asteroidSystem.clear();
-      this.beamLaser.clear();
-      this.combat.setEnemies(this.round.enemies);
-      this.combat.setLootDrops(this.round.lootDrops);
+      this.spawnDirector?.purgeCombatWorld();
+      this.world.destroyAll();
+      this.playerEntity = null;
     }
 
     this.saveManager.clearSave();
     this.state = createInitialState();
     this.state.round.phase = 'dead';
     this.techTree = new TechTreeState(this.state.seed);
+    this._initWorldForState();
     this._rebuildComputed();
     this.currency.init(this.state);
 
-    if (this.techTreeUI) {
-      this.techTreeUI.setTree(this.techTree);
-      this.round.init(this.state, this.scene, (round) => this._onRoundStart(round));
-    } else {
-      this._setupTechTreeUI();
-    }
+    if (this.techTreeUI) this.techTreeUI.setTree(this.techTree);
+    else this._setupTechTreeUI();
 
-    this.state.player.hp = this.computed.maxHp;
-    this.state.player.shieldHp = 0;
-    this.ship.setShieldVisible(this.computed.maxShieldHp > 0 && this.state.player.shieldHp > 0);
     this._techTreeOpen = false;
-
     this.ui.hide('hud');
     this.ui.hide('techTree');
     if (this.techTreeUI) this.techTreeUI.close();
@@ -414,41 +426,44 @@ class Game {
     document.getElementById('game-canvas').addEventListener('click', (ev) => {
       if (this._paused) return;
       if (this._tryPriorityFocusClick(ev)) return;
-      this.combat.fireManualGun(this.state, this.computed, this.ship, this.audio);
+      const manual = this.playerEntity?.get('ManualGunComponent');
+      if (manual) { manual.fire(); return; }
+      const rail = this.playerEntity?.get('RailgunComponent');
+      if (rail) rail.beginCharge();
+    });
+
+    document.getElementById('game-canvas').addEventListener('mouseup', () => {
+      this.playerEntity?.get('RailgunComponent')?.releaseCharge();
     });
   }
 
-  /**
-   * Priority Designator: click an enemy to lock auto-targeting until it dies.
-   * @returns {boolean} true if the click was consumed as a focus pick (skip nose cannon).
-   */
   _tryPriorityFocusClick(ev) {
     if (!this.state || this.state.round.phase !== 'combat') return false;
-    if (!this.computed?.manualTargetFocusEnabled) return false;
+    const stats = this.playerEntity?.get('PlayerStatsComponent');
+    if (!stats?.manualTargetFocusEnabled) return false;
 
     const canvas = document.getElementById('game-canvas');
     const rect = canvas.getBoundingClientRect();
-    const rw = rect.width;
-    const rh = rect.height;
-    if (rw <= 0 || rh <= 0) return false;
+    if (rect.width <= 0 || rect.height <= 0) return false;
 
-    this._focusPickNdc.x = ((ev.clientX - rect.left) / rw) * 2 - 1;
-    this._focusPickNdc.y = -((ev.clientY - rect.top) / rh) * 2 + 1;
+    this._focusPickNdc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    this._focusPickNdc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
     this._focusPickRaycaster.setFromCamera(this._focusPickNdc, this.scene.camera);
 
-    const enemies = this.round.enemies;
+    const enemies = Array.from(this.world.query('enemy'));
     const roots = [];
+    const map = new Map();
     for (const e of enemies) {
-      if (e.active) roots.push(e.group);
+      const vis = e.get('EnemyVisualsComponent');
+      if (vis?.group) { roots.push(vis.group); map.set(vis.group, e); }
     }
-    if (roots.length === 0) return false;
-
+    if (!roots.length) return false;
     const hits = this._focusPickRaycaster.intersectObjects(roots, true);
-    if (hits.length === 0) return false;
+    if (!hits.length) return false;
 
     let o = hits[0].object;
     while (o) {
-      const picked = enemies.find(en => en.active && en.group === o);
+      const picked = map.get(o);
       if (picked) {
         this.state.round.manualFocusEnemyId = picked.id;
         return true;
@@ -462,62 +477,56 @@ class Game {
     window.addEventListener('keydown', e => {
       if (e.code !== 'Space') return;
       if (this._paused) return;
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (this._isTypingTarget(e.target)) return;
       e.preventDefault();
-      this.combat.fireManualGun(this.state, this.computed, this.ship, this.audio);
+      this.playerEntity?.get('ManualGunComponent')?.fire();
     });
   }
 
   _setupAbilityKeys() {
+    const ABILITY_ORDER = [
+      'SpeedBoostComponent', 'EmpAbilityComponent', 'WarpDriveComponent',
+      'GravityBombComponent', 'DecoyAbilityComponent',
+    ];
     window.addEventListener('keydown', e => {
       if (this._paused) return;
       if (!this.state || this.state.round.phase !== 'combat') return;
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      const slot = parseInt(e.key, 10) - 1; // '1'→0, '2'→1, etc.
-      if (slot >= 0 && slot <= 3) {
-        this.ability.activate(slot, this.state, this.computed, this.combat, this.ship);
-      }
+      if (this._isTypingTarget(e.target)) return;
+      const slot = parseInt(e.key, 10) - 1;
+      if (slot < 0 || slot > 3) return;
+      const active = ABILITY_ORDER
+        .map(name => this.playerEntity?.get(name))
+        .filter(Boolean);
+      active[slot]?.trigger(this.world.ctx);
     });
   }
 
   async start() {
-    // Show start screen first
     this.ui.showStart(() => {
       this.audio.init();
       this._loadOrNewGame();
     });
-
-    // Start render loop immediately (shows scene behind start screen)
     this.loop.onUpdate(delta => this._tick(delta));
     this.loop.start();
   }
 
   _loadOrNewGame() {
     const saved = this.saveManager.load();
-
     if (saved) {
       this.state = saved;
-      this.state._computed = null; // will be recomputed
-
-      // Restore tech tree
       this.techTree = new TechTreeState(this.state.seed);
       this.techTree.loadFromSave(
         saved.techTree?.unlockedNodes || {},
         saved.techTree?.generatedTiers || 0
       );
-
+      this._initWorldForState();
       this._rebuildComputed();
       this._setupTechTreeUI();
 
-      // Offline earnings
       const offline = this.saveManager.calculateOfflineEarnings(
         saved.lastActiveTime,
         this.computed.stellarDustRate
       );
-
-      // Always land in the hangar/dead state after loading
       this.state.round.phase = 'dead';
 
       this.ui.showWelcome(offline, () => {
@@ -533,7 +542,6 @@ class Game {
     } else {
       this._newGame();
     }
-
     this.state.lastActiveTime = Date.now();
   }
 
@@ -541,24 +549,40 @@ class Game {
     this.state = createInitialState();
     this.state.round.phase = 'dead';
     this.techTree = new TechTreeState(this.state.seed);
+    this._initWorldForState();
     this._rebuildComputed();
     this._setupTechTreeUI();
-    // Show hangar screen — no run stats yet
     this.ui.showDeath(null, () => this._openTechTree(), () => this._showWarpGateAndLaunch());
+  }
+
+  _initWorldForState() {
+    this.playerEntity = createPlayer({ settings: this.settings });
+    this.world.setContext({
+      state: this.state,
+      playerEntity: this.playerEntity,
+      spawnLoot: (pos, currency, amount) => this.spawnDirector?.spawnLootAt(pos, currency, amount),
+      camera: this.camera,
+    });
+    this.world.spawn(this.playerEntity);
+
+    this.spawnDirector = new SpawnDirector({
+      world: this.world, state: this.state, currency: this.currency,
+    });
+    this.spawnDirector.init();
+
+    this.upgradeApplier = new UpgradeApplier({
+      world: this.world, state: this.state, playerEntity: this.playerEntity,
+    });
   }
 
   _setupTechTreeUI() {
     this.currency.init(this.state);
     this.techTreeUI = new TechTreeUI(this.techTree, this.currency, this.audio);
-
     this.ui.bindTechTreeButtons(
       () => this._openTechTree(),
       () => this._closeTechTree()
     );
-
     this.ui.bindMuteButton(this.audio, this.settings);
-
-    this.round.init(this.state, this.scene, (round) => this._onRoundStart(round));
   }
 
   _combatMusicKey() {
@@ -566,19 +590,28 @@ class Game {
   }
 
   _rebuildComputed() {
-    this.computed = this.upgrade.compute(this.state, this.techTree);
+    if (!this.upgradeApplier) return;
+    this.computed = this.upgradeApplier.apply(this.techTree);
     this.state._computed = this.computed;
-    // Ensure current stats don't exceed new maxes
+
     const p = this.state.player;
-    p.hp = Math.min(p.hp, this.computed.maxHp);
-    p.shieldHp = Math.min(p.shieldHp, this.computed.maxShieldHp);
-    if (p.energy !== undefined) p.energy = Math.min(p.energy, this.computed.maxEnergy);
-    this.ship.setShieldVisible(this.computed.maxShieldHp > 0 && p.shieldHp > 0);
-    const autoExtras = this.computed.hasAutoFire ? (this.computed.extraWeapons || []) : [];
-    this.ship.syncTurrets(autoExtras);
-    this.ship.syncVisualModifiers(this.computed.visualModifiers || []);
-    this.projectilePool.applyProjectileVisual(this.computed.projectileVisuals || new Map());
-    this.ability.syncAbilities(this.computed);
+    const health = this.playerEntity.get('HealthComponent');
+    const shield = this.playerEntity.get('ShieldComponent');
+    const energy = this.playerEntity.get('EnergyComponent');
+    if (health) {
+      health.hp = Math.min(p.hp ?? health.maxHp, health.maxHp);
+      p.hp = health.hp;
+      p.maxHp = health.maxHp;
+    }
+    if (shield) {
+      shield.hp = Math.min(p.shieldHp ?? 0, shield.maxHp);
+      p.shieldHp = shield.hp;
+    }
+    if (energy) {
+      energy.current = Math.min(p.energy ?? energy.max, energy.max);
+      p.energy = energy.current;
+    }
+
     eventBus.emit(EVENTS.STATS_UPDATED, this.computed);
   }
 
@@ -588,10 +621,7 @@ class Game {
     this.ui.hide('death');
     this.ui.show('techTree');
     this.techTreeUI.open(this.state, this.computed);
-    // Only switch to tech-tree music if not actively in combat
-    if (this.state.round.phase !== 'combat') {
-      this.audio.playMusic('tech-tree');
-    }
+    if (this.state.round.phase !== 'combat') this.audio.playMusic('tech-tree');
   }
 
   _closeTechTree() {
@@ -604,7 +634,6 @@ class Game {
       this._prevBossMusicActive = !!this.state.round.bossIsActive;
       this.audio.playMusic(this._combatMusicKey());
     } else {
-      // Back to the hangar / death screen
       this.ui.showDeath(
         this.state.lastRun,
         () => this._openTechTree(),
@@ -613,7 +642,6 @@ class Game {
     }
   }
 
-  /** Returns unlocked warp gates as [{gateNum, tier}], empty if none. */
   _getUnlockedGates() {
     const maxTier = this.state.warpGates?.maxTierReached || 0;
     const count = Math.floor(maxTier / WARP.GATE_TIER_INTERVAL);
@@ -624,17 +652,11 @@ class Game {
     return gates;
   }
 
-  /** Show warp gate selection if any are unlocked, otherwise launch immediately. */
   _showWarpGateAndLaunch() {
     const gates = this._getUnlockedGates();
-    if (gates.length === 0) {
-      this._startNewRun(1);
-      return;
-    }
+    if (!gates.length) { this._startNewRun(1); return; }
     this.ui.hide('death');
-    this.ui.showWarpGateSelect(gates, (startTier) => {
-      this._startNewRun(startTier);
-    });
+    this.ui.showWarpGateSelect(gates, (startTier) => this._startNewRun(startTier));
   }
 
   _startNewRun(startTier = 1) {
@@ -646,9 +668,7 @@ class Game {
     this.ui.show('hud');
     this.audio.play('launch');
 
-    // Reset per-run stats
     const r = this.state.round;
-    // Apply interest before resetting currencies
     if (this.computed.interestRate > 0) {
       const interest = Math.floor(this.state.currencies.scrapMetal * this.computed.interestRate);
       if (interest > 0) this.currency.add('scrapMetal', interest);
@@ -658,34 +678,28 @@ class Game {
     r.distanceTraveled = startDist;
     r.current = startTier;
     r.enemiesDefeated = 0;
-    // Pre-set bossesDefeated so first boss spawns soon after arrival, not immediately
     r.bossesDefeated = Math.floor(startDist / RUN.BOSS_DISTANCE_INTERVAL);
     r.bossIsActive = false;
     r.killsThisRun = 0;
     this.state.roundLoot = {};
 
-    // Repair the ship and restore energy
-    this.state.player.hp = this.computed.maxHp;
-    this.state.player.shieldHp = 0;
-    this.state.player.energy = this.computed.maxEnergy;
-    this._phoenixCooldown = 0;
+    const health = this.playerEntity.get('HealthComponent');
+    const shield = this.playerEntity.get('ShieldComponent');
+    const energy = this.playerEntity.get('EnergyComponent');
+    if (health) { health.hp = health.maxHp; health.dead = false; }
+    if (shield) shield.hp = 0;
+    if (energy) energy.current = energy.max;
 
-    // Clear any leftover combat entities
-    this.round.purgeCombatWorld();
-    this.projectilePool.clear();
-    this.asteroidSystem.clear();
-    this.beamLaser.clear();
+    this.spawnDirector.purgeCombatWorld();
+    for (const e of this.world.query('projectile_player')) e.destroy();
+    for (const e of this.world.query('projectile_enemy')) e.destroy();
+    for (const e of this.world.query('asteroid')) e.destroy();
 
-    this.round.startRound(); // sets phase = 'combat'
-    this.combat.setEnemies(this.round.enemies);
-    this.combat.setLootDrops(this.round.lootDrops);
+    this.spawnDirector.startRound();
+    this.hud.show();
 
     this._prevBossMusicActive = !!r.bossIsActive;
     this.audio.playMusic(this._combatMusicKey());
-  }
-
-  _onRoundStart(round) {
-    this.hud.show();
   }
 
   _captureVisualDefaults() {
@@ -740,12 +754,8 @@ class Game {
     sm.renderer.toneMappingExposure = d.toneMappingExposure;
   }
 
-  /** @param {import('three').Color} color */
-  _hexFromColor(color) {
-    return `0x${color.getHexString()}`;
-  }
+  _hexFromColor(color) { return `0x${color.getHexString()}`; }
 
-  /** Live visual values (debug sliders + scene) for export / AI handoff. */
   getVisualSettingsSnapshot() {
     const pp = this._postPasses;
     const sm = this.scene;
@@ -753,18 +763,12 @@ class Game {
     const cg = pp.colorGrade.uniforms;
     const sh = cg.shadowColor.value;
     const hi = cg.highlightColor.value;
-
     return {
       game: 'Infinite Aliens',
       exportedAt: new Date().toISOString(),
-      BLOOM: {
-        STRENGTH: pp.bloom.strength,
-        RADIUS: pp.bloom.radius,
-        THRESHOLD: pp.bloom.threshold,
-      },
+      BLOOM: { STRENGTH: pp.bloom.strength, RADIUS: pp.bloom.radius, THRESHOLD: pp.bloom.threshold },
       SCENE: {
-        FOG_NEAR: fog.near,
-        FOG_FAR: fog.far,
+        FOG_NEAR: fog.near, FOG_FAR: fog.far,
         FOG_COLOR: this._hexFromColor(fog.color),
         AMBIENT_COLOR: this._hexFromColor(sm.ambientLight.color),
         AMBIENT_INTENSITY: sm.ambientLight.intensity,
@@ -790,169 +794,130 @@ class Game {
     };
   }
 
-  _buildVisualSettingsExportText() {
-    const snapshot = this.getVisualSettingsSnapshot();
-    const json = JSON.stringify(snapshot, null, 2);
-    return `${[
-      '=== INSTRUCTIONS (give this whole block to an AI or developer) ===',
-      '',
-      'Save the JSON below as the new default look for Infinite Aliens. Apply it like this:',
-      '',
-      '1. src/constants.js — Replace the `BLOOM` object with the JSON `BLOOM` (numeric fields as-is).',
-      '2. src/constants.js — Replace the `SCENE` object: copy FOG_NEAR, FOG_FAR, AMBIENT_INTENSITY, DIR_INTENSITY. For each *COLOR field, use a JavaScript hex literal, e.g. FOG_COLOR: 0x000011 (parse the string from JSON if needed).',
-      '3. src/scene/SceneManager.js — In _setupRenderer(), set `this.renderer.toneMappingExposure` to SCENE_MANAGER.toneMappingExposure.',
-      '4. src/scene/SceneManager.js — In _setupFog(), set `this.scene.background` to `new THREE.Color(<backgroundColor hex literal>)` matching SCENE_MANAGER.backgroundColor.',
-      '5. src/scene/SceneManager.js — In _setupLighting(), the fill DirectionalLight: first arg = fillLightColor hex literal, second = SCENE_MANAGER.fillLightIntensity.',
-      '6. src/scene/ShaderPasses.js — Set each shader export’s default `uniforms.*.value` to match POST_SHADER_DEFAULTS (shadowColor/highlightColor as `{ x, y, z }` vec3 objects).',
-      '7. src/scene/PostProcessing.js — Bloom pass constructor already uses `BLOOM` from constants after you edit constants.',
-      '8. src/main.js — Update `_captureVisualDefaults()` so its returned object matches the new defaults (BLOOM/SCENE imports for fog and main lights; same numeric values as POST_SHADER_DEFAULTS and SCENE_MANAGER for exposure, background hex, fill intensity, etc.) so debug "RESET VISUALS" stays correct.',
-      '',
-      'After edits, reload the game and use debug Reset Visuals to confirm.',
-      '',
-      '=== JSON ===',
-      '',
-    ].join('\n')}${json}\n`;
-  }
-
   async copyVisualSettingsToClipboard() {
-    const text = this._buildVisualSettingsExportText();
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (_) {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        return ok;
-      } catch (e2) {
-        return false;
-      }
-    }
+    const snapshot = this.getVisualSettingsSnapshot();
+    const text = JSON.stringify(snapshot, null, 2);
+    try { await navigator.clipboard.writeText(text); return true; }
+    catch (_) { return false; }
   }
 
   _worldMotionScale() {
     if (!this.state || this.state.round.phase !== 'combat') return 1;
+    const stats = this.playerEntity?.get('PlayerStatsComponent');
+    const base = PLAYER.BASE_SPEED;
+    let speed = stats?.speed ?? base;
+    for (const b of (stats?.activeBoosts || [])) {
+      if (b.stat === 'speed') speed *= b.multiplier;
+    }
+    return speed / base;
+  }
+
+  _syncStateFromPlayer() {
+    if (!this.playerEntity || !this.state) return;
     const p = this.state.player;
-    const boostMult = (p._speedBoostTimer > 0 && p._speedBoostMult > 1) ? p._speedBoostMult : 1;
-    return ((this.computed?.speed ?? PLAYER.BASE_SPEED) * boostMult) / PLAYER.BASE_SPEED;
+    const h = this.playerEntity.get('HealthComponent');
+    const s = this.playerEntity.get('ShieldComponent');
+    const e = this.playerEntity.get('EnergyComponent');
+    if (h) { p.hp = h.hp; p.maxHp = h.maxHp; }
+    if (s) p.shieldHp = s.hp;
+    if (e) p.energy = e.current;
   }
 
   _tick(delta) {
+    // Raw, uncapped gap between this tick and the previous one. The GameLoop
+    // clamps `delta` at 100 ms, so a multi-second browser/GC stall looks like
+    // a single 100 ms frame in the fps average. This raw measurement surfaces
+    // those hitches in the perf overlay.
+    const nowMs = performance.now();
+    const rawGapMs = this._lastTickMs != null ? nowMs - this._lastTickMs : 0;
+    this._lastTickMs = nowMs;
+
     const dt = this._paused ? 0 : delta;
 
-    if (!this.state) {
-      // Just render the scene (start screen visible)
+    // Feed perf metrics + adaptive quality with the real (unpaused) delta so
+    // pausing the game doesn't trick the tier selector. Work time (CPU spent
+    // inside _tick) is measured from the end of the *previous* tick, so the
+    // value we pass here is for the frame that just ran.
+    const prevWorkMs = this._lastWorkMs ?? 0;
+    this.perfOverlay.tick(delta, rawGapMs, prevWorkMs);
+    this.qualityController.tick(delta);
+
+    if (!this.state || !this.playerEntity) {
       this.starfield.update(dt, 1);
       this.synthGrid.update(dt, 1);
       this.camera.update(dt);
-      this.ship.update(dt, null);
-      this.ship.syncAttachments(null, dt);
       this._updateShaders(dt);
+      this.projectileRenderer.flush();
       this.scene.render();
+      this._lastWorkMs = performance.now() - nowMs;
       return;
     }
 
     const phase = this.state.round.phase;
     const worldSpeed = this._worldMotionScale();
 
-    // ---- Speed Boost ability tick ----
-    const p = this.state?.player;
-    if (p && p._speedBoostTimer > 0) {
-      p._speedBoostTimer = Math.max(0, p._speedBoostTimer - dt);
-    }
+    // Break `_tick` into labeled sections so the perf overlay can attribute
+    // hitches. `_mark` is a cheap no-op when profiling is off.
+    const mark = this._perfLogEnabled ? this._profMark.bind(this) : NOOP_MARK;
+    mark('start');
 
-    // ---- Phoenix Drive cooldown tick ----
-    if (this._phoenixCooldown > 0) {
-      this._phoenixCooldown = Math.max(0, this._phoenixCooldown - dt);
-    }
-
-    // Always update ship visuals
-    this.ship.update(dt, this.computed, phase);
-    this.ship.syncAttachments(this.computed?.attachments, dt);
-    this.upgrade.tickTriggers(dt);
-    this.starfield.update(dt, worldSpeed);
-    this.synthGrid.update(dt, worldSpeed);
-    this.camera.update(dt);
-
-    // Update post-processing uniforms
-    this._updateShaders(dt);
+    this.upgradeApplier?.tick(dt);                     mark('upgrade');
+    this.starfield.update(dt, worldSpeed);             mark('starfield');
+    this.synthGrid.update(dt, worldSpeed);             mark('synthgrid');
+    this.camera.update(dt);                            mark('camera');
+    this._updateShaders(dt);                           mark('shaders');
 
     if (phase === 'combat') {
-      this.round.update(dt, this.computed);
-      this.combat.setEnemies(this.round.enemies);
-      this.combat.setLootDrops(this.round.lootDrops);
+      this.spawnDirector.update(dt);                   mark('spawn');
 
       const bossNow = !!this.state.round.bossIsActive;
       if (bossNow !== this._prevBossMusicActive) {
         this._prevBossMusicActive = bossNow;
         this.audio.playMusic(this._combatMusicKey());
       }
-
-      // Active abilities
-      this.ability.update(dt);
-      this.ability.tickHud();
-
-      // Auto-attack + collision
-      this.combat.update(dt, this.state, this.computed, this.ship, this.audio);
-
-      // Asteroids
-      this.asteroidSystem.update(dt, this.projectilePool.active, this.round.enemies, worldSpeed);
-
-      // Beam laser turret
-      const beamEquipped =
-        !!this.computed.hasAutoFire && (this.computed.extraWeapons?.includes('beam') ?? false);
-      this.beamLaser.update(dt, beamEquipped, this.ship, this.round.enemies, this.computed, this.state.round);
-
-      // Regen
-      this.upgrade.applyRegen(dt, this.state, this.computed);
-
-      // Sync shield visual
-      this.ship.setShieldVisible(
-        this.computed.maxShieldHp > 0 && this.state.player.shieldHp > 0
-      );
-
-      // HUD update
-      this.hud.update(this.state, this.computed, this.combat.getHeatState());
     }
 
-    // Projectile updates always
-    this.projectilePool.update(dt);
-
-    // Tech tree UI tick (animation) — runs whenever the panel is open
-    if (this.techTreeUI && this._techTreeOpen) {
-      this.techTreeUI.tick(dt);
+    this.world.update(dt);                             mark('world');
+    if (phase === 'combat') {
+      this.collision.update();                         mark('collision');
     }
 
-    // Save
-    if (this.techTree) {
-      this.saveManager.update(dt, this.state, this.techTree);
+    this._syncStateFromPlayer();                       mark('sync');
+
+    if (phase === 'combat') {
+      const manual = this.playerEntity.get('ManualGunComponent');
+      this.hud.update(this.state, this.computed, manual?.getHeatState?.() ?? null);
+      mark('hud');
     }
 
-    // Render
-    this.scene.render();
+    if (this.techTreeUI && this._techTreeOpen) this.techTreeUI.tick(dt);
+
+    if (this.techTree) this.saveManager.update(dt, this.state, this.techTree);
+    mark('save');
+
+    this.projectileRenderer.flush();                   mark('projFlush');
+
+    // Disable auto-reset so renderer.info accumulates across all composer
+    // passes. Lets us see the real total draw count (not just the last
+    // fullscreen pass, which is always "1 draw / 1 triangle").
+    const ri = this.scene.renderer.info;
+    ri.autoReset = false;
+    ri.reset();
+    this.scene.render();                               mark('render');
+
+    this._lastWorkMs = performance.now() - nowMs;
+    if (this._perfLogEnabled) this._profFlush();
   }
 
   _updateShaders(delta) {
     this._grainTime += delta;
     const composer = this._composer;
     if (!composer) return;
-
-    // Update grain pass time uniform
     for (const pass of composer.passes) {
-      if (pass.uniforms?.time) {
-        pass.uniforms.time.value = this._grainTime;
-      }
+      if (pass.uniforms?.time) pass.uniforms.time.value = this._grainTime;
     }
   }
 }
 
-// Boot
 const game = new Game();
 game.start();
