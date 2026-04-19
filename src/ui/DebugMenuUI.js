@@ -425,9 +425,27 @@ export class DebugMenuUI {
       ? 'POST-PROCESSING: ON'
       : 'POST-PROCESSING: OFF';
     ppRow.appendChild(ppBtn);
+
+    const logBtn = document.createElement('button');
+    logBtn.className = 'neon-btn small';
+    const syncLogBtn = () => {
+      logBtn.textContent = g._perfLogEnabled
+        ? 'PERF LOGGING: ON'
+        : 'PERF LOGGING: OFF';
+    };
+    logBtn.addEventListener('click', () => {
+      g.setPerfLogEnabled(!g._perfLogEnabled);
+      syncLogBtn();
+    });
+    syncLogBtn();
+    ppRow.appendChild(logBtn);
+
     sec.appendChild(ppRow);
 
-    this._visualSyncers.push(() => this._syncQualityButtons());
+    this._visualSyncers.push(() => {
+      this._syncQualityButtons();
+      syncLogBtn();
+    });
     wrap.appendChild(sec);
   }
 

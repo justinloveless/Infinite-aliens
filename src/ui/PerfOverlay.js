@@ -43,6 +43,10 @@ export class PerfOverlay {
     this._peakGapMs = 0;
     this._peakGapAgeSec = 0;
 
+    // Diagnostic hitch logging. Off by default; toggled from the Debug Menu.
+    this._loggingEnabled = false;
+    this._lastHitchLog = 0;
+
     this._host = this._buildDom();
     this._updateVisibility();
   }
@@ -90,6 +94,10 @@ export class PerfOverlay {
     this._detailsEl.classList.toggle('hidden', !this._detailed);
   }
 
+  /** Enable/disable the console hitch log. Off by default. */
+  setLoggingEnabled(on) { this._loggingEnabled = !!on; }
+  get loggingEnabled() { return this._loggingEnabled; }
+
   _updateVisibility() {
     this._host.classList.toggle('hidden', !this._visible);
     this._host.setAttribute('aria-hidden', this._visible ? 'false' : 'true');
@@ -129,8 +137,8 @@ export class PerfOverlay {
 
       // Log significant hitches to the console with whatever context we can
       // pull together (entity count, draw calls). Rate-limited so a sustained
-      // stall doesn't spam.
-      if (rawGapMs > 100) {
+      // stall doesn't spam. Gated behind a debug-menu toggle.
+      if (this._loggingEnabled && rawGapMs > 100) {
         const now = performance.now();
         if (!this._lastHitchLog || now - this._lastHitchLog > 500) {
           this._lastHitchLog = now;

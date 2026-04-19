@@ -48,10 +48,10 @@ class Game {
     this.settings = new SettingsManager();
     this.audio = new AudioManager();
 
-    // Per-section tick profiler. Enable with Shift+F3; logs a breakdown
-    // whenever a frame's measured work exceeds 50 ms so we can see which
-    // phase (spawn / world / collision / render / ...) caused a hitch.
-    this._profilerEnabled = true;
+    // Toggles diagnostic perf logging: per-section tick breakdowns on hitches
+    // (>50 ms), the hitch line from PerfOverlay, and the one-time GPU info
+    // line. Off by default; flip it via the Debug Menu or Shift+F3.
+    this._perfLogEnabled = false;
     this._profMarks = null;
 
     this.scene = new SceneManager();
@@ -98,7 +98,7 @@ class Game {
       getFps: () => this.perfOverlay.getStats().fps,
     });
     this._applySettingsToPerf();
-    this._logGpuInfo();
+    this.perfOverlay.setLoggingEnabled(this._perfLogEnabled);
 
     this.ui = new UIManager();
     this.hud = new HUD();
@@ -159,13 +159,12 @@ class Game {
       const next = !this.settings.showFps;
       this.settings.setShowFps(next);
     });
-    // Shift+F3: toggle per-section profiler. Logs a breakdown on hitches.
+    // Shift+F3: toggle diagnostic perf logging (hitch lines + section breakdowns).
     window.addEventListener('keydown', e => {
       if (e.code !== 'F3' || !e.shiftKey || e.repeat) return;
       if (this._isTypingTarget(e.target)) return;
       e.preventDefault();
-      this._profilerEnabled = !this._profilerEnabled;
-      console.log(`[perf] profiler ${this._profilerEnabled ? 'ON' : 'OFF'} (log hitches >50ms)`);
+      this.setPerfLogEnabled(!this._perfLogEnabled);
     });
     // Alt+F3: toggle full composer bypass. Runs plain renderer.render().
     window.addEventListener('keydown', e => {
@@ -188,6 +187,7 @@ class Game {
   _profFlush() {
     const marks = this._profMarks;
     if (!marks || marks.length < 2) { if (marks) marks.length = 0; return; }
+    if (!this._perfLogEnabled) { marks.length = 0; return; }
     const total = marks[marks.length - 1][1] - marks[0][1];
     if (total >= 50) {
       const parts = [];
@@ -202,7 +202,21 @@ class Game {
     marks.length = 0;
   }
 
-  /** Log WebGL renderer/vendor once at startup so we can confirm GPU accel. */
+  /** Toggles all diagnostic perf logging in one place. */
+  setPerfLogEnabled(on) {
+    const next = !!on;
+    if (next === this._perfLogEnabled) return;
+    this._perfLogEnabled = next;
+    this.perfOverlay.setLoggingEnabled(next);
+    if (next) {
+      console.log(`[perf] logging ON (hitches >100ms + section breakdowns >50ms)`);
+      this._logGpuInfo();
+    } else {
+      console.log(`[perf] logging OFF`);
+    }
+  }
+
+  /** Log WebGL renderer/vendor so we can confirm GPU accel. */
   _logGpuInfo() {
     try {
       const gl = this.scene.renderer.getContext();
@@ -844,7 +858,7 @@ class Game {
 
     // Break `_tick` into labeled sections so the perf overlay can attribute
     // hitches. `_mark` is a cheap no-op when profiling is off.
-    const mark = this._profilerEnabled ? this._profMark.bind(this) : NOOP_MARK;
+    const mark = this._perfLogEnabled ? this._profMark.bind(this) : NOOP_MARK;
     mark('start');
 
     this.upgradeApplier?.tick(dt);                     mark('upgrade');
@@ -892,7 +906,7 @@ class Game {
     this.scene.render();                               mark('render');
 
     this._lastWorkMs = performance.now() - nowMs;
-    if (this._profilerEnabled) this._profFlush();
+    if (this._perfLogEnabled) this._profFlush();
   }
 
   _updateShaders(delta) {
