@@ -1,0 +1,61 @@
+{
+  "slots": [
+    {
+      "id": "weapon_mid",
+      "type": "weapon",
+      "shape": "box",
+      "size": 0.5,
+      "position": [0, 0.0, -1.1],
+      "unlockCondition": "always",
+      "label": "SIEGE CANNON",
+      "description": "Heavy-bore primary mount along the hull's prow.",
+      "panel": { "anchor": "top", "offsetX": 0, "offsetY": 10 }
+    },
+    {
+      "id": "defense_core",
+      "type": "defense",
+      "shape": "circle",
+      "size": 0.5,
+      "position": [0, -0.4, 0.0],
+      "unlockCost": { "credits": 250 },
+      "label": "CORE",
+      "description": "Reinforced belly plating socket.",
+      "panel": { "anchor": "bottom-left", "offsetX": 10, "offsetY": 10 }
+    },
+    {
+      "id": "defense_hull",
+      "type": "defense",
+      "shape": "circle",
+      "size": 0.42,
+      "position": [0, 0.45, 0.5],
+      "unlockCost": { "credits": 600 },
+      "label": "DORSAL ARMOR",
+      "description": "Top-mounted armor / shield emitter.",
+      "panel": { "anchor": "bottom-right", "offsetX": 10, "offsetY": 10 }
+    },
+    {
+      "id": "defense_flank",
+      "type": "defense",
+      "shape": "box",
+      "size": 0.38,
+      "position": [1.05, 0.0, 0.3],
+      "unlockCost": { "credits": 800 },
+      "label": "FLANK PLATE",
+      "description": "Starboard flank armor plating.",
+      "panel": { "anchor": "right", "offsetX": 10, "offsetY": 0 }
+    },
+    {
+      "id": "utility_aux",
+      "type": "utility",
+      "shape": "circle",
+      "size": 0.38,
+      "position": [-1.05, 0.0, 0.3],
+      "unlockCost": { "credits": 500 },
+      "label": "PORT AUX",
+      "description": "Port utility socket — magnets, generators, drones.",
+      "panel": { "anchor": "left", "offsetX": 10, "offsetY": 0 }
+    }
+  ],
+  "defaultUnlockedSlots": ["weapon_mid"],
+  "defaultLoadout": { "weapon_mid": "main_cannon" }
+}

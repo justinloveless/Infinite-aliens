@@ -1,5 +1,6 @@
 import { PLAYER, ENERGY } from '../constants.js';
 import { eventBus, EVENTS } from '../core/EventBus.js';
+import { buildHangarUnlockedNodes, getWeaponSlotAssignments } from '../hangar/HangarSystem.js';
 
 import { PlayerStatsComponent } from '../components/player/PlayerStatsComponent.js';
 import { HealthComponent } from '../components/health/HealthComponent.js';
@@ -72,10 +73,41 @@ export class UpgradeApplier {
     this._syncPlayerStats(stats);
     this._syncDependentComponents(stats);
     this._unregisterTriggers();
-    const unlocked = techTreeState ? techTreeState.getVisibleNodes().filter(n => n.isUnlocked) : [];
+    const unlocked = this._gatherAllUnlocked(techTreeState);
     this._registerTriggers(unlocked, stats);
     this._lastStats = stats;
     return stats;
+  }
+
+  /**
+   * Build the full unlocked-node list from all three sources:
+   *   1. Installed items (state.ship.slots)
+   *   2. Research purchases (state.ship.research)
+   *   3. Legacy tech tree unlocks
+   * Hangar nodes come first so the tech tree ones dedupe against them.
+   */
+  _gatherAllUnlocked(techTreeState) {
+    const hangar = buildHangarUnlockedNodes(this.state);
+    const seen = new Set(hangar.map(n => n.id));
+    const tree = techTreeState ? techTreeState.getVisibleNodes().filter(n => n.isUnlocked) : [];
+    for (const n of tree) {
+      if (!seen.has(n.templateId || n.id)) {
+        hangar.push(n);
+        seen.add(n.templateId || n.id);
+      }
+    }
+    return hangar;
+  }
+
+  /** Dry-run: compute stats for an arbitrary candidate ship state (for hangar previews). */
+  preview(techTreeState, candidateShipState) {
+    const originalShip = this.state.ship;
+    this.state.ship = candidateShipState;
+    try {
+      return this._buildStats(techTreeState);
+    } finally {
+      this.state.ship = originalShip;
+    }
   }
 
   /** Decrement trigger cooldowns + decay active boosts each frame. */
@@ -116,7 +148,7 @@ export class UpgradeApplier {
       activeBoosts: [],
       enemyModifiers: makeEnemyModifiers(),
       roundModifiers: { spawnInterval: 1, maxConcurrent: 1 },
-      lootRates: { scrapMetal: 1, plasmaCrystals: 1, bioEssence: 1, darkMatter: 1, stellarDust: 1 },
+      lootRates: { credits: 1, scrapMetal: 1, plasmaCrystals: 1, bioEssence: 1, darkMatter: 1, stellarDust: 1 },
       visualModifiers: [],
       attachments: [],
       projectileVisuals: new Map(),
@@ -161,12 +193,12 @@ export class UpgradeApplier {
       __pendingComponentOps: [], // new grammar ops captured here
     };
 
-    if (!techTreeState) {
+    const unlocked = this._gatherAllUnlocked(techTreeState);
+
+    if (!unlocked.length) {
       stats.projectileCount = clampOdd(stats.projectileCount);
       return stats;
     }
-
-    const unlocked = techTreeState.getVisibleNodes().filter(n => n.isUnlocked);
 
     for (const node of unlocked) {
       for (const effect of node.effects) {
@@ -241,6 +273,8 @@ export class UpgradeApplier {
     if (stats.momentumEngineActive) {
       stats.stellarDustRate *= stats.speed / PLAYER.BASE_SPEED;
     }
+
+    stats.weaponSlotByFireType = getWeaponSlotAssignments(this.state);
 
     return stats;
   }
@@ -389,6 +423,7 @@ export class UpgradeApplier {
       psc.visualModifiers = stats.visualModifiers;
       psc.attachments = stats.attachments;
       psc.manualTargetFocusEnabled = stats.manualTargetFocusEnabled;
+      psc.weaponSlotByFireType = stats.weaponSlotByFireType;
     }
 
     const health = p.get('HealthComponent');
@@ -416,6 +451,7 @@ export class UpgradeApplier {
     if (visuals) {
       visuals.syncVisualModifiers(stats.visualModifiers);
       visuals.syncAttachments(stats.attachments);
+      visuals.resyncWeaponTurretParents();
     }
   }
 

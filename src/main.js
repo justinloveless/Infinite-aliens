@@ -32,6 +32,9 @@ import { HUD } from './ui/HUD.js';
 import { TechTreeUI } from './ui/TechTreeUI.js';
 import { RoundTransition } from './ui/RoundTransition.js';
 import { DamageNumbers } from './ui/DamageNumbers.js';
+import { HangarUI } from './ui/HangarUI.js';
+import { StoreUI } from './ui/StoreUI.js';
+import { ResearchUI } from './ui/ResearchUI.js';
 import { BLOOM, PLAYER, RUN, SCENE, WARP } from './constants.js';
 import * as THREE from 'three';
 
@@ -115,6 +118,9 @@ class Game {
     this._prevBossMusicActive = false;
     this._paused = false;
     this._techTreeOpen = false;
+    this.hangarUI = null;
+    this.storeUI = null;
+    this.researchUI = null;
     this.upgradeEditor = null;
 
     this._focusPickRaycaster = new THREE.Raycaster();
@@ -240,23 +246,59 @@ class Game {
       this.damageNumbers.spawn(screen.x, screen.y, damage, isCrit, false);
     });
 
-    eventBus.on(EVENTS.UPGRADE_PURCHASED, () => this._rebuildComputed());
-    eventBus.on(EVENTS.UPGRADE_SOLD, () => this._rebuildComputed());
+    eventBus.on(EVENTS.UPGRADE_PURCHASED, () => { this._rebuildComputed(); this._saveNow(); });
+    eventBus.on(EVENTS.UPGRADE_SOLD, () => { this._rebuildComputed(); this._saveNow(); });
+    eventBus.on(EVENTS.SHIP_PURCHASED, () => this._saveNow());
 
     eventBus.on(EVENTS.CURRENCY_CHANGED, () => {
       if (this.techTreeUI) this.techTreeUI.updateCurrencyBar(this.state);
     });
+
+    eventBus.on(EVENTS.SHIP_SELECTED, () => this._rebuildPlayerEntityForShipChange());
+
+    // Flush save when the tab is closed / hidden so hangar tweaks made within
+    // the 30 s autosave window aren't lost.
+    window.addEventListener('beforeunload', () => this._saveNow());
+    window.addEventListener('pagehide', () => this._saveNow());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this._saveNow();
+    });
   }
 
-  _handlePlayerDied() {
-    const health = this.playerEntity?.get('HealthComponent');
-    if (health && !health.dead) return;
+  /** Immediate save if state + techTree are ready. Safe to call any time. */
+  _saveNow() {
+    if (!this.state || !this.techTree) return;
+    this.saveManager.save(this.state, this.techTree);
+  }
+
+  /**
+   * Switching ships changes the mesh variant + weapon slot layout, both baked
+   * into ShipVisualsComponent at attach time. Easier to rebuild the whole
+   * player entity than to hot-swap every dependent component. Only valid
+   * between runs (dead/start phase), so we never do this mid-combat.
+   */
+  _rebuildPlayerEntityForShipChange() {
+    if (!this.state || !this.world) return;
+    const phase = this.state.round.phase;
+    if (phase === 'combat') return;
+    if (this.playerEntity) {
+      this.playerEntity.destroy();
+      this.world._sweep();
+    }
+    this.playerEntity = createPlayer({ settings: this.settings, state: this.state });
+    this.world.setContext({ playerEntity: this.playerEntity });
+    this.world.spawn(this.playerEntity);
+    if (this.upgradeApplier) this.upgradeApplier.playerEntity = this.playerEntity;
+    this._rebuildComputed();
+    this.hangarUI?.onShipChanged?.();
+  }
+
+  /**
+   * Shared teardown when leaving combat for the meta layer (death screen or hangar).
+   * Does not touch audio or pause state.
+   */
+  _finalizeCombatRunForMeta() {
     if (!this.state) return;
-
-    this.setPaused(false);
-    this.audio.stopMusic();
-    this.audio.play('death');
-
     const r = this.state.round;
     this.state.lastRun = {
       distance: r.distanceTraveled,
@@ -286,11 +328,39 @@ class Game {
     for (const e of this.world.query('asteroid')) e.destroy();
 
     this.ui.hide('hud');
+  }
+
+  _handlePlayerDied() {
+    const health = this.playerEntity?.get('HealthComponent');
+    if (health && !health.dead) return;
+    if (!this.state) return;
+
+    this.setPaused(false);
+    this.audio.stopMusic();
+    this.audio.play('death');
+
+    this._finalizeCombatRunForMeta();
+
     this.ui.showDeath(
       this.state.lastRun,
       () => this._openTechTree(),
-      () => this._showWarpGateAndLaunch()
+      () => this._showWarpGateAndLaunch(),
+      () => this._openHangar(),
     );
+  }
+
+  /** Pause menu only: must already be paused during combat. */
+  _confirmEndRunToHangarFromPauseMenu() {
+    if (!this.state || this.state.round.phase !== 'combat' || !this._paused) return;
+    const ok = window.confirm(
+      'Return to the hangar? This ends the current run. Your currencies, upgrades, and sector stats are saved.',
+    );
+    if (!ok) return;
+    this.setPaused(false);
+    this.audio.stopMusic();
+    this._finalizeCombatRunForMeta();
+    this.saveManager.save(this.state, this.techTree);
+    this._openHangar();
   }
 
   _setupSettingsButton() {
@@ -335,6 +405,9 @@ class Game {
 
   _setupPauseControls() {
     document.getElementById('pause-resume-btn')?.addEventListener('click', () => this.setPaused(false));
+    document.getElementById('pause-return-hangar-btn')?.addEventListener('click', () => {
+      this._confirmEndRunToHangarFromPauseMenu();
+    });
     document.getElementById('pause-btn')?.addEventListener('click', () => this.togglePause());
     window.addEventListener('keydown', e => {
       if (e.code !== 'KeyP' || e.repeat) return;
@@ -419,7 +492,7 @@ class Game {
     this.ui.hide('techTree');
     if (this.techTreeUI) this.techTreeUI.close();
     this.audio.stopMusic();
-    this.ui.showDeath(null, () => this._openTechTree(), () => this._startNewRun());
+    this.ui.showDeath(null, () => this._openTechTree(), () => this._startNewRun(), () => this._openHangar());
   }
 
   _setupClickHandling() {
@@ -481,6 +554,13 @@ class Game {
       e.preventDefault();
       this.playerEntity?.get('ManualGunComponent')?.fire();
     });
+    window.addEventListener('keyup', e => {
+      if (e.code !== 'Space') return;
+      if (this._paused) return;
+      if (this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      this.playerEntity?.get('ManualGunComponent')?.stopFiring();
+    });
   }
 
   _setupAbilityKeys() {
@@ -536,7 +616,8 @@ class Game {
         this.ui.showDeath(
           this.state.lastRun ?? null,
           () => this._openTechTree(),
-          () => this._showWarpGateAndLaunch()
+          () => this._showWarpGateAndLaunch(),
+          () => this._openHangar(),
         );
       });
     } else {
@@ -552,11 +633,11 @@ class Game {
     this._initWorldForState();
     this._rebuildComputed();
     this._setupTechTreeUI();
-    this.ui.showDeath(null, () => this._openTechTree(), () => this._showWarpGateAndLaunch());
+    this.ui.showDeath(null, () => this._openTechTree(), () => this._showWarpGateAndLaunch(), () => this._openHangar());
   }
 
   _initWorldForState() {
-    this.playerEntity = createPlayer({ settings: this.settings });
+    this.playerEntity = createPlayer({ settings: this.settings, state: this.state });
     this.world.setContext({
       state: this.state,
       playerEntity: this.playerEntity,
@@ -583,7 +664,76 @@ class Game {
       () => this._closeTechTree()
     );
     this.ui.bindMuteButton(this.audio, this.settings);
+    this._setupHangarUI();
   }
+
+  _setupHangarUI() {
+    if (this.hangarUI) return; // one-shot: these UIs are stateless wrt runs
+    this.hangarUI = new HangarUI({
+      state: this.state,
+      currency: this.currency,
+      upgradeApplier: this.upgradeApplier,
+      techTree: this.techTree,
+      onLaunch: () => { this._closeHangar(); this._showWarpGateAndLaunch(); },
+      onOpenStore: (slotId) => this._openStore(slotId),
+      onOpenResearch: () => this._openResearch(),
+      onOpenTechTree: () => { this._closeHangar(); this._openTechTree(); },
+      onClose: () => this._onHangarClosed(),
+    });
+    this.storeUI = new StoreUI({
+      state: this.state,
+      currency: this.currency,
+      onClose: () => this._onStoreClosed(),
+    });
+    this.researchUI = new ResearchUI({
+      state: this.state,
+      currency: this.currency,
+      onClose: () => this._onResearchClosed(),
+    });
+  }
+
+  _openHangar() {
+    this._techTreeOpen = false;
+    this.ui.hide('hud');
+    this.ui.hide('death');
+    this.ui.hide('techTree');
+    this.techTreeUI?.close?.();
+    this.ui.show('hangar');
+    this.hangarUI.open();
+    if (this.state.round.phase !== 'combat') this.audio.playMusic('tech-tree');
+  }
+
+  _closeHangar() {
+    this.hangarUI?.close();
+  }
+
+  _onHangarClosed() {
+    this.ui.hide('hangar');
+    if (this.state.round.phase !== 'combat') {
+      this.ui.showDeath(
+        this.state.lastRun,
+        () => this._openTechTree(),
+        () => this._showWarpGateAndLaunch(),
+        () => this._openHangar(),
+      );
+    } else {
+      this.ui.show('hud');
+    }
+  }
+
+  _openStore(slotId = null) {
+    this.ui.show('store');
+    this.storeUI.open(slotId);
+  }
+
+  _onStoreClosed() { this.ui.hide('store'); }
+
+  _openResearch() {
+    this.ui.show('research');
+    this.researchUI.open();
+  }
+
+  _onResearchClosed() { this.ui.hide('research'); }
 
   _combatMusicKey() {
     return this.state?.round?.bossIsActive ? 'boss' : 'combat';
@@ -637,7 +787,8 @@ class Game {
       this.ui.showDeath(
         this.state.lastRun,
         () => this._openTechTree(),
-        () => this._showWarpGateAndLaunch()
+        () => this._showWarpGateAndLaunch(),
+        () => this._openHangar(),
       );
     }
   }

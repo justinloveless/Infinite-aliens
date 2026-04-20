@@ -1,7 +1,7 @@
 // ===== GAME CONSTANTS =====
 
 export const GAME = {
-  VERSION: 13,
+  VERSION: 16,
   AUTO_SAVE_INTERVAL: 30000,  // ms
   OFFLINE_CAP: 8 * 3600,     // seconds
   OFFLINE_EFFICIENCY: 0.5,
@@ -76,6 +76,7 @@ export const PLAY_AREA = {
 };
 
 export const CURRENCIES = {
+  credits:         { label: 'Credits',         icon: '⬡', color: '#ffb347' },
   scrapMetal:      { label: 'Scrap Metal',     icon: '⚙', color: '#aaaaaa' },
   plasmaCrystals:  { label: 'Plasma Crystals', icon: '◆', color: '#00f5ff' },
   bioEssence:      { label: 'Bio Essence',     icon: '✦', color: '#39ff14' },

@@ -1,6 +1,11 @@
 import { CURRENCIES } from '../constants.js';
 import { reticleDebug } from '../components/enemy/EnemyVisualsComponent.js';
 import { DEBUG_ENEMY_SPAWN_TYPES } from '../components/enemy/EnemyDefs.js';
+import {
+  getAllItems, listActiveSlots, installItem, getResearchCatalog,
+  getResearchLevel, hasItemInstalled, getRequiredItem,
+} from '../hangar/HangarSystem.js';
+import { eventBus, EVENTS } from '../core/EventBus.js';
 
 const CURRENCY_KEYS = Object.keys(CURRENCIES);
 const DEBUG_MENU_POS_KEY = 'infinite_aliens_debug_menu_pos';
@@ -111,6 +116,7 @@ export class DebugMenuUI {
     this._buildPerformanceSection(wrap);
     this._buildVisualSection(wrap);
     this._buildTargetingSection(wrap);
+    this._buildHangarSection(wrap);
 
     const grid = document.createElement('div');
     grid.className = 'debug-menu-grid';
@@ -698,6 +704,97 @@ export class DebugMenuUI {
     });
     visActions.appendChild(copyVis);
     sec.appendChild(visActions);
+
+    wrap.appendChild(sec);
+  }
+
+  _buildHangarSection(wrap) {
+    const sec = document.createElement('div');
+    sec.className = 'debug-menu-visual';
+    this._sectionTitle(sec, 'HANGAR (ITEMS & RESEARCH)');
+
+    const hint = document.createElement('p');
+    hint.className = 'debug-menu-hint';
+    hint.style.marginTop = '0';
+    hint.textContent = 'Grant base items, auto-install into open compatible slots, and bump research levels without paying currency.';
+    sec.appendChild(hint);
+
+    // Items
+    const itemsRow = document.createElement('div');
+    itemsRow.className = 'debug-menu-spawn-btns';
+    for (const item of getAllItems()) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'neon-btn small';
+      btn.textContent = `+ ${item.name}`;
+      btn.title = `Grant ${item.id} and auto-install into first empty ${item.slotType} slot.`;
+      btn.addEventListener('click', () => {
+        const s = this._game.state;
+        if (!s.ship) return;
+        if (!s.ship.ownedItems.includes(item.id)) s.ship.ownedItems.push(item.id);
+        for (const slot of listActiveSlots(s)) {
+          if (slot.type === item.slotType && !s.ship.slots[slot.id]?.installedItemId) {
+            installItem(s, slot.id, item.id);
+            break;
+          }
+        }
+        eventBus.emit(EVENTS.UPGRADE_PURCHASED, { source: 'debug', itemId: item.id });
+      });
+      itemsRow.appendChild(btn);
+    }
+    sec.appendChild(itemsRow);
+
+    // Research: +1 to every research node whose item is installed (or has no item gate)
+    const researchRow = document.createElement('div');
+    researchRow.className = 'debug-menu-actions';
+    researchRow.style.borderTop = 'none';
+    researchRow.style.paddingTop = '4px';
+
+    const plusAll = document.createElement('button');
+    plusAll.type = 'button';
+    plusAll.className = 'neon-btn small';
+    plusAll.textContent = '+1 ALL RESEARCH';
+    plusAll.title = 'Increments every eligible research node by one level.';
+    plusAll.addEventListener('click', () => {
+      const s = this._game.state;
+      if (!s.ship) return;
+      s.ship.research ||= {};
+      let bumped = 0;
+      for (const node of getResearchCatalog()) {
+        const cur = getResearchLevel(s, node.id);
+        const max = node.maxLevel ?? 1;
+        if (cur >= max) continue;
+        s.ship.research[node.id] = cur + 1;
+        bumped++;
+      }
+      eventBus.emit(EVENTS.UPGRADE_PURCHASED, { source: 'debug-research', count: bumped });
+    });
+    researchRow.appendChild(plusAll);
+
+    const plusItemGated = document.createElement('button');
+    plusItemGated.type = 'button';
+    plusItemGated.className = 'neon-btn small';
+    plusItemGated.textContent = '+1 INSTALLED-ONLY';
+    plusItemGated.title = 'Like "+1 ALL RESEARCH" but skips nodes whose gating item is not currently installed.';
+    plusItemGated.addEventListener('click', () => {
+      const s = this._game.state;
+      if (!s.ship) return;
+      s.ship.research ||= {};
+      let bumped = 0;
+      for (const node of getResearchCatalog()) {
+        const cur = getResearchLevel(s, node.id);
+        const max = node.maxLevel ?? 1;
+        if (cur >= max) continue;
+        const req = getRequiredItem(node);
+        if (req && !hasItemInstalled(s, req)) continue;
+        s.ship.research[node.id] = cur + 1;
+        bumped++;
+      }
+      eventBus.emit(EVENTS.UPGRADE_PURCHASED, { source: 'debug-research', count: bumped });
+    });
+    researchRow.appendChild(plusItemGated);
+
+    sec.appendChild(researchRow);
 
     wrap.appendChild(sec);
   }

@@ -18,6 +18,7 @@ export class AutoFireWeaponComponent extends Component {
     if (ctx?.state?.round?.phase !== 'combat') { this._timer = 0; return; }
     const stats = this.entity.get('PlayerStatsComponent');
     const t = this.entity.get('TransformComponent');
+    const visuals = this.entity.get('ShipVisualsComponent');
     if (!stats || !t) return;
 
     this._timer += dt;
@@ -36,7 +37,9 @@ export class AutoFireWeaponComponent extends Component {
 
     const tgtT = target.get('TransformComponent');
     const baseDir = new THREE.Vector3().subVectors(tgtT.position, t.position).normalize();
-    const spawnBase = t.position.clone().add(new THREE.Vector3(0, 0, -0.5));
+    const spawnBase = visuals
+      ? visuals.getPrimaryWeaponMuzzleWorldPosition()
+      : t.position.clone().add(new THREE.Vector3(0, 0, -0.5));
 
     const killsThisRun = ctx.state.round.killsThisRun || 0;
     const resonance = ctx.playerEntity?.get('ResonanceFieldComponent')?.level ?? 0;

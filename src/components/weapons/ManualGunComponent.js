@@ -17,6 +17,7 @@ export class ManualGunComponent extends Component {
     this._overheated = false;
     this._overheatTimer = 0;
     this._fireCooldown = 0;
+    this._firing = false;
     this._ctx = null;
   }
 
@@ -47,7 +48,10 @@ export class ManualGunComponent extends Component {
 
     const t = this.entity.get('TransformComponent');
     const stats = this.entity.get('PlayerStatsComponent');
-    const pos = t.position.clone(); pos.z -= 1.0;
+    const visuals = this.entity.get('ShipVisualsComponent');
+    const pos = visuals
+      ? visuals.getPrimaryWeaponMuzzleWorldPosition()
+      : t.position.clone().add(new THREE.Vector3(0, 0, -1.0));
     const dir = new THREE.Vector3(0, 0, -1);
     const damage = stats?.damage ?? PLAYER.BASE_DAMAGE;
     const pierces = stats?.projectilePierces ?? 0;
@@ -58,9 +62,18 @@ export class ManualGunComponent extends Component {
       pierces, heatRatio: ratio,
     }));
     eventBus.emit(EVENTS.MANUAL_FIRED);
+    this._firing = true;
+  }
+
+  stopFiring() {
+    this._firing = false;
   }
 
   update(dt) {
+    if (this._firing) {
+      this.fire();
+    }
+
     this._heat = Math.max(0, this._heat - MANUAL_GUN.HEAT_COOL_RATE * dt);
     this._fireCooldown = Math.max(0, this._fireCooldown - dt);
     if (this._overheated) {

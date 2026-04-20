@@ -8,6 +8,9 @@ export class UIManager {
       death: document.getElementById('death-screen'),
       welcome: document.getElementById('welcome-screen'),
       warpGate: document.getElementById('warp-gate-screen'),
+      hangar: document.getElementById('hangar-screen'),
+      store: document.getElementById('store-screen'),
+      research: document.getElementById('research-screen'),
     };
   }
 
@@ -29,8 +32,9 @@ export class UIManager {
    * @param {object|null} stats  - lastRun stats, or null for first-run "ready" state
    * @param {function} onViewTree - open tech tree overlay
    * @param {function} onLaunch   - start a new run
+   * @param {function} [onViewHangar] - open hangar overlay
    */
-  showDeath(stats, onViewTree, onLaunch) {
+  showDeath(stats, onViewTree, onLaunch, onViewHangar) {
     const title = document.getElementById('death-title');
     const statsEl = document.getElementById('death-stats');
 
@@ -52,6 +56,8 @@ export class UIManager {
 
     this.show('death');
     document.getElementById('view-tree-btn').onclick = onViewTree;
+    const hangarBtn = document.getElementById('view-hangar-btn');
+    if (hangarBtn) hangarBtn.onclick = onViewHangar || null;
     document.getElementById('death-launch-btn').onclick = () => {
       this.hide('death');
       onLaunch();

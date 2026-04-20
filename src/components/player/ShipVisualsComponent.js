@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { PLAYER } from '../../constants.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
+import { buildShipHull } from '../../scene/ShipMeshFactory.js';
+import { getActiveShipDef, getActiveShipSlots } from '../../data/ships.js';
 
 const MAGNET_VERTEX = `
 varying float vR;
@@ -57,13 +59,6 @@ void main() {
 
 const NOVA_PULSE_DURATION = 0.52;
 
-const TURRET_LOCAL = {
-  laser:   new THREE.Vector3(-1.5,  0.05,  0.1),
-  missile: new THREE.Vector3( 1.5,  0.05,  0.1),
-  plasma:  new THREE.Vector3( 0,   -0.25, -0.5),
-  beam:    new THREE.Vector3( 0,    0.3,  -0.8),
-};
-
 const ATTACHMENT_ANCHORS = {
   ship:       new THREE.Vector3( 0,    0,    0   ),
   hull:       new THREE.Vector3( 0,    0,    0   ),
@@ -98,6 +93,9 @@ export class ShipVisualsComponent extends Component {
     this._novaRadius = PLAYER.STELLAR_NOVA_BASE_RADIUS;
     this._shieldMesh = null;
     this._scene = null;
+    /** @type {Map<string, THREE.Group>} */
+    this._weaponSlotRoots = new Map();
+    this._muzzleForwardLocal = new THREE.Vector3(0, 0, -0.25);
   }
 
   onAttach(ctx) {
@@ -192,30 +190,66 @@ export class ShipVisualsComponent extends Component {
     this._tickAttachments(dt);
   }
 
+  /** World-space muzzle point for a weapon hardpoint slot (ship-local −Z forward). */
+  getSlotMuzzleWorldPosition(slotId, out = new THREE.Vector3()) {
+    const root = this._weaponSlotRoots.get(slotId) || this._group;
+    out.copy(this._muzzleForwardLocal);
+    return root.localToWorld(out);
+  }
+
+  /** Nose / primary auto slot — same slot used for manual cannon alignment. */
+  getPrimaryWeaponMuzzleWorldPosition(out = new THREE.Vector3()) {
+    const stats = this.entity?.get('PlayerStatsComponent');
+    const sid = stats?.weaponSlotByFireType?.primary || 'weapon_mid';
+    return this.getSlotMuzzleWorldPosition(sid, out);
+  }
+
   /** Returns world-space position of a named turret muzzle. */
-  getTurretWorldPosition(type) {
-    const local = TURRET_LOCAL[type];
-    if (!local) return this._group.position.clone();
-    const muzzle = local.clone().add(new THREE.Vector3(0, 0, -0.25));
-    return this._group.localToWorld(muzzle);
+  getTurretWorldPosition(type, out = new THREE.Vector3()) {
+    const stats = this.entity?.get('PlayerStatsComponent');
+    const sid = stats?.weaponSlotByFireType?.[type] || 'weapon_mid';
+    return this.getSlotMuzzleWorldPosition(sid, out);
+  }
+
+  /** Re-parent turrets after hangar slot changes (stats already synced). */
+  resyncWeaponTurretParents() {
+    const stats = this.entity?.get('PlayerStatsComponent');
+    const slotMap = stats?.weaponSlotByFireType;
+    for (const type of Object.keys(this._turretMeshes)) {
+      this._parentTurretToWeaponSlot(type, slotMap);
+    }
+  }
+
+  _parentTurretToWeaponSlot(type, slotMap) {
+    const turret = this._turretMeshes[type];
+    if (!turret) return;
+    const slotId = slotMap?.[type] || 'weapon_mid';
+    const root = this._weaponSlotRoots.get(slotId) || this._group;
+    if (turret.parent !== root) root.add(turret);
+    turret.position.set(0, 0, 0);
   }
 
   /** Adds/removes turret meshes to match the desired set. */
   syncTurrets(types) {
     const desired = new Set(types || []);
+    const stats = this.entity?.get('PlayerStatsComponent');
+    const slotMap = stats?.weaponSlotByFireType;
+
     for (const type of Object.keys(this._turretMeshes)) {
       if (!desired.has(type)) {
-        this._group.remove(this._turretMeshes[type]);
+        const mesh = this._turretMeshes[type];
+        if (mesh.parent) mesh.parent.remove(mesh);
         delete this._turretMeshes[type];
       }
     }
     for (const type of desired) {
-      if (this._turretMeshes[type]) continue;
+      if (this._turretMeshes[type]) {
+        this._parentTurretToWeaponSlot(type, slotMap);
+        continue;
+      }
       const turret = this._buildTurretMesh(type);
-      const localPos = TURRET_LOCAL[type];
-      if (localPos) turret.position.copy(localPos);
-      this._group.add(turret);
       this._turretMeshes[type] = turret;
+      this._parentTurretToWeaponSlot(type, slotMap);
     }
   }
 
@@ -255,71 +289,32 @@ export class ShipVisualsComponent extends Component {
     });
   }
 
-  // ── Internal build helpers (copied from legacy Ship.js) ──
+  // ── Internal build helpers ────────────────────────────────────────────
   _buildMesh() {
-    const keyLight = new THREE.PointLight(0xc8e0ff, 6, 14);
-    keyLight.position.set(2, 5, 3);
-    this._group.add(keyLight);
+    const state = this.world?.ctx?.state;
+    // Prefer the ShipComponent attached to this entity — it holds the ship's
+    // identity (variant, slots) and behavior. Fall back to looking up the
+    // active ship from global state for entities built before the component
+    // was attached (shouldn't happen, but belt + suspenders).
+    const shipComp = this.entity?.get('ShipComponent');
+    const variant = shipComp?.meshVariant
+      || getActiveShipDef(state)?.meshVariant
+      || 'allrounder';
 
-    const rimLight = new THREE.PointLight(0x4466aa, 2, 8);
-    rimLight.position.set(-2, -2, 2);
-    this._group.add(rimLight);
-
-    const hullGeo = new THREE.ConeGeometry(0.55, 2.2, 6);
-    const hullMat = new THREE.MeshStandardMaterial({
-      color: 0x7799bb, emissive: 0x1a2e42, emissiveIntensity: 0.6,
-      metalness: 0.35, roughness: 0.55,
-    });
-    const hull = new THREE.Mesh(hullGeo, hullMat);
-    hull.rotation.x = Math.PI / 2;
-    this._group.add(hull);
-    this._hull = hull;
-
-    const wingGeo = new THREE.BoxGeometry(1.8, 0.1, 0.8);
-    const wingMat = new THREE.MeshStandardMaterial({
-      color: 0x5577aa, emissive: 0x0f1f33, emissiveIntensity: 0.5,
-      metalness: 0.4, roughness: 0.5,
-    });
-    const wingL = new THREE.Mesh(wingGeo, wingMat);
-    wingL.position.set(-0.9, 0, 0.5);
-    this._group.add(wingL);
-    this._wingL = wingL;
-    const wingR = new THREE.Mesh(wingGeo, wingMat.clone());
-    wingR.position.set(0.9, 0, 0.5);
-    this._group.add(wingR);
-    this._wingR = wingR;
-
-    const engineGeo = new THREE.CylinderGeometry(0.22, 0.3, 0.55, 8);
-    const engineMat = new THREE.MeshStandardMaterial({
-      color: 0x445566, emissive: 0x0a1520, emissiveIntensity: 0.4,
-      metalness: 0.5, roughness: 0.4,
-    });
-    const engine = new THREE.Mesh(engineGeo, engineMat);
-    engine.rotation.x = Math.PI / 2;
-    engine.position.z = 1.1;
-    this._group.add(engine);
-    this._engine = engine;
-
-    const glowGeo = new THREE.CircleGeometry(0.2, 12);
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.9 });
-    const glow = new THREE.Mesh(glowGeo, glowMat);
-    glow.rotation.x = Math.PI / 2;
-    glow.position.z = 1.38;
-    this._group.add(glow);
+    const hullGroup = shipComp
+      ? shipComp.buildHull({ withLights: true })
+      : buildShipHull({ variant, withLights: true });
+    this._group.add(hullGroup);
+    this._hullGroup = hullGroup;
+    this._hull = hullGroup.userData.hull || null;
+    this._wingL = hullGroup.userData.wingL || null;
+    this._wingR = hullGroup.userData.wingR || null;
+    this._engine = hullGroup.userData.engine || null;
+    this._cockpit = hullGroup.userData.cockpit || null;
 
     this._thrusterLight = new THREE.PointLight(0x0088ff, 2.5, 5);
     this._thrusterLight.position.set(0, 0, 1.5);
     this._group.add(this._thrusterLight);
-
-    const cockpitGeo = new THREE.SphereGeometry(0.18, 8, 6);
-    const cockpitMat = new THREE.MeshStandardMaterial({
-      color: 0x00f5ff, emissive: 0x00c8d8, emissiveIntensity: 1.2,
-      metalness: 0.1, roughness: 0.2,
-    });
-    const cockpit = new THREE.Mesh(cockpitGeo, cockpitMat);
-    cockpit.position.z = -0.6;
-    this._group.add(cockpit);
-    this._cockpit = cockpit;
 
     const shieldGeo = new THREE.SphereGeometry(1.5, 16, 12);
     const shieldMat = new THREE.MeshBasicMaterial({
@@ -329,9 +324,23 @@ export class ShipVisualsComponent extends Component {
     this._shieldMesh.visible = false;
     this._group.add(this._shieldMesh);
 
-    const wingLight = new THREE.PointLight(0xff00ff, 0.5, 3);
-    wingLight.position.set(0, 0, 0.4);
-    this._group.add(wingLight);
+    this._buildWeaponSlotRoots(state);
+  }
+
+  /** Empty groups at the active ship's weapon positions — turrets parent here. */
+  _buildWeaponSlotRoots(state) {
+    this._weaponSlotRoots.clear();
+    // Same preference order as _buildMesh: ship component on the entity first.
+    const shipComp = this.entity?.get('ShipComponent');
+    const slots = shipComp?.slots || getActiveShipSlots(state || this.world?.ctx?.state);
+    for (const slot of slots) {
+      if (slot.type !== 'weapon') continue;
+      const g = new THREE.Group();
+      const p = slot.position;
+      if (Array.isArray(p) && p.length >= 3) g.position.set(p[0], p[1], p[2]);
+      this._group.add(g);
+      this._weaponSlotRoots.set(slot.id, g);
+    }
   }
 
   _buildMagnetField() {

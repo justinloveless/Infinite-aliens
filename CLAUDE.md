@@ -16,6 +16,25 @@ No test or lint tooling is configured.
 
 **Infinite Aliens** is a Three.js roguelike idle game bundled with Vite. `src/main.js` is the single orchestrator — it instantiates every system, wires them together, and owns the game loop. There is no framework, no state management library; communication between systems goes through a global singleton pub/sub `eventBus` (`src/core/EventBus.js`).
 
+### Entity-Component-System (ECS)
+
+**Game objects are Entities. Behavior + data live in Components. Systems only orchestrate.** Always prefer adding a new component over stuffing logic into a system, prefab, or global helper.
+
+Core primitives (`src/ecs/`):
+- `Entity` — a thin bag of components + tags. No domain logic. `entity.add(component)`, `entity.get('ComponentName')`, `entity.destroy()`.
+- `Component` — base class. Owns its own data, meshes, and event subscriptions. Lifecycle: `onAttach(ctx)` / `onDetach()` / `update(dt, ctx)` (all optional). Use `this.listen(EVENT, fn)` for subscriptions that auto-unsubscribe on detach.
+- `World` — holds entities, drives per-frame `update`, sweeps destroyed entities, exposes `ctx` (settings, state, scene, renderer).
+
+Conventions:
+- **One responsibility per component.** `HealthComponent` holds HP. `ShieldComponent` holds shields. `RegenComponent` ticks regen. Don't merge these — composition beats inheritance.
+- **File layout.** Put components under `src/components/<domain>/<Name>Component.js` (domains: `core`, `player`, `ships`, `weapons`, `health`, `enemy`, `projectile`, `aoe`, `world`, `abilities`).
+- **Naming.** Always suffix `Component`. `class FooComponent extends Component`. The `componentName` is the class name unless overridden (override to share a key across a subclass family — see ships below).
+- **Lifecycle discipline.** Every THREE object / event subscription / DOM element created in `onAttach` must be torn down in `onDetach`. Leaks here cause memory bloat across ship switches and respawns.
+- **Prefabs, not factories.** `src/prefabs/createX.js` files only compose components onto entities. They do not hold game logic. If you find yourself writing behavior in a prefab, move it into a component.
+- **When in doubt, add a component.** New ability/buff/visual/ship/enemy-variant = new component class. A "system" in this codebase is just a thin coordinator (`CombatSystem`, `RoundSystem`) that calls into components.
+
+Ship components (`src/components/ships/`) are a concrete example of the pattern: each purchasable ship is its own `ShipComponent` subclass holding its identity, base stats, slot layout, mesh, and per-frame hooks. `ShipRegistry.js` is the lookup; `src/data/ships.js` is a thin facade over the registry for legacy POJO consumers.
+
 ### Game Loop & Phase State
 
 `GameLoop` drives a `requestAnimationFrame` tick. The game is always in one of three phases stored in `state.round.phase`:
@@ -76,6 +95,9 @@ The node template list lives in `src/techtree/TechNodeTemplates.js` (not `upgrad
 | `src/core/GameState.js` | Canonical state shape + serialization |
 | `src/core/SaveManager.js` | localStorage persistence + version migrations |
 | `src/core/EventBus.js` | Global pub/sub; prefer named `EVENTS` constants |
+| `src/ecs/{Entity,Component,World}.js` | Core ECS primitives — all game objects use these |
+| `src/components/ships/ShipComponent.js` | Base class for per-ship components (data + behavior per variant) |
+| `src/components/ships/ShipRegistry.js` | Maps ship id → component class; iteration order = hangar carousel |
 | `src/systems/UpgradeSystem.js` | Rebuilds `computed` stats; implements upgrade grammar |
 | `src/systems/CombatSystem.js` | All per-frame combat logic |
 | `src/systems/RoundSystem.js` | Distance/tier progression, enemy spawning, bosses |

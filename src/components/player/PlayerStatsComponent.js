@@ -27,7 +27,7 @@ export class PlayerStatsComponent extends Component {
     this.projectilePierces = init.projectilePierces ?? 0;
     this.vampireHealRatio = init.vampireHealRatio ?? 0;
     this.damageReflect = init.damageReflect ?? 0;
-    this.lootRates = init.lootRates || { scrapMetal: 1, plasmaCrystals: 1, bioEssence: 1, darkMatter: 1, stellarDust: 1 };
+    this.lootRates = init.lootRates || { credits: 1, scrapMetal: 1, plasmaCrystals: 1, bioEssence: 1, darkMatter: 1, stellarDust: 1 };
     this.passiveRates = init.passiveRates || {};
     this.enemyModifiers = init.enemyModifiers || null;
     this.roundModifiers = init.roundModifiers || { spawnInterval: 1.0, maxConcurrent: 1.0 };
@@ -37,6 +37,8 @@ export class PlayerStatsComponent extends Component {
     this.manualTargetFocusEnabled = init.manualTargetFocusEnabled ?? false;
     /** Transient boosts from trigger actions, e.g. Berserker Protocol. */
     this.activeBoosts = init.activeBoosts || [];
+    /** Filled by UpgradeApplier: fire key → slot id (`primary`, `laser`, …). */
+    this.weaponSlotByFireType = init.weaponSlotByFireType || { primary: 'weapon_mid' };
   }
 
   /** Effective damage factoring boosts + resonance stacks (kills this run). */

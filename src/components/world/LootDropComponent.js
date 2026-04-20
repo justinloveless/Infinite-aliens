@@ -4,6 +4,7 @@ import { eventBus, EVENTS } from '../../core/EventBus.js';
 import { LOOT, PLAYER } from '../../constants.js';
 
 const COLORS = {
+  credits: 0xffb347,
   scrapMetal: 0xaaaaaa,
   plasmaCrystals: 0x00f5ff,
   bioEssence: 0x39ff14,

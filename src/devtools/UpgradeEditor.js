@@ -10,8 +10,8 @@
 
 import upgradesData from '../data/upgrades.json';
 
-const CURRENCY_LIST  = ['scrapMetal', 'plasmaCrystals', 'bioEssence', 'darkMatter', 'stellarDust'];
-const CURRENCY_ICONS = { scrapMetal: '⚙', plasmaCrystals: '◆', bioEssence: '✦', darkMatter: '◉', stellarDust: '★' };
+const CURRENCY_LIST  = ['credits', 'scrapMetal', 'plasmaCrystals', 'bioEssence', 'darkMatter', 'stellarDust'];
+const CURRENCY_ICONS = { credits: '⬡', scrapMetal: '⚙', plasmaCrystals: '◆', bioEssence: '✦', darkMatter: '◉', stellarDust: '★' };
 const CATEGORIES     = ['weapon', 'defense', 'utility', 'passive', 'special'];
 const MAIN_CATS      = ['weapon', 'defense', 'utility', 'passive'];
 const RARITIES       = ['', 'common', 'uncommon', 'rare', 'epic', 'legendary'];

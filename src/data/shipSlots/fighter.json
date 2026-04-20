@@ -1,0 +1,61 @@
+{
+  "slots": [
+    {
+      "id": "weapon_mid",
+      "type": "weapon",
+      "shape": "box",
+      "size": 0.3,
+      "position": [0, 0.0, -1.15],
+      "unlockCondition": "always",
+      "label": "NOSE",
+      "description": "Nose-mounted primary cannon.",
+      "panel": { "anchor": "top", "offsetX": 0, "offsetY": 10 }
+    },
+    {
+      "id": "weapon_wing_l",
+      "type": "weapon",
+      "shape": "box",
+      "size": 0.28,
+      "position": [-1.5, 0.05, 0.65],
+      "unlockCost": { "credits": 400 },
+      "label": "PORT WINGTIP",
+      "description": "Port wingtip weapon hardpoint.",
+      "panel": { "anchor": "left", "offsetX": 10, "offsetY": 0 }
+    },
+    {
+      "id": "weapon_wing_r",
+      "type": "weapon",
+      "shape": "box",
+      "size": 0.28,
+      "position": [1.5, 0.05, 0.65],
+      "unlockCost": { "credits": 400 },
+      "label": "STBD WINGTIP",
+      "description": "Starboard wingtip weapon hardpoint.",
+      "panel": { "anchor": "right", "offsetX": 10, "offsetY": 0 }
+    },
+    {
+      "id": "weapon_nose_pod",
+      "type": "weapon",
+      "shape": "box",
+      "size": 0.26,
+      "position": [0, -0.28, -0.4],
+      "unlockCost": { "credits": 700 },
+      "label": "CHIN POD",
+      "description": "Ventral chin-pod weapon for extra firepower.",
+      "panel": { "anchor": "bottom-left", "offsetX": 10, "offsetY": 10 }
+    },
+    {
+      "id": "utility_aux",
+      "type": "utility",
+      "shape": "circle",
+      "size": 0.3,
+      "position": [0, 0.3, 0.55],
+      "unlockCost": { "credits": 400 },
+      "label": "AUX BAY",
+      "description": "Dorsal utility bay — magnets, thrusters, drones.",
+      "panel": { "anchor": "top-right", "offsetX": 10, "offsetY": 10 }
+    }
+  ],
+  "defaultUnlockedSlots": ["weapon_mid"],
+  "defaultLoadout": { "weapon_mid": "main_cannon" }
+}

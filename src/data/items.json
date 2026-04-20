@@ -1,0 +1,115 @@
+{
+  "items": [
+    {
+      "id": "main_cannon",
+      "name": "Main Cannon",
+      "slotType": "weapon",
+      "grantsNodeId": "auto_turret",
+      "starter": true,
+      "cost": {},
+      "icon": "⬢",
+      "description": "Forward auto-cannon. Brings your fixed nose turret online for continuous aimed fire.",
+      "color": "#ffcc66"
+    },
+    {
+      "id": "laser_turret",
+      "name": "Laser Turret",
+      "slotType": "weapon",
+      "grantsNodeId": "laser_type",
+      "cost": { "scrapMetal": 80, "plasmaCrystals": 10 },
+      "icon": "|",
+      "description": "Mounts a continuous plasma beam turret that fires alongside your main cannon.",
+      "color": "#00f5ff"
+    },
+    {
+      "id": "missile_turret",
+      "name": "Missile Turret",
+      "slotType": "weapon",
+      "grantsNodeId": "missile_type",
+      "cost": { "scrapMetal": 120, "plasmaCrystals": 20 },
+      "icon": "➹",
+      "description": "Homing missile rack. Fire-and-forget ordnance that tracks the nearest hostile.",
+      "color": "#ff8800"
+    },
+    {
+      "id": "plasma_turret",
+      "name": "Plasma Turret",
+      "slotType": "weapon",
+      "grantsNodeId": "plasma_type",
+      "cost": { "scrapMetal": 150, "plasmaCrystals": 30, "darkMatter": 2 },
+      "icon": "◈",
+      "description": "Heavy plasma cannon. Slower fire rate but devastating per shot.",
+      "color": "#ff00ff"
+    },
+    {
+      "id": "beam_laser",
+      "name": "Beam Laser",
+      "slotType": "weapon",
+      "grantsNodeId": "beam_laser",
+      "cost": { "scrapMetal": 180, "plasmaCrystals": 35 },
+      "icon": "━",
+      "description": "High-intensity beam emitter. Sustained damage on any target held in line.",
+      "color": "#ff1133"
+    },
+    {
+      "id": "hull_plating",
+      "name": "Hull Plating",
+      "slotType": "defense",
+      "grantsNodeId": "hull_plating",
+      "cost": { "scrapMetal": 60 },
+      "icon": "🛡",
+      "description": "Reinforced hull plating. Increases maximum hull integrity.",
+      "color": "#4488ff"
+    },
+    {
+      "id": "composite_armor",
+      "name": "Composite Armor",
+      "slotType": "defense",
+      "grantsNodeId": "armor",
+      "cost": { "scrapMetal": 90 },
+      "icon": "▦",
+      "description": "Dense alloy layering reduces all incoming damage.",
+      "color": "#6699cc"
+    },
+    {
+      "id": "shield_generator",
+      "name": "Shield Generator",
+      "slotType": "defense",
+      "grantsNodeId": "shield_gen",
+      "cost": { "scrapMetal": 110, "plasmaCrystals": 25 },
+      "icon": "◯",
+      "description": "Electromagnetic shield. Absorbs damage before hull; draws continuous energy.",
+      "color": "#00f5ff"
+    },
+    {
+      "id": "magnet_coil",
+      "name": "Magnet Coil",
+      "slotType": "utility",
+      "grantsNodeId": "magnet",
+      "cost": { "scrapMetal": 50 },
+      "icon": "⊕",
+      "description": "Extends loot tether range.",
+      "color": "#ffcc00"
+    },
+    {
+      "id": "thrusters",
+      "name": "Thruster Module",
+      "slotType": "utility",
+      "grantsNodeId": "speed",
+      "cost": { "scrapMetal": 70 },
+      "icon": "▶",
+      "description": "Boosted thrusters increase ship agility.",
+      "color": "#ffd700"
+    },
+    {
+      "id": "nanobots",
+      "name": "Nanobot Array",
+      "slotType": "utility",
+      "grantsNodeId": "hp_regen",
+      "cost": { "scrapMetal": 80, "bioEssence": 15 },
+      "icon": "⬡",
+      "description": "Self-replicating nanobots slowly repair hull damage.",
+      "color": "#39ff14"
+    }
+  ]
+}

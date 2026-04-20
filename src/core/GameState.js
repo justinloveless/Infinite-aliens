@@ -1,14 +1,51 @@
 import { PLAYER, GAME, ENERGY } from '../constants.js';
+import {
+  getDefaultShipId, getShipDef, createLoadoutForShip,
+  rebindShipAlias, applyShipBaseStatsToState,
+} from '../data/ships.js';
+
+/**
+ * Legacy shape of `state.ship` used by the v14 migration path. Preserved so
+ * pre-v16 saves can be upgraded through v14 → v15 → v16 using the existing
+ * migration blocks. New game state uses `createInitialShipsState()` instead.
+ */
+export function createInitialShip() {
+  const defaultId = getDefaultShipId();
+  const def = getShipDef(defaultId);
+  const loadout = createLoadoutForShip(def);
+  return {
+    slots: loadout.slots,
+    ownedItems: ['main_cannon'],
+    unlockedSlots: [...(loadout.unlockedSlots || ['weapon_mid'])],
+    research: {},
+  };
+}
+
+/** Fresh multi-ship roster: only the default ship is owned + selected. */
+export function createInitialShipsState() {
+  const defaultId = getDefaultShipId();
+  const def = getShipDef(defaultId);
+  return {
+    selectedId: defaultId,
+    ownedIds: [defaultId],
+    loadouts: {
+      [defaultId]: createLoadoutForShip(def),
+    },
+  };
+}
+
+export function createInitialInventory() {
+  return { ownedItems: ['main_cannon'] };
+}
 
 export function createInitialState() {
-  return {
+  const state = {
     version: GAME.VERSION,
     seed: Math.floor(Math.random() * 0xffffffff),
 
-    // Run progression (tier in `current` is derived from distance during combat)
     round: {
       current: 1,
-      phase: 'start',          // 'start' | 'combat' | 'dead'
+      phase: 'start',
       distanceTraveled: 0,
       enemiesDefeated: 0,
       bossesDefeated: 0,
@@ -18,10 +55,8 @@ export function createInitialState() {
       manualFocusEnemyId: null,
     },
 
-    // Stats from the most recently completed run — null on a fresh save
     lastRun: null,
 
-    // Player base stats (upgrades modify computedStats, not these)
     player: {
       hp: PLAYER.BASE_HP,
       maxHp: PLAYER.BASE_HP,
@@ -42,9 +77,8 @@ export function createInitialState() {
       targetingRange: PLAYER.BASE_TARGETING_RANGE,
       lootMultiplier: PLAYER.BASE_LOOT_MULT,
       stellarDustRate: PLAYER.STELLAR_DUST_RATE,
-      projectileType: 'laser',  // 'laser' | 'missile' | 'plasma'
+      projectileType: 'laser',
       hasDrone: false,
-      /** Continuous aimed turret fire (primary + side turrets + beam); false = manual nose cannon only until upgraded. */
       hasAutoFire: false,
       hasVampire: false,
       hasDamageReflect: false,
@@ -53,11 +87,10 @@ export function createInitialState() {
       energy: ENERGY.BASE_MAX,
     },
 
-    // Computed stats (rebuilt when upgrades change)
     computed: null,
 
-    // Currencies
     currencies: {
+      credits: 0,
       scrapMetal: 0,
       plasmaCrystals: 0,
       bioEssence: 0,
@@ -65,29 +98,43 @@ export function createInitialState() {
       stellarDust: 0,
     },
 
-    // Loot earned this combat session (HUD / debugging)
     roundLoot: {},
 
-    // Tech tree
     techTree: {
-      unlockedNodes: {},      // { nodeId: currentLevel }
-      generatedTiers: 0,      // how many tiers have been generated
+      unlockedNodes: {},
+      generatedTiers: 0,
     },
 
-    // Warp gates (persistent across runs)
     warpGates: {
-      maxTierReached: 0,   // highest tier ever reached; new gates unlock every 10 tiers
+      maxTierReached: 0,
     },
 
-    // Timestamps
+    // Shared inventory: items owned across all ships.
+    inventory: createInitialInventory(),
+    // Roster of ships + per-ship loadouts. `ship` below is a live alias to the
+    // currently-selected loadout (with `ownedItems` shared from `inventory`).
+    ships: createInitialShipsState(),
+
     lastSaveTime: Date.now(),
     lastActiveTime: Date.now(),
   };
+
+  rebindShipAlias(state);
+  applyShipBaseStatsToState(state, getShipDef(state.ships.selectedId));
+  return state;
 }
 
-// Deep clone the state (for saves)
+/**
+ * Serialize the state for persistence. `state.ship` is a live alias onto the
+ * active loadout, so we strip it before JSON-serializing (otherwise the save
+ * would contain two diverging copies of the same loadout after a ship swap).
+ * `_computed` and `_unlockedTemplates` are transient caches and are also
+ * stripped.
+ */
 export function serializeState(state) {
-  return JSON.stringify(state);
+  const { ship, _computed, _unlockedTemplates, ...persistable } = state;
+  void ship; void _computed; void _unlockedTemplates;
+  return JSON.stringify(persistable);
 }
 
 export function deserializeState(json) {

@@ -50,4 +50,6 @@ export const EVENTS = {
   ASTEROID_HIT_ENEMY:  'asteroid:hitEnemy',  // { position, damage }
   EMP_FIRED:           'emp:fired',          // { duration, damage }
   PHOENIX_REVIVED:     'phoenix:revived',    // {}
+  SHIP_PURCHASED:      'ship:purchased',     // { shipId }
+  SHIP_SELECTED:       'ship:selected',      // { shipId }
 };

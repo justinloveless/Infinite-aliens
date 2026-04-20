@@ -45,8 +45,11 @@ export class RailgunComponent extends Component {
 
     const t = this.entity.get('TransformComponent');
     const stats = this.entity.get('PlayerStatsComponent');
+    const visuals = this.entity.get('ShipVisualsComponent');
     const dir = new THREE.Vector3(0, 0, -1);
-    const pos = t.position.clone(); pos.z -= 1.2;
+    const pos = visuals
+      ? visuals.getPrimaryWeaponMuzzleWorldPosition()
+      : t.position.clone().add(new THREE.Vector3(0, 0, -1.2));
     const dmg = Math.ceil((stats?.damage ?? 1) * (this.damageMultiplier || 1));
 
     ctx.world.spawn(createProjectile({

@@ -14,6 +14,7 @@ export const ENEMY_DEFS = {
     eyeZ: 0.35,
     scale: 1,
     loot: [
+      { currency: 'credits', min: 1, max: 3 },
       { currency: 'scrapMetal', min: 2, max: 5 },
       { currency: 'plasmaCrystals', min: 0, max: 1 },
       { currency: 'bioEssence', min: 0, max: 1 },
@@ -31,7 +32,10 @@ export const ENEMY_DEFS = {
     behavior: 'steady',
     eyeZ: 0.45,
     scale: 1,
-    loot: [{ currency: 'scrapMetal', min: 5, max: 12 }],
+    loot: [
+      { currency: 'credits', min: 4, max: 8 },
+      { currency: 'scrapMetal', min: 5, max: 12 },
+    ],
     spawnWeight: 20,
   },
   swarm: {
@@ -45,7 +49,10 @@ export const ENEMY_DEFS = {
     behavior: 'zigzag',
     eyeZ: 0.25,
     scale: 0.9,
-    loot: [{ currency: 'bioEssence', min: 1, max: 3 }],
+    loot: [
+      { currency: 'credits', min: 1, max: 2 },
+      { currency: 'bioEssence', min: 1, max: 3 },
+    ],
     spawnWeight: 25,
     spawnCount: 3,
   },
@@ -63,6 +70,7 @@ export const ENEMY_DEFS = {
     eyeZ: 0.35,
     scale: 1,
     loot: [
+      { currency: 'credits', min: 3, max: 6 },
       { currency: 'plasmaCrystals', min: 2, max: 5 },
       { currency: 'scrapMetal', min: 1, max: 3 },
     ],
@@ -79,6 +87,7 @@ export const ENEMY_DEFS = {
     behavior: 'boss',
     scale: 1,
     loot: [
+      { currency: 'credits', min: 25, max: 50 },
       { currency: 'darkMatter', min: 1, max: 3 },
       { currency: 'scrapMetal', min: 15, max: 30 },
       { currency: 'plasmaCrystals', min: 8, max: 15 },

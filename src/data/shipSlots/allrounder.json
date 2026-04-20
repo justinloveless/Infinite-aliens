@@ -1,0 +1,72 @@
+{
+  "slots": [
+    {
+      "id": "weapon_mid",
+      "type": "weapon",
+      "shape": "box",
+      "size": 0.35,
+      "position": [0, 0.05, -0.55],
+      "unlockCondition": "always",
+      "label": "MAIN",
+      "description": "Forward fixed hardpoint — your primary nose mount.",
+      "panel": { "anchor": "top", "offsetX": 0, "offsetY": 10 }
+    },
+    {
+      "id": "weapon_wing_l",
+      "type": "weapon",
+      "shape": "box",
+      "size": 0.32,
+      "position": [-1.7, 0.12, 0.3],
+      "unlockCost": { "credits": 500 },
+      "label": "PORT WING",
+      "description": "Port wing hardpoint. Mount a secondary weapon turret.",
+      "panel": { "anchor": "left", "offsetX": 10, "offsetY": 0 }
+    },
+    {
+      "id": "weapon_wing_r",
+      "type": "weapon",
+      "shape": "box",
+      "size": 0.32,
+      "position": [1.7, 0.12, 0.3],
+      "unlockCost": { "credits": 500 },
+      "label": "STBD WING",
+      "description": "Starboard wing hardpoint. Mount a secondary weapon turret.",
+      "panel": { "anchor": "right", "offsetX": 10, "offsetY": 0 }
+    },
+    {
+      "id": "defense_core",
+      "type": "defense",
+      "shape": "circle",
+      "size": 0.4,
+      "position": [0, -0.3, 0.25],
+      "unlockCost": { "credits": 250 },
+      "label": "CORE",
+      "description": "Main armor/shield socket below the hull core.",
+      "panel": { "anchor": "bottom-left", "offsetX": 10, "offsetY": 10 }
+    },
+    {
+      "id": "defense_hull",
+      "type": "defense",
+      "shape": "circle",
+      "size": 0.36,
+      "position": [0, -0.2, 0.85],
+      "unlockCost": { "credits": 750 },
+      "label": "AFT PLATING",
+      "description": "Rear armor plating slot — great for hull reinforcement.",
+      "panel": { "anchor": "bottom-right", "offsetX": 10, "offsetY": 10 }
+    },
+    {
+      "id": "utility_aux",
+      "type": "utility",
+      "shape": "circle",
+      "size": 0.35,
+      "position": [0, 0.38, 0.9],
+      "unlockCost": { "credits": 400 },
+      "label": "AUX BAY",
+      "description": "Dorsal utility bay — magnets, thrusters, drones.",
+      "panel": { "anchor": "top-right", "offsetX": 10, "offsetY": 10 }
+    }
+  ],
+  "defaultUnlockedSlots": ["weapon_mid"],
+  "defaultLoadout": { "weapon_mid": "main_cannon" }
+}

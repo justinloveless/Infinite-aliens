@@ -1,6 +1,13 @@
 import { GAME, RUN } from '../constants.js';
 import { eventBus, EVENTS } from './EventBus.js';
-import { createInitialState, serializeState, deserializeState } from './GameState.js';
+import {
+  createInitialState, createInitialShip, createInitialInventory, createInitialShipsState,
+  serializeState, deserializeState,
+} from './GameState.js';
+import {
+  getDefaultShipId, getShipDef, createLoadoutForShip,
+  rebindShipAlias, applyShipBaseStatsToState,
+} from '../data/ships.js';
 
 const SAVE_KEY = 'infinite_aliens_save';
 
@@ -104,7 +111,61 @@ export class SaveManager {
       // v13: ECS refactor — entity state no longer round-trips through `player`.
       // Old saves are incompatible because `computed` fields moved onto components.
       if (data.version === 12) return null;
+      // v14: hangar / item slot system added — default ship struct on old saves;
+      // legacy tech tree stays intact.
+      if (data.version === 13) {
+        data.version = 14;
+        if (!data.ship) data.ship = createInitialShip();
+      }
+      // v15: credits currency + explicit unlockedSlots array (replaces slotCaps).
+      if (data.version === 14) {
+        data.version = 15;
+        if (data.currencies && data.currencies.credits === undefined) {
+          data.currencies.credits = 0;
+        }
+        if (data.ship) {
+          if (!Array.isArray(data.ship.unlockedSlots)) {
+            // Legacy slotCaps → pick the first N slots of each type as unlocked.
+            const unlocked = ['weapon_mid'];
+            const caps = data.ship.slotCaps || { weapon: 1, defense: 0, utility: 0 };
+            if (caps.weapon > 1) unlocked.push('weapon_wing_l');
+            if (caps.weapon > 2) unlocked.push('weapon_wing_r');
+            if (caps.defense > 0) unlocked.push('defense_core');
+            if (caps.defense > 1) unlocked.push('defense_hull');
+            if (caps.utility > 0) unlocked.push('utility_aux');
+            data.ship.unlockedSlots = unlocked;
+          }
+          delete data.ship.slotCaps;
+        }
+      }
+      // v16: multi-ship roster. `state.ship` becomes a runtime alias onto the
+      // selected loadout inside `state.ships`, and `ownedItems` is promoted to
+      // a shared `state.inventory` array.
+      if (data.version === 15) {
+        data.version = 16;
+        const defaultId = getDefaultShipId();
+        const legacy = data.ship || createInitialShip();
+        data.inventory = { ownedItems: Array.isArray(legacy.ownedItems) ? [...legacy.ownedItems] : ['main_cannon'] };
+        data.ships = {
+          selectedId: defaultId,
+          ownedIds: [defaultId],
+          loadouts: {
+            [defaultId]: {
+              slots: legacy.slots || createLoadoutForShip(getShipDef(defaultId)).slots,
+              unlockedSlots: Array.isArray(legacy.unlockedSlots) ? [...legacy.unlockedSlots] : ['weapon_mid'],
+              research: legacy.research || {},
+            },
+          },
+        };
+        delete data.ship;
+      }
       if (data.version !== GAME.VERSION) return null;
+
+      // Post-load: rehydrate transients + aliases that serializeState stripped.
+      if (!data.inventory) data.inventory = createInitialInventory();
+      if (!data.ships) data.ships = createInitialShipsState();
+      rebindShipAlias(data);
+      applyShipBaseStatsToState(data, getShipDef(data.ships.selectedId));
       return data;
     } catch {
       return null;
