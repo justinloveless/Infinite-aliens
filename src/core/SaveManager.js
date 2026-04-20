@@ -159,6 +159,38 @@ export class SaveManager {
         };
         delete data.ship;
       }
+      // v17: galaxy campaign + boss arena + infinite mastery added
+      if (data.version === 16) {
+        data.version = 17;
+        if (!data.campaign) {
+          data.campaign = { galaxyIndex: 0, totalSectorsCleared: 0, infiniteMode: false, infiniteSector: 0 };
+        }
+        if (!data.bossArena) {
+          data.bossArena = { active: false, subPhase: 'inactive', bossDefeated: false, gatesTotal: 3, gatesClosed: 0, buildProgress: 0 };
+        }
+        if (data.techTree && !data.techTree.masteryLevels) {
+          data.techTree.masteryLevels = {};
+        }
+        // Inject researchMastery into every ship loadout
+        if (data.ships?.loadouts) {
+          for (const loadout of Object.values(data.ships.loadouts)) {
+            if (!loadout.researchMastery) loadout.researchMastery = {};
+          }
+        }
+      }
+      // v18: arena interaction redesign — hold-E replaced with destructible
+      // gate crystal rings, boss is optional. Save shape is unchanged; just
+      // reset any in-flight arena state so stale subPhases don't persist.
+      if (data.version === 17) {
+        data.version = 18;
+        if (data.bossArena) {
+          data.bossArena.active = false;
+          data.bossArena.subPhase = 'inactive';
+          data.bossArena.gatesClosed = 0;
+          data.bossArena.buildProgress = 0;
+          data.bossArena.bossDefeated = false;
+        }
+      }
       if (data.version !== GAME.VERSION) return null;
 
       // Post-load: rehydrate transients + aliases that serializeState stripped.

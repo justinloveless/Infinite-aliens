@@ -52,4 +52,17 @@ export const EVENTS = {
   PHOENIX_REVIVED:     'phoenix:revived',    // {}
   SHIP_PURCHASED:      'ship:purchased',     // { shipId }
   SHIP_SELECTED:       'ship:selected',      // { shipId }
+  // Galaxy campaign
+  GALAXY_BOSS_PENDING:       'galaxy:boss_pending',       // { galaxyIndex, tier } — arena transition
+  ARENA_WARNING:             'arena:warning',             // { tier, galaxyIndex } — sector 9 heads-up
+  ARENA_TRANSITION_STARTED:  'arena:transition_started',  // { galaxyIndex }
+  ARENA_TRANSITION_ENDED:    'arena:transition_ended',    // { galaxyIndex }
+  ARENA_PHASE_CHANGED:       'arena:phase_changed',       // { subPhase }
+  ARENA_GATE_CLOSED:         'arena:gate_closed',         // { gateId }
+  ARENA_COMPLETE:            'arena:complete',            // {}
+  ARENA_LEAVE_REQUESTED:     'arena:leave_requested',     // {} — fired when player flies through their built warp gate
+  GATE_CRYSTAL_DESTROYED:    'arena:gate_crystal_destroyed', // { gateId }
+  CAMPAIGN_ADVANCED:         'campaign:advanced',         // { galaxyIndex, infiniteMode }
+  // Infinite mastery
+  MASTERY_PURCHASED:   'mastery:purchased',   // { nodeId, masteryLevel }
 };

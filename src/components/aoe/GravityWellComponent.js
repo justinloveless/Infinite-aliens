@@ -1,4 +1,5 @@
 import { Component } from '../../ecs/Component.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 
 /** Slows enemies within `radius` by refreshing a short-duration slow status. */
 export class GravityWellComponent extends Component {
@@ -9,7 +10,7 @@ export class GravityWellComponent extends Component {
   }
 
   update(dt, ctx) {
-    if (ctx?.state?.round?.phase !== 'combat') return;
+    if (!isCombatPhase(ctx?.state?.round?.phase)) return;
     const t = this.entity.get('TransformComponent'); if (!t) return;
     const r2 = this.radius * this.radius;
     const enemies = ctx.world.getFrameEnemies();

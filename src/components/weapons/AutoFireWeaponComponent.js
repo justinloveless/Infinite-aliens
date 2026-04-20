@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 import { resolveTarget } from './CombatTargeting.js';
 import { createProjectile } from '../../prefabs/createProjectile.js';
 
@@ -15,7 +16,7 @@ export class AutoFireWeaponComponent extends Component {
   }
 
   update(dt, ctx) {
-    if (ctx?.state?.round?.phase !== 'combat') { this._timer = 0; return; }
+    if (!isCombatPhase(ctx?.state?.round?.phase)) { this._timer = 0; return; }
     const stats = this.entity.get('PlayerStatsComponent');
     const t = this.entity.get('TransformComponent');
     const visuals = this.entity.get('ShipVisualsComponent');

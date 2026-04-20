@@ -7,6 +7,7 @@ import { ProjectileMotionComponent } from '../components/projectile/ProjectileMo
 import { ProjectileDamageComponent } from '../components/projectile/ProjectileDamageComponent.js';
 import { ProjectileVisualComponent } from '../components/projectile/ProjectileVisualComponent.js';
 import { HomingComponent } from '../components/projectile/HomingComponent.js';
+import { BOSS_ARENA } from '../constants.js';
 
 const TYPE_SPEEDS = {
   laser: 28, manual: 28, missile: 20, plasma: 22, enemy: 14,
@@ -52,7 +53,11 @@ export function createProjectile(opts) {
     damage, isCrit, isPlayerProjectile: isPlayer, pierces,
     onKillHealAmount, onKill,
   }));
-  entity.add(new BoundsComponent({ xMax: 35, yMax: 20, zMin: -90, zMax: 10 }));
+  // Use arena bounds (with a small margin) so projectiles fired during the
+  // boss arena don't despawn the frame after leaving the combat corridor.
+  const xMax = Math.max(35, BOSS_ARENA.X_MAX + 20);
+  const zFar = Math.max(90, -BOSS_ARENA.Z_MIN + 20);
+  entity.add(new BoundsComponent({ xMax, yMax: 20, zMin: -zFar, zMax: zFar }));
 
   if (type === 'missile' && target) {
     entity.add(new HomingComponent({ target, turnRate: 4 }));

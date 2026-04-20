@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { PLAY_AREA } from '../../constants.js';
+import { isOpenCombatPhase } from '../../core/phaseUtil.js';
 
 const ARROW_ALTS = {
   moveUp:    'ArrowUp',
@@ -59,13 +60,19 @@ export class PlayerInputComponent extends Component {
     const inputX = (this._isDown('moveRight') ? 1 : 0) - (this._isDown('moveLeft') ? 1 : 0);
     const inputZ = (this._isDown('moveDown')  ? 1 : 0) - (this._isDown('moveUp')   ? 1 : 0);
 
-    // Suspend input/movement while not in combat
+    // Arena phases use the dedicated flight controller in main.js; don't
+    // touch position/rotation here or the PLAY_AREA clamp will drag the ship
+    // back into the narrow combat corridor.
     const phase = ctx?.state?.round?.phase;
-    const combatActive = phase === 'combat';
+    if (!isOpenCombatPhase(phase)) {
+      this._vx += (0 - this._vx) * dt * 10;
+      this._vz += (0 - this._vz) * dt * 10;
+      return;
+    }
 
     const accel = dt * 10;
-    const targetVx = combatActive ? inputX * speed : 0;
-    const targetVz = combatActive ? inputZ * speed : 0;
+    const targetVx = inputX * speed;
+    const targetVz = inputZ * speed;
     this._vx += (targetVx - this._vx) * accel;
     this._vz += (targetVz - this._vz) * accel;
 

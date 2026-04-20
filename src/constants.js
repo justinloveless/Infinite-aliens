@@ -1,7 +1,7 @@
 // ===== GAME CONSTANTS =====
 
 export const GAME = {
-  VERSION: 16,
+  VERSION: 18,
   AUTO_SAVE_INTERVAL: 30000,  // ms
   OFFLINE_CAP: 8 * 3600,     // seconds
   OFFLINE_EFFICIENCY: 0.5,
@@ -10,7 +10,7 @@ export const GAME = {
 /** Continuous run: difficulty tier from distance; bosses at distance milestones. */
 export const RUN = {
   DISTANCE_PER_TIER: 38,       // +1 effective tier (enemy scaling / unlocks) per this many units moved
-  BOSS_DISTANCE_INTERVAL: 135, // first boss at this distance, then each +interval after the prior boss dies
+  BOSS_DISTANCE_INTERVAL: 380, // = 10 tiers per boss; one boss fight per galaxy (10 sectors), always an arena
   MAX_CONCURRENT_ENEMIES: 15,
   SPAWN_INTERVAL_BASE: 2.35,
   SPAWN_INTERVAL_MIN: 0.45,
@@ -198,9 +198,56 @@ export const MANUAL_GUN = {
   FIRE_COOLDOWN:      0.12, // minimum seconds between shots
 };
 
-/** Warp gate system: gates unlock every N tiers reached and allow starting a new run mid-progression. */
+/** @deprecated Galaxy select replaces warp gate tier-skip. Kept for save migration compatibility. */
 export const WARP = {
-  GATE_TIER_INTERVAL: 10,   // a new gate unlocks every 10 tiers reached
+  GATE_TIER_INTERVAL: 10,
+};
+
+/** Galaxy campaign: 10 real galaxies × 10 sectors each. Boss arena triggers at each galaxy's final sector. */
+export const CAMPAIGN = {
+  GALAXIES: 10,
+  SECTORS_PER_GALAXY: 10,
+  GALAXY_NAMES: [
+    'Milky Way', 'Andromeda', 'Triangulum',
+    'Large Magellanic Cloud', 'Small Magellanic Cloud',
+    'Whirlpool', 'Sombrero', 'Pinwheel', 'Centaurus A', 'Cartwheel',
+  ],
+};
+
+/** Boss arena phase: a 600×600-unit open map with free flight + 3 sequential objectives. */
+export const BOSS_ARENA = {
+  X_MIN: -300, X_MAX: 300,
+  Z_MIN: -300, Z_MAX: 300,
+  EDGE_BAND: 40,             // units from the wall where soft steering kicks in
+  GATE_COUNT: 3,
+  GATE_BUILD_TIME: 20,       // seconds to complete the player's warp gate
+  GATE_FLY_THROUGH_RADIUS: 5.0, // player must fly within this many units of own gate to warp out
+  GATE_SPAWN_INTERVAL: 3.0,  // seconds between enemy spawns at each active gate
+  GATE_MAX_LIVE_SPAWNS: 6,   // cap on concurrent enemies spawned by a single gate
+  // Gate crystal ring — destroy all crystals to close a gate.
+  GATE_CRYSTAL_COUNT: 5,
+  GATE_CRYSTAL_ORBIT_RADIUS: 4.0,
+  GATE_CRYSTAL_ORBIT_SPEED: 0.6, // rad/sec
+  GATE_CRYSTAL_COLLIDER_RADIUS: 0.7,
+  GATE_CRYSTAL_HP_BASE: 14,
+  GATE_CRYSTAL_HP_TIER_MULT: 1.2, // HP multiplies by this^tier (mild scaling)
+  BOSS_MOVE_SPEED_MULT: 1.6, // arena boss moves faster than a combat boss
+  BOSS_GROW_IN_TIME: 0.5,    // seconds for boss to scale from 0 to full size at arrival
+  BOSS_SPAWN_INTERVAL: 2.5,  // seconds between boss minion spawns while boss alive
+  BOSS_MAX_LIVE_SPAWNS: 8,   // cap on concurrent minions spawned by the boss
+
+  // Flight controller
+  YAW_SPEED: 2.2,            // rad/sec per A/D hold
+  THROTTLE_ACCEL: 6,         // speed ramps up/down per sec
+  MIN_SPEED_MULT: 0.35,      // × baseSpeed when holding S
+  MAX_SPEED_MULT: 2.2,       // × baseSpeed when holding W
+  CRUISE_SPEED_MULT: 1.1,    // × baseSpeed when no throttle input
+  BASE_SPEED_MULT: 4,        // × computed.speed to get arena "base" speed
+
+  // Transition
+  TRANSITION_DURATION: 3.5,  // total seconds combat → boss_arena
+  BOSS_SPAWN_AT: 2.5,        // seconds into transition when boss + gates appear
+  CAMERA_SETTLE_AT: 3.2,     // seconds when camera finishes pulling into follow
 };
 
 export const ASTEROID = {

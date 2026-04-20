@@ -2,6 +2,7 @@ import { eventBus, EVENTS } from '../core/EventBus.js';
 import {
   getResearchCatalog, getResearchLevel, canPurchaseResearch, purchaseResearch,
   sellResearchLevel, getRequiredItem, hasItemInstalled, getItem,
+  getResearchMasteryLevel, purchaseResearchMastery, getResearchMasteryCost,
 } from '../hangar/HangarSystem.js';
 
 const CURRENCY_ICONS = {
@@ -39,6 +40,7 @@ export class ResearchUI {
       eventBus.on(EVENTS.CURRENCY_CHANGED, () => this._isOpen && this._renderCurrencies()),
       eventBus.on(EVENTS.UPGRADE_PURCHASED, () => this._isOpen && this._renderList()),
       eventBus.on(EVENTS.UPGRADE_SOLD, () => this._isOpen && this._renderList()),
+      eventBus.on(EVENTS.MASTERY_PURCHASED, () => this._isOpen && this._renderList()),
     ];
   }
 
@@ -106,6 +108,7 @@ export class ResearchUI {
     const maxLevel = node.maxLevel ?? 1;
     const owned = level > 0;
     const maxed = level >= maxLevel;
+    const masteryLevel = maxed ? getResearchMasteryLevel(this.state, node.id) : 0;
     const requiredItem = getRequiredItem(node);
     const itemInstalled = !requiredItem || hasItemInstalled(this.state, requiredItem);
     const prereqOk = canPurchaseResearch(this.state, node.id) && itemInstalled;
@@ -119,8 +122,13 @@ export class ResearchUI {
     }).join('');
 
     let stateTag = '';
-    if (maxed) stateTag = '<span class="research-card-tag">MAXED</span>';
-    else if (owned) stateTag = `<span class="research-card-level">LV ${level}/${maxLevel}</span>`;
+    if (maxed && masteryLevel > 0) {
+      stateTag = `<span class="research-card-tag mastery">★ MASTERY LV ${masteryLevel}</span>`;
+    } else if (maxed) {
+      stateTag = '<span class="research-card-tag">MAXED</span>';
+    } else if (owned) {
+      stateTag = `<span class="research-card-level">LV ${level}/${maxLevel}</span>`;
+    }
 
     let reqTag = '';
     if (requiredItem && !itemInstalled) {
@@ -133,9 +141,20 @@ export class ResearchUI {
       !prereqOk ? 'locked' : '',
     ].filter(Boolean).join(' ');
 
+    const masteryCost = maxed ? getResearchMasteryCost(node, masteryLevel) : null;
+    const masteryAfford = masteryCost ? this.currency.canAfford(masteryCost) : false;
+    const masteryCostPills = masteryCost ? Object.entries(masteryCost).map(([k, v]) => {
+      const cfg = CURRENCY_ICONS[k] || { icon: '?', color: '#fff' };
+      const ok = (this.state.currencies[k] ?? 0) >= v;
+      return `<span class="cost-pill ${ok ? '' : 'afford-no'}"><span style="color:${cfg.color}">${cfg.icon}</span> ${v}</span>`;
+    }).join('') : '';
+
     const btns = [];
     if (!maxed) {
       btns.push(`<button class="neon-btn small research-buy-btn" data-id="${node.id}" ${prereqOk && afford ? '' : 'disabled'}>RESEARCH</button>`);
+    }
+    if (maxed) {
+      btns.push(`<button class="neon-btn small mastery-btn research-mastery-btn" data-id="${node.id}" ${masteryAfford ? '' : 'disabled'}>★ MASTERY</button>`);
     }
     if (owned) {
       btns.push(`<button class="neon-btn small research-sell-btn" data-id="${node.id}">SELL LV</button>`);
@@ -149,7 +168,7 @@ export class ResearchUI {
         </div>
         <div class="research-card-desc">${node.description || ''}</div>
         ${reqTag}
-        <div class="research-card-cost">${maxed ? '' : costPills}</div>
+        <div class="research-card-cost">${maxed ? masteryCostPills : costPills}</div>
         <div class="research-card-actions">
           ${btns.join(' ')}
           ${stateTag}
@@ -171,6 +190,9 @@ export class ResearchUI {
     });
     this._body.querySelectorAll('.research-sell-btn').forEach(btn => {
       btn.onclick = () => sellResearchLevel(this.state, this.currency, btn.dataset.id);
+    });
+    this._body.querySelectorAll('.research-mastery-btn').forEach(btn => {
+      btn.onclick = () => purchaseResearchMastery(this.state, this.currency, btn.dataset.id);
     });
   }
 }

@@ -19,6 +19,59 @@ export const MUSIC_SPECS = {
     prompt:
       'Epic but cozy synthwave boss battle music, deeper bass pulse, dramatic analog synth leads, tension building but not aggressive, retro-futuristic space combat, 110 BPM, seamless loop, warm and exciting, no vocals',
   },
+
+  // Per-galaxy arena tracks. Played when the player warps into a galaxy's
+  // boss arena. Each is tuned to the mood of the environment preset.
+  'arena-0': {
+    file: 'arena-milky-way.mp3',
+    prompt:
+      'Triumphant home-turf synthwave arena battle music, warm analog basslines, bright 80s lead synths, rising heroic melody with cozy retro-future optimism, driving but not aggressive, Milky Way core starship showdown, 118 BPM, seamless loop, no vocals',
+  },
+  'arena-1': {
+    file: 'arena-andromeda.mp3',
+    prompt:
+      'Deep blue cosmic synthwave arena battle music, layered ethereal pads, shimmering arpeggios, steady kick pulse, mysterious alien beauty with forward momentum, Andromeda galaxy duel, 114 BPM, seamless loop, warm analog synths, no vocals',
+  },
+  'arena-2': {
+    file: 'arena-triangulum.mp3',
+    prompt:
+      'Crystalline aquamarine synthwave arena battle music, bright pluck synths, bubbling sequenced bass, airy choir pads, hopeful and determined, cozy retro-futuristic combat, Triangulum ice-ring gate run, 120 BPM, seamless loop, no vocals',
+  },
+  'arena-3': {
+    file: 'arena-large-magellanic.mp3',
+    prompt:
+      'Warm amber synthwave arena battle music, thick analog bass, soaring saw leads, sunset boulevard energy, confident and cruising but with tension, Large Magellanic Cloud showdown, 116 BPM, seamless loop, cozy retro-future, no vocals',
+  },
+  'arena-4': {
+    file: 'arena-small-magellanic.mp3',
+    prompt:
+      'Neon pink dreampop synthwave arena battle music, gated reverb snare, cozy bright chorused synths, playful arpeggios, upbeat but melancholic undertone, Small Magellanic Cloud arena, 120 BPM, seamless loop, warm analog, no vocals',
+  },
+  'arena-5': {
+    file: 'arena-whirlpool.mp3',
+    prompt:
+      'Swirling cyan synthwave arena battle music, rotating filtered pads, cascading delay arpeggios, driving octave bass, hypnotic spiraling motion, Whirlpool galaxy encounter, 122 BPM, seamless loop, warm and immersive, no vocals',
+  },
+  'arena-6': {
+    file: 'arena-sombrero.mp3',
+    prompt:
+      'Regal ivory-and-black synthwave arena battle music, stately analog leads, orchestral hit stabs, steady powerful bass pulse, cinematic and confident, Sombrero galaxy duel, 112 BPM, seamless loop, cozy epic, no vocals',
+  },
+  'arena-7': {
+    file: 'arena-pinwheel.mp3',
+    prompt:
+      'Fiery orange synthwave arena battle music, punchy gated drums, searing lead synth riffs, syncopated bass, exciting and kinetic with a grin, Pinwheel galaxy brawl, 124 BPM, seamless loop, warm retro-future, no vocals',
+  },
+  'arena-8': {
+    file: 'arena-centaurus-a.mp3',
+    prompt:
+      'Dark violet synthwave arena battle music, brooding low analog bass, haunting minor-key leads, glitchy pulse textures, mysterious menace with forward drive, Centaurus A AGN showdown, 120 BPM, seamless loop, cozy sinister, no vocals',
+  },
+  'arena-9': {
+    file: 'arena-cartwheel.mp3',
+    prompt:
+      'Blazing crimson synthwave arena battle music, apocalyptic swelling pads, pounding four-on-the-floor kick, screaming lead synths, end-of-galaxy final-stand energy, Cartwheel galaxy last ring, 126 BPM, seamless loop, warm but urgent, no vocals',
+  },
 };
 
 /** Logical music keys → filename (built from MUSIC_SPECS for a single edit point). */

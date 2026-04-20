@@ -1,4 +1,5 @@
 import { Component } from '../../ecs/Component.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 
 /**
  * Periodically pushes enemies within `radius` away from the owner and
@@ -14,7 +15,7 @@ export class RepulserComponent extends Component {
   }
 
   update(dt, ctx) {
-    if (ctx?.state?.round?.phase !== 'combat') return;
+    if (!isCombatPhase(ctx?.state?.round?.phase)) return;
     this._timer += dt;
     if (this._timer < this.interval) return;
     this._timer = 0;

@@ -103,6 +103,8 @@ export class AudioManager {
       droneSpawn: { freq: 400, type: 'sine', duration: 0.45, decay: 0.38, vol: 0.22, sweep: 0.55 },
       manualShot: { freq: 320, type: 'sawtooth', duration: 0.2, decay: 0.14, vol: 0.22, sweep: -0.55 },
       manualOverheat: { freq: 280, type: 'sawtooth', duration: 1.0, decay: 0.9, vol: 0.28, sweep: -0.75, noise: true },
+      warning: { freq: 520, type: 'square', duration: 0.6, decay: 0.5, vol: 0.22, sweep: -0.2 },
+      warp: { freq: 180, type: 'sawtooth', duration: 2.4, decay: 2.0, vol: 0.3, sweep: 1.4, noise: true },
     };
 
     const def = defs[name];

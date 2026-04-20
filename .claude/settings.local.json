@@ -12,7 +12,8 @@
       "Bash(node --check src/devtools/tech-tree-designer-page.js)",
       "Bash(node --check dev/techtreedesigner.html)",
       "Bash(node --check vite.config.js)",
-      "Bash(node -e \"const d=require\\('./src/data/upgrades.json'\\); const starters=d.nodes.filter\\(n=>!n.prereqs||!n.prereqs.length\\); console.log\\('Ring-0 nodes:', starters.map\\(n=>n.id+' ['+n.category+']'\\).join\\(', '\\)\\)\")"
+      "Bash(node -e \"const d=require\\('./src/data/upgrades.json'\\); const starters=d.nodes.filter\\(n=>!n.prereqs||!n.prereqs.length\\); console.log\\('Ring-0 nodes:', starters.map\\(n=>n.id+' ['+n.category+']'\\).join\\(', '\\)\\)\")",
+      "Bash(grep -E \"\\\\.\\(js|json\\)$\")"
     ]
   }
 }

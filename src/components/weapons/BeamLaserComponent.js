@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
 import { BEAM_LASER } from '../../constants.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 import { resolveTarget } from './CombatTargeting.js';
 
 const _yAxis = new THREE.Vector3(0, 1, 0);
@@ -88,7 +89,7 @@ export class BeamLaserComponent extends Component {
   update(dt, ctx) {
     this._time += dt;
 
-    if (ctx?.state?.round?.phase !== 'combat') {
+    if (!isCombatPhase(ctx?.state?.round?.phase)) {
       this._setVisible(false);
       this._light.intensity = 0;
       this._isOn = false;

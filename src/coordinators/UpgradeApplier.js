@@ -234,6 +234,27 @@ export class UpgradeApplier {
       }
     }
 
+    // Mastery bonuses: +1% per mastery level per affected stat
+    for (const node of unlocked) {
+      if (!(node.masteryLevel > 0)) continue;
+      const bonus = node.masteryLevel * 0.01;
+      const seen = new Set();
+      for (const effect of node.effects) {
+        if (effect.condition) continue;
+        const target = effect.target || 'player';
+        if (target !== 'player') continue;
+        const { type, stat } = effect;
+        if (seen.has(stat) || stats[stat] === undefined) continue;
+        if (type === 'multiply') {
+          stats[stat] *= (1 + bonus);
+          seen.add(stat);
+        } else if (type === 'add' || type === 'add_flat') {
+          stats[stat] += effect.value * bonus;
+          seen.add(stat);
+        }
+      }
+    }
+
     // Stellar Nova scaling
     const nova = unlocked.find(n => n.templateId === 'stellar_burst');
     if (nova && nova.currentLevel > 0) {

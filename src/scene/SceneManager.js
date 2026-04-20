@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SCENE, BLOOM } from '../constants.js';
+import { GALAXY_PRESETS } from './EnvironmentPresets.js';
 
 export class SceneManager {
   constructor() {
@@ -110,6 +111,77 @@ export class SceneManager {
     if (this.composer) {
       this.composer.setSize(w, h);
     }
+  }
+
+  /**
+   * Begin transitioning to a new galaxy environment preset.
+   * @param {object} preset - from EnvironmentPresets.js
+   * @param {boolean} instant - apply immediately (no lerp)
+   */
+  applyEnvironment(preset, instant = false) {
+    this._envTarget = preset;
+    if (instant) {
+      this._applyPresetImmediate(preset);
+      this._envLerpT = 1;
+      this._envStart = null;
+    } else {
+      this._envStart = this._snapshotCurrentEnv();
+      this._envLerpT = 0;
+    }
+  }
+
+  _snapshotCurrentEnv() {
+    const fog = this.scene.fog;
+    return {
+      fogColor:         new THREE.Color(fog.color),
+      fogNear:          fog.near,
+      fogFar:           fog.far,
+      bgColor:          new THREE.Color(this.scene.background),
+      ambientColor:     new THREE.Color(this.ambientLight.color),
+      ambientIntensity: this.ambientLight.intensity,
+      dirColor:         new THREE.Color(this.directionalLight.color),
+      dirIntensity:     this.directionalLight.intensity,
+      fillColor:        new THREE.Color(this.fillLight.color),
+      fillIntensity:    this.fillLight.intensity,
+      exposure:         this.renderer.toneMappingExposure,
+    };
+  }
+
+  _applyPresetImmediate(p) {
+    this.scene.fog.color.setHex(p.fogColor);
+    this.scene.fog.near  = p.fogNear;
+    this.scene.fog.far   = p.fogFar;
+    this.scene.background.setHex(p.bgColor);
+    this.ambientLight.color.setHex(p.ambientColor);
+    this.ambientLight.intensity     = p.ambientIntensity;
+    this.directionalLight.color.setHex(p.dirColor);
+    this.directionalLight.intensity = p.dirIntensity;
+    this.fillLight.color.setHex(p.fillColor);
+    this.fillLight.intensity        = p.fillIntensity;
+    this.renderer.toneMappingExposure = p.exposure;
+  }
+
+  /** Call every frame from main._tick() to animate environment transitions. */
+  lerpEnvironment(dt) {
+    if (!this._envTarget || !this._envStart || this._envLerpT >= 1) return;
+    this._envLerpT = Math.min(1, this._envLerpT + dt / 2.5);
+    const t = this._envLerpT;
+    const s = this._envStart;
+    const p = this._envTarget;
+
+    this.scene.fog.color.lerpColors(s.fogColor, new THREE.Color(p.fogColor), t);
+    this.scene.fog.near  = s.fogNear  + (p.fogNear  - s.fogNear)  * t;
+    this.scene.fog.far   = s.fogFar   + (p.fogFar   - s.fogFar)   * t;
+    this.scene.background.lerpColors(s.bgColor, new THREE.Color(p.bgColor), t);
+    this.ambientLight.color.lerpColors(s.ambientColor, new THREE.Color(p.ambientColor), t);
+    this.ambientLight.intensity     = s.ambientIntensity + (p.ambientIntensity - s.ambientIntensity) * t;
+    this.directionalLight.color.lerpColors(s.dirColor, new THREE.Color(p.dirColor), t);
+    this.directionalLight.intensity = s.dirIntensity + (p.dirIntensity - s.dirIntensity) * t;
+    this.fillLight.color.lerpColors(s.fillColor, new THREE.Color(p.fillColor), t);
+    this.fillLight.intensity        = s.fillIntensity + (p.fillIntensity - s.fillIntensity) * t;
+    this.renderer.toneMappingExposure = s.exposure + (p.exposure - s.exposure) * t;
+
+    if (t >= 1) this._envStart = null;
   }
 
   // Project 3D world position to 2D screen coords

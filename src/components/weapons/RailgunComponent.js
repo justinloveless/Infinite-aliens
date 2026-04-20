@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 import { createProjectile } from '../../prefabs/createProjectile.js';
 
 /**
@@ -23,7 +24,7 @@ export class RailgunComponent extends Component {
 
   beginCharge() {
     const ctx = this._ctx;
-    if (!ctx || ctx.state?.round?.phase !== 'combat') return;
+    if (!ctx || !isCombatPhase(ctx.state?.round?.phase)) return;
     const energy = this.entity.get('EnergyComponent');
     if (!energy || energy.current < this.energyCost) return;
     this._charging = true;
@@ -46,7 +47,8 @@ export class RailgunComponent extends Component {
     const t = this.entity.get('TransformComponent');
     const stats = this.entity.get('PlayerStatsComponent');
     const visuals = this.entity.get('ShipVisualsComponent');
-    const dir = new THREE.Vector3(0, 0, -1);
+    const yaw = t?.rotation?.y ?? 0;
+    const dir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     const pos = visuals
       ? visuals.getPrimaryWeaponMuzzleWorldPosition()
       : t.position.clone().add(new THREE.Vector3(0, 0, -1.2));

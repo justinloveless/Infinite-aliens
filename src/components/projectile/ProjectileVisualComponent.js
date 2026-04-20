@@ -108,14 +108,15 @@ export class ProjectileVisualComponent extends Component {
       this._handle = renderer.allocate(this._spec);
       this._handle.setColor(this._instanceColorHex);
       const t = this.entity?.get('TransformComponent');
-      if (t) this._handle.setPosition(t.position);
+      const motion = this.entity?.get('ProjectileMotionComponent');
+      if (t) this._handle.setTransform(t.position, motion?.direction ?? null);
       return;
     }
-    // Fallback: regular Mesh (matches the original behavior).
+    // Fallback: regular Mesh (matches the original behavior). Orientation is
+    // applied per frame in update() to match the instanced path.
     const mat = new THREE.MeshBasicMaterial({ color: this._instanceColorHex });
     const mesh = new THREE.Mesh(this._spec.geometry, mat);
     mesh.scale.setScalar(this._spec.scale);
-    if (this._spec.rotateX) mesh.rotation.x = Math.PI / 2;
     this._fallbackMesh = mesh;
     ctx?.scene?.groups.projectiles.add(mesh);
   }
@@ -136,10 +137,20 @@ export class ProjectileVisualComponent extends Component {
   update() {
     const t = this.entity?.get('TransformComponent');
     if (!t) return;
+    const motion = this.entity?.get('ProjectileMotionComponent');
+    const dir = motion?.direction ?? null;
     if (this._handle) {
-      this._handle.setPosition(t.position);
+      this._handle.setTransform(t.position, dir);
     } else if (this._fallbackMesh) {
       this._fallbackMesh.position.copy(t.position);
+      if (dir && (dir.x || dir.y || dir.z)) {
+        _fallbackQuat.setFromUnitVectors(_fallbackUpAxis, _fallbackDir.copy(dir).normalize());
+        this._fallbackMesh.quaternion.copy(_fallbackQuat);
+      }
     }
   }
 }
+
+const _fallbackQuat = new THREE.Quaternion();
+const _fallbackDir = new THREE.Vector3();
+const _fallbackUpAxis = new THREE.Vector3(0, 1, 0);

@@ -109,6 +109,22 @@ export function createInitialState() {
       maxTierReached: 0,
     },
 
+    campaign: {
+      galaxyIndex: 0,           // 0–9 (pins at 9 in infinite mode)
+      totalSectorsCleared: 0,   // persists across runs
+      infiniteMode: false,
+      infiniteSector: 0,        // increments per boss after all 10 galaxies cleared
+    },
+
+    bossArena: {
+      active: false,
+      subPhase: 'inactive',     // 'inactive'|'transitioning'|'fighting'|'building_gate'|'complete'
+      bossDefeated: false,
+      gatesTotal: 3,
+      gatesClosed: 0,
+      buildProgress: 0,         // 0..1
+    },
+
     // Shared inventory: items owned across all ships.
     inventory: createInitialInventory(),
     // Roster of ships + per-ship loadouts. `ship` below is a live alias to the

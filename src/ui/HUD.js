@@ -1,5 +1,5 @@
 import { eventBus, EVENTS } from '../core/EventBus.js';
-import { CURRENCIES, RUN } from '../constants.js';
+import { CURRENCIES, RUN, CAMPAIGN } from '../constants.js';
 
 export class HUD {
   constructor() {
@@ -8,6 +8,7 @@ export class HUD {
     this._heatBar = document.getElementById('heat-bar');
     this._energyBar = document.getElementById('energy-bar');
     this._roundNum = document.getElementById('round-number');
+    this._galaxyLabel = document.getElementById('galaxy-label');
     this._distanceVal = document.getElementById('distance-value');
     this._bossBar = document.getElementById('boss-progress-bar');
     this._enemiesDefeated = document.getElementById('enemies-defeated');
@@ -16,6 +17,9 @@ export class HUD {
     for (const key of Object.keys(CURRENCIES)) {
       this._amtEls[key] = document.getElementById(`amt-${key}`);
     }
+
+    this._warningEl = document.getElementById('arena-warning');
+    this._warningHideTimer = null;
 
     this._subscribeEvents();
   }
@@ -27,6 +31,25 @@ export class HUD {
     eventBus.on(EVENTS.ROUND_STARTED, ({ round }) => {
       this._roundNum.textContent = round;
     });
+    eventBus.on(EVENTS.ARENA_WARNING, () => this.showArenaWarning());
+    eventBus.on(EVENTS.ARENA_TRANSITION_STARTED, () => this.hideArenaWarning());
+  }
+
+  /** Show the sector-9 heads-up banner for ~4 seconds. */
+  showArenaWarning() {
+    if (!this._warningEl) return;
+    this._warningEl.classList.remove('hidden');
+    if (this._warningHideTimer) clearTimeout(this._warningHideTimer);
+    this._warningHideTimer = setTimeout(() => this.hideArenaWarning(), 4500);
+  }
+
+  hideArenaWarning() {
+    if (!this._warningEl) return;
+    this._warningEl.classList.add('hidden');
+    if (this._warningHideTimer) {
+      clearTimeout(this._warningHideTimer);
+      this._warningHideTimer = null;
+    }
   }
 
   show() { document.getElementById('hud').classList.remove('hidden'); }
@@ -85,17 +108,26 @@ export class HUD {
 
     const r = state.round;
     this._roundNum.textContent = r.current;
+
+    if (this._galaxyLabel && state.campaign) {
+      const g = state.campaign;
+      const galaxyName = CAMPAIGN.GALAXY_NAMES[g.galaxyIndex] || 'Unknown Galaxy';
+      const sector = ((r.current - 1) % CAMPAIGN.SECTORS_PER_GALAXY) + 1;
+      this._galaxyLabel.textContent = g.infiniteMode
+        ? `INFINITE MODE — Sector ${g.infiniteSector + 1}`
+        : `${galaxyName} — Sector ${sector}/${CAMPAIGN.SECTORS_PER_GALAXY}`;
+    }
     if (this._distanceVal) {
       this._distanceVal.textContent = Math.floor(r.distanceTraveled || 0);
     }
 
     if (this._bossBar) {
-      const bd = r.bossesDefeated || 0;
-      const prevAt = bd * RUN.BOSS_DISTANCE_INTERVAL;
-      const nextAt = (bd + 1) * RUN.BOSS_DISTANCE_INTERVAL;
-      const span = nextAt - prevAt;
+      // Progress through current galaxy's 10 sectors; boss fires at the start of sector 10.
+      const galaxySpan = CAMPAIGN.SECTORS_PER_GALAXY * RUN.DISTANCE_PER_TIER;
+      const bossAt = (CAMPAIGN.SECTORS_PER_GALAXY - 1) * RUN.DISTANCE_PER_TIER;
       const d = r.distanceTraveled || 0;
-      const t = span > 0 ? Math.min(1, Math.max(0, (d - prevAt) / span)) : 0;
+      const relD = galaxySpan > 0 ? d - Math.floor(d / galaxySpan) * galaxySpan : 0;
+      const t = bossAt > 0 ? Math.min(1, Math.max(0, relD / bossAt)) : 0;
       this._bossBar.style.width = `${(r.bossIsActive ? 1 : t) * 100}%`;
     }
 

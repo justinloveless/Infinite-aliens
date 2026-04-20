@@ -1,4 +1,4 @@
-import { RUN, PLAYER, ASTEROID } from '../constants.js';
+import { RUN, PLAYER, ASTEROID, CAMPAIGN } from '../constants.js';
 import { eventBus, EVENTS } from '../core/EventBus.js';
 import { createEnemy } from '../prefabs/createEnemy.js';
 import { createLootDrop } from '../prefabs/createLootDrop.js';
@@ -20,6 +20,8 @@ export class SpawnDirector {
     this._spawnTimer = 0;
     this._asteroidTimer = 0;
     this._bossSpawnPending = false;
+    this._galaxyBossPending = false;
+    this._warningShownForTier = -1;
     this._unsub = null;
   }
 
@@ -66,6 +68,8 @@ export class SpawnDirector {
     for (const e of this.world.query('effect')) e.destroy();
     this._spawnTimer = 0;
     this._bossSpawnPending = false;
+    this._galaxyBossPending = false;
+    this._warningShownForTier = -1;
   }
 
   _clearLoot() {
@@ -81,9 +85,22 @@ export class SpawnDirector {
     const state = this.state;
     const hasBoss = this._hasLiveBoss();
     state.round.bossIsActive = hasBoss;
-    const nextAt = (state.round.bossesDefeated + 1) * RUN.BOSS_DISTANCE_INTERVAL;
-    if (state.round.distanceTraveled >= nextAt && !hasBoss) {
-      this._bossSpawnPending = true;
+    const tier = state.round.current;
+
+    // Sector 9 heads-up: one-shot warning per approaching galaxy boss.
+    const sectorInGalaxy = ((tier - 1) % CAMPAIGN.SECTORS_PER_GALAXY) + 1;
+    if (sectorInGalaxy === CAMPAIGN.SECTORS_PER_GALAXY - 1 && this._warningShownForTier !== tier) {
+      this._warningShownForTier = tier;
+      const galaxyIndex = state.campaign?.galaxyIndex ?? 0;
+      eventBus.emit(EVENTS.ARENA_WARNING, { tier, galaxyIndex });
+    }
+
+    // Galaxy boss fires at the start of the last sector of each galaxy (tier % 10 === 0).
+    const atBossSector = tier > 0 && tier % CAMPAIGN.SECTORS_PER_GALAXY === 0;
+    if (atBossSector && !hasBoss && !this._galaxyBossPending) {
+      this._galaxyBossPending = true;
+      const galaxyIndex = state.campaign?.galaxyIndex ?? 0;
+      eventBus.emit(EVENTS.GALAXY_BOSS_PENDING, { galaxyIndex, tier });
     }
   }
 
@@ -96,8 +113,13 @@ export class SpawnDirector {
 
   _onEnemyKilled(enemy) {
     const state = this.state;
-    if (state.round.phase !== 'combat') return;
+    if (state.round.phase !== 'combat' && state.round.phase !== 'boss_arena') return;
     if (!enemy) return;
+    // Arena director owns its own kill handling
+    if (state.round.phase === 'boss_arena') {
+      enemy.destroy();
+      return;
+    }
 
     const color = enemy.enemyType === 'boss' ? 0xaa00ff : 0xff6600;
     const scale = enemy.enemyType === 'boss' ? 2.5 : (enemy.enemyType === 'tank' ? 1.5 : 1.0);

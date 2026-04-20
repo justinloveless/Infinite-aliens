@@ -11,6 +11,7 @@ export class UIManager {
       hangar: document.getElementById('hangar-screen'),
       store: document.getElementById('store-screen'),
       research: document.getElementById('research-screen'),
+      arenaHud: document.getElementById('arena-hud'),
     };
   }
 
@@ -95,36 +96,35 @@ export class UIManager {
   }
 
   /**
-   * Show the warp gate selection screen.
-   * @param {Array<{gateNum: number, tier: number}>} gates - unlocked gates (excluding gate 0)
-   * @param {function(startTier: number): void} onSelect - called with the chosen starting tier
+   * Show galaxy selection screen (replaces warp gate tier-skip).
+   * @param {Array<{galaxyIndex: number, name: string, startTier: number}>} galaxies - unlocked galaxies
+   * @param {function(galaxyIndex: number): void} onSelect - called with chosen galaxy index
    */
-  showWarpGateSelect(gates, onSelect) {
+  showGalaxySelect(galaxies, onSelect) {
     const list = document.getElementById('warp-gate-list');
     list.innerHTML = '';
 
-    // Standard launch (always first)
-    const standardBtn = document.createElement('button');
-    standardBtn.className = 'neon-btn warp-gate-btn gate-standard';
-    standardBtn.innerHTML = `
-      <span class="warp-gate-sector">Sector 1</span>
-      <span class="warp-gate-label">Standard Launch</span>
-    `;
-    standardBtn.onclick = () => { this.hide('warpGate'); onSelect(1); };
-    list.appendChild(standardBtn);
-
-    for (const gate of gates) {
+    for (const g of galaxies) {
       const btn = document.createElement('button');
-      btn.className = 'neon-btn warp-gate-btn';
+      btn.className = 'neon-btn warp-gate-btn' + (g.galaxyIndex === 0 ? ' gate-standard' : '');
       btn.innerHTML = `
-        <span class="warp-gate-sector">Sector ${gate.tier}</span>
-        <span class="warp-gate-label">Warp Gate ${gate.gateNum}</span>
+        <span class="warp-gate-sector">${g.name}</span>
+        <span class="warp-gate-label">${g.galaxyIndex === 0 ? 'Standard Launch' : `Galaxy ${g.galaxyIndex + 1} — Sector 1`}</span>
       `;
-      btn.onclick = () => { this.hide('warpGate'); onSelect(gate.tier); };
+      btn.onclick = () => { this.hide('warpGate'); onSelect(g.galaxyIndex); };
       list.appendChild(btn);
     }
 
     this.show('warpGate');
+  }
+
+  /** @deprecated Use showGalaxySelect instead */
+  showWarpGateSelect(gates, onSelect) {
+    this.showGalaxySelect(
+      [{ galaxyIndex: 0, name: 'Milky Way', startTier: 1 },
+       ...gates.map(g => ({ galaxyIndex: Math.floor(g.tier / 10), name: `Sector ${g.tier}`, startTier: g.tier }))],
+      (idx) => onSelect(idx * 10 + 1),
+    );
   }
 
   bindTechTreeButtons(onOpen, onClose) {

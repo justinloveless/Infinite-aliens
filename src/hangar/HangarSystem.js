@@ -193,6 +193,38 @@ export function canPurchaseResearch(state, nodeId) {
   return true;
 }
 
+// ─── Research Mastery ──────────────────────────────────────────────────────
+
+export function getResearchMasteryLevel(state, nodeId) {
+  return state?.ship?.researchMastery?.[nodeId] ?? 0;
+}
+
+export function getResearchMasteryCost(node, masteryLevel) {
+  const maxLevel = node.maxLevel ?? 1;
+  const baseMult = Math.pow(1.4, maxLevel - 1); // cost of the last regular level
+  const masteryMult = Math.pow(2.5, masteryLevel);
+  const out = {};
+  for (const [k, v] of Object.entries(node.baseCost || {})) {
+    out[k] = Math.ceil(v * baseMult * masteryMult);
+  }
+  return out;
+}
+
+export function purchaseResearchMastery(state, currency, nodeId) {
+  const node = _nodesById.get(nodeId);
+  if (!node) return false;
+  const level = getResearchLevel(state, nodeId);
+  if (level < (node.maxLevel ?? 1)) return false; // must be maxed first
+  const masteryLevel = getResearchMasteryLevel(state, nodeId);
+  const cost = getResearchMasteryCost(node, masteryLevel);
+  if (!currency.canAfford(cost)) return false;
+  currency.subtract(cost);
+  if (!state.ship.researchMastery) state.ship.researchMastery = {};
+  state.ship.researchMastery[nodeId] = masteryLevel + 1;
+  eventBus.emit(EVENTS.MASTERY_PURCHASED, { nodeId, masteryLevel: masteryLevel + 1, source: 'research' });
+  return true;
+}
+
 /** Buy one level of a research node. */
 export function purchaseResearch(state, currency, nodeId) {
   const node = _nodesById.get(nodeId);
@@ -269,7 +301,8 @@ export function buildHangarUnlockedNodes(state) {
     if (!node || level <= 0) continue;
     const requiredItem = getRequiredItem(node);
     if (requiredItem && !hasItemInstalled(state, requiredItem)) continue;
-    out.push(_materializeNode(node, level));
+    const masteryLevel = getResearchMasteryLevel(state, nodeId);
+    out.push(_materializeNode(node, level, masteryLevel));
     seen.add(nodeId);
   }
 
@@ -327,7 +360,7 @@ export function selectShip(state, shipId) {
   return true;
 }
 
-function _materializeNode(nodeData, level) {
+function _materializeNode(nodeData, level, masteryLevel = 0) {
   return {
     id: nodeData.id,
     templateId: nodeData.id,
@@ -341,6 +374,7 @@ function _materializeNode(nodeData, level) {
     visual: nodeData.visual || null,
     maxLevel: nodeData.maxLevel ?? 1,
     currentLevel: level,
+    masteryLevel,
     isUnlocked: level > 0,
     isMaxed: level >= (nodeData.maxLevel ?? 1),
   };

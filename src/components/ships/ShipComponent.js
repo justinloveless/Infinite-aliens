@@ -110,6 +110,7 @@ export class ShipComponent extends Component {
       slots,
       unlockedSlots: [...this.defaultUnlockedSlots],
       research: {},
+      researchMastery: {},
     };
   }
 

@@ -20,10 +20,24 @@ export class TechNode {
     this.presentation = data.presentation || null;
     this.costModifiers = data.costModifiers || [];
     this.visual = data.visual || null;
+
+    this.masteryLevel = 0;
   }
 
   get isMaxed() {
     return this.currentLevel >= this.maxLevel;
+  }
+
+  get canMastery() {
+    return this.isMaxed;
+  }
+
+  getMasteryCost() {
+    const lastCost = this.getHistoricalCostForLevel(this.maxLevel);
+    const mult = Math.pow(2.5, this.masteryLevel);
+    return Object.fromEntries(
+      Object.entries(lastCost).map(([k, v]) => [k, Math.ceil(v * mult)])
+    );
   }
 
   get isUnlocked() {

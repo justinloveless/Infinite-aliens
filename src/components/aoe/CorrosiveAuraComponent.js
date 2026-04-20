@@ -1,4 +1,5 @@
 import { Component } from '../../ecs/Component.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 
 /** Deals continuous damage-per-second to every enemy within `radius`. */
 export class CorrosiveAuraComponent extends Component {
@@ -9,7 +10,7 @@ export class CorrosiveAuraComponent extends Component {
   }
 
   update(dt, ctx) {
-    if (ctx?.state?.round?.phase !== 'combat') return;
+    if (!isCombatPhase(ctx?.state?.round?.phase)) return;
     if (this.dps <= 0) return;
     const t = this.entity.get('TransformComponent'); if (!t) return;
     const dmg = Math.max(1, Math.ceil(this.dps * dt));

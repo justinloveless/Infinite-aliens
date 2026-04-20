@@ -1,5 +1,6 @@
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 
 /**
  * Periodic AoE pulse centered on the owner. When the timer elapses, damages
@@ -39,7 +40,7 @@ export class StellarNovaComponent extends Component {
   }
 
   update(dt, ctx) {
-    if (ctx?.state?.round?.phase !== 'combat') return;
+    if (!isCombatPhase(ctx?.state?.round?.phase)) return;
     if (this.interval <= 0) return;
     this._timer += dt;
     if (this._timer >= this.interval) {

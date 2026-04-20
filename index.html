@@ -50,6 +50,7 @@
     </div>
 
     <div id="hud-top-center">
+      <div id="galaxy-label" class="hud-galaxy"></div>
       <div id="run-display">
         <span class="round-label">SECTOR</span>
         <span id="round-number">1</span>
@@ -127,6 +128,51 @@
         <span class="currency-amount" id="amt-stellarDust">0</span>
       </div>
     </div>
+  </div>
+
+  <!-- Sector 9 heads-up + arena warp transition overlay -->
+  <div id="arena-warning" class="hidden">
+    <div class="arena-warning-inner">
+      <div class="arena-warning-icon">&#9888;</div>
+      <div class="arena-warning-text">
+        <div class="arena-warning-title">ENEMY HUB AHEAD</div>
+        <div class="arena-warning-sub">Prepare for warp at the next sector.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="arena-transition" class="hidden">
+    <div id="arena-transition-streak"></div>
+    <div id="arena-transition-banner">
+      <div class="arena-banner-title">ENTERING ENEMY HUB</div>
+      <div class="arena-banner-sub">Hold course. Warp engaged.</div>
+    </div>
+  </div>
+
+  <!-- Boss Arena HUD: shown only during boss_arena phase -->
+  <div id="arena-hud" class="hidden">
+    <div id="arena-objectives">
+      <div class="arena-obj" id="aobj-gates">
+        <span class="arena-obj-icon">&#11042;</span>
+        <span class="arena-obj-text">Destroy Gate Crystals (<span id="aobj-gates-count">0</span>/3)</span>
+        <span class="arena-obj-status" id="aobj-gates-status">0/3</span>
+      </div>
+      <div class="arena-obj arena-obj-locked" id="aobj-build">
+        <span class="arena-obj-icon">&#9699;</span>
+        <span class="arena-obj-text">Build Warp Gate</span>
+        <div class="arena-progress-bar"><div id="arena-build-fill"></div></div>
+        <span class="arena-obj-status" id="aobj-build-status">LOCKED</span>
+      </div>
+      <div class="arena-obj arena-obj-optional" id="aobj-boss">
+        <span class="arena-obj-icon">&#9876;</span>
+        <span class="arena-obj-text">Defeat the Boss (optional)</span>
+        <span class="arena-obj-status" id="aobj-boss-status">ACTIVE</span>
+      </div>
+    </div>
+    <div id="arena-leave-prompt" class="hidden">
+      Fly through your warp gate to depart &mdash; stay to fight the boss for extra loot.
+    </div>
+    <div id="arena-indicators"></div>
   </div>
 
   <!-- Tech Tree Screen -->

@@ -1,29 +1,74 @@
 import * as THREE from 'three';
 
+const DEFAULT_CONFIG = {
+  width: 60,
+  depth: 80,
+  hLines: 16,
+  vLines: 12,
+  zStart: 5,
+  zEnd: -80,
+  centered: false, // false: legacy corridor (z: +5 forward, -depth back)
+};
+
+const ARENA_CONFIG = {
+  width: 680,
+  depth: 680,
+  hLines: 40,
+  vLines: 40,
+  centered: true, // symmetric around origin in x and z
+};
+
 // Scrolling synthwave perspective grid below the ship
 export class SynthGrid {
   constructor(scene) {
     this._time = 0;
-    this._createLines(scene);
+    this._scene = scene;
+    this._config = { ...DEFAULT_CONFIG };
+    this._lines = null;
+    this._basePositions = null;
+    this._color = 0xff00dd;
+    this._arenaMode = false;
+    this._rebuild();
   }
 
-  _createLines(scene) {
-    const lines = [];
-    const width = 60;
-    const depth = 80;
-    const hLines = 16;
-    const vLines = 12;
-
-    // Vertical lines (running front-to-back)
-    for (let i = 0; i <= vLines; i++) {
-      const x = (i / vLines - 0.5) * width;
-      lines.push(x, -3.5, 5, x, -3.5, -depth);
+  _rebuild() {
+    if (this._lines) {
+      this._scene.remove(this._lines);
+      this._lines.geometry.dispose();
+      this._lines.material.dispose();
+      this._lines = null;
     }
 
-    // Horizontal lines
-    for (let i = 0; i <= hLines; i++) {
-      const z = -i * (depth / hLines);
-      lines.push(-width / 2, -3.5, z, width / 2, -3.5, z);
+    const cfg = this._config;
+    const lines = [];
+    const halfW = cfg.width / 2;
+
+    if (cfg.centered) {
+      const halfD = cfg.depth / 2;
+      // Vertical lines (constant x, spanning full z)
+      for (let i = 0; i <= cfg.vLines; i++) {
+        const x = (i / cfg.vLines - 0.5) * cfg.width;
+        lines.push(x, -3.5, -halfD, x, -3.5, halfD);
+      }
+      // Horizontal lines (constant z, spanning full x)
+      for (let i = 0; i <= cfg.hLines; i++) {
+        const z = (i / cfg.hLines - 0.5) * cfg.depth;
+        lines.push(-halfW, -3.5, z, halfW, -3.5, z);
+      }
+    } else {
+      const zStart = cfg.zStart;
+      const zEnd = cfg.zEnd;
+      // Vertical lines running front-to-back
+      for (let i = 0; i <= cfg.vLines; i++) {
+        const x = (i / cfg.vLines - 0.5) * cfg.width;
+        lines.push(x, -3.5, zStart, x, -3.5, zEnd);
+      }
+      // Horizontal lines
+      const span = zStart - zEnd;
+      for (let i = 0; i <= cfg.hLines; i++) {
+        const z = zStart - i * (span / cfg.hLines);
+        lines.push(-halfW, -3.5, z, halfW, -3.5, z);
+      }
     }
 
     const posArr = new Float32Array(lines);
@@ -31,21 +76,39 @@ export class SynthGrid {
     geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
 
     const mat = new THREE.LineBasicMaterial({
-      color: 0xff00dd,
+      color: this._color,
       transparent: true,
       opacity: 0.2,
     });
 
     this._lines = new THREE.LineSegments(geo, mat);
     this._basePositions = posArr.slice();
-    scene.add(this._lines);
+    this._scene.add(this._lines);
+  }
+
+  setColor(hex) {
+    this._color = hex;
+    if (this._lines) this._lines.material.color.setHex(hex);
+  }
+
+  /** Expand the grid to cover the full arena bounds, or restore corridor default. */
+  setArenaMode(on) {
+    const next = !!on;
+    if (next === this._arenaMode) return;
+    this._arenaMode = next;
+    this._config = { ...(next ? ARENA_CONFIG : DEFAULT_CONFIG) };
+    this._time = 0;
+    this._rebuild();
   }
 
   /** @param {number} speedScale - matches player run speed vs base (combat only in main) */
   update(delta, speedScale = 1) {
+    if (this._arenaMode) {
+      // In arena, grid is static under the ship's movement; no scrolling.
+      return;
+    }
     const s = Math.max(0, speedScale);
     this._time += delta * 8 * s;
-    // Scroll horizontal lines forward
     const posAttr = this._lines.geometry.getAttribute('position');
     const arr = posAttr.array;
     const base = this._basePositions;

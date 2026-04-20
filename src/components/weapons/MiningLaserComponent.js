@@ -1,4 +1,5 @@
 import { Component } from '../../ecs/Component.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 
 /**
  * Tracks nearby asteroids and, once within range, deals continuous damage
@@ -14,7 +15,7 @@ export class MiningLaserComponent extends Component {
   }
 
   update(dt, ctx) {
-    if (ctx?.state?.round?.phase !== 'combat') return;
+    if (!isCombatPhase(ctx?.state?.round?.phase)) return;
     const t = this.entity.get('TransformComponent');
     if (!t) return;
     const asteroids = ctx.world.query('asteroid') || [];

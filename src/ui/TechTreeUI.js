@@ -344,16 +344,22 @@ export class TechTreeUI {
   }
 
   _purchaseNode(node) {
+    if (node.isMaxed) {
+      // Attempt mastery purchase instead of regular level-up
+      const success = this._tree.purchaseMastery(node.id, this._currency);
+      if (success) {
+        if (this._audio) this._audio.play('upgrade');
+        this.render();
+      }
+      return;
+    }
     const success = this._tree.purchase(node.id, this._currency);
     if (success) {
       if (this._audio) {
         if (node.templateId === 'drone') this._audio.play('droneSpawn');
         else this._audio.play('upgrade');
       }
-      // Flash animation via re-render
       this.render();
-    } else {
-      // Visual shake would go here
     }
   }
 
@@ -603,10 +609,19 @@ export class TechTreeUI {
 
     if (isMaxed) {
       ctx.font = `bold 11px sans-serif`;
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('✓', cx + NODE_MAIN_R - 7, cy - NODE_MAIN_R + 8);
+      if (node.masteryLevel > 0) {
+        // Mastery star: purple glow
+        ctx.fillStyle = '#cc00ff';
+        ctx.shadowColor = '#ff00ff';
+        ctx.shadowBlur = 6;
+        ctx.fillText('★', cx + NODE_MAIN_R - 7, cy - NODE_MAIN_R + 8);
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fillText('✓', cx + NODE_MAIN_R - 7, cy - NODE_MAIN_R + 8);
+      }
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
     }
@@ -719,7 +734,23 @@ export class TechTreeUI {
         html += `<div class="tooltip-locked">Requires: ${prereqNames.join(', ')}</div>`;
       }
     } else {
-      html += `<div class="tooltip-level" style="color:#39ff14">MAXED OUT ✓</div>`;
+      if (node.masteryLevel > 0) {
+        html += `<div class="tooltip-level" style="color:#cc00ff">★ MASTERY LV ${node.masteryLevel}</div>`;
+      } else {
+        html += `<div class="tooltip-level" style="color:#39ff14">MAXED OUT ✓</div>`;
+      }
+      // Mastery purchase
+      const masteryCost = node.getMasteryCost();
+      html += `<div class="tooltip-cost" style="border-color:#cc00ff44;margin-top:4px">`;
+      html += `<span style="color:#cc00ff;font-size:9px">★ MASTERY:</span> `;
+      for (const [type, amount] of Object.entries(masteryCost)) {
+        const currMeta = CURRENCIES[type];
+        const have = this._currency.get(type);
+        const color = have >= amount ? '#cc00ff' : '#ff2244';
+        html += `<span class="tooltip-cost-item" style="border-color:${color};color:${color}">${currMeta?.icon || ''} ${Math.ceil(amount)}</span>`;
+      }
+      html += `</div>`;
+      html += `<div style="font-size:9px;color:#aa88ff;margin-top:2px">+1% per effect per mastery level · Click to buy</div>`;
     }
 
     // Synergy section

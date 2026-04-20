@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
 import { MANUAL_GUN, PLAYER } from '../../constants.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 import { createProjectile } from '../../prefabs/createProjectile.js';
 
 /**
@@ -30,7 +31,7 @@ export class ManualGunComponent extends Component {
 
   fire() {
     const ctx = this._ctx;
-    if (!ctx || ctx.state?.round?.phase !== 'combat') return;
+    if (!ctx || !isCombatPhase(ctx.state?.round?.phase)) return;
     if (this._overheated || this._fireCooldown > 0) return;
 
     this._fireCooldown = MANUAL_GUN.FIRE_COOLDOWN;
@@ -52,7 +53,10 @@ export class ManualGunComponent extends Component {
     const pos = visuals
       ? visuals.getPrimaryWeaponMuzzleWorldPosition()
       : t.position.clone().add(new THREE.Vector3(0, 0, -1.0));
-    const dir = new THREE.Vector3(0, 0, -1);
+    // Fire along the ship's current yaw so the manual gun points where the
+    // ship's nose is (essential for arena flight controls).
+    const yaw = t?.rotation?.y ?? 0;
+    const dir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     const damage = stats?.damage ?? PLAYER.BASE_DAMAGE;
     const pierces = stats?.projectilePierces ?? 0;
 

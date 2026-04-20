@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 import { createProjectile } from '../../prefabs/createProjectile.js';
 
 /**
@@ -18,7 +19,7 @@ export class RangedAttackerComponent extends Component {
   }
 
   update(dt, ctx) {
-    if (ctx?.state?.round?.phase !== 'combat') return;
+    if (!isCombatPhase(ctx?.state?.round?.phase)) return;
     const t = this.entity.get('TransformComponent');
     const playerT = ctx.playerEntity?.get('TransformComponent');
     if (!t || !playerT) return;

@@ -79,7 +79,7 @@ export function applyShipBaseStatsToState(state, shipDef) {
 export function createLoadoutForShip(shipDef) {
   const cls = getShipClass(shipDef?.id);
   if (cls) return cls.createLoadout();
-  return { slots: {}, unlockedSlots: [], research: {} };
+  return { slots: {}, unlockedSlots: [], research: {}, researchMastery: {} };
 }
 
 /**

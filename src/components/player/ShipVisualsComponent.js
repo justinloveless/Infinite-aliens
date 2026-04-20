@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { PLAYER } from '../../constants.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
+import { isCombatPhase } from '../../core/phaseUtil.js';
 import { buildShipHull } from '../../scene/ShipMeshFactory.js';
 import { getActiveShipDef, getActiveShipSlots } from '../../data/ships.js';
 
@@ -161,8 +162,7 @@ export class ShipVisualsComponent extends Component {
       this._magnetMesh.position.y = t.position.y + 0.06;
       this._magnetMesh.position.z = t.position.z;
       this._magnetMesh.scale.setScalar(mRange);
-      const phase = ctx?.state?.round?.phase;
-      this._magnetMesh.visible = phase === 'combat';
+      this._magnetMesh.visible = isCombatPhase(ctx?.state?.round?.phase);
     }
 
     // Stellar nova pulse

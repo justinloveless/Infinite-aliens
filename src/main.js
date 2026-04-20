@@ -29,13 +29,16 @@ import { TechTreeState } from './techtree/TechTreeState.js';
 
 import { UIManager } from './ui/UIManager.js';
 import { HUD } from './ui/HUD.js';
+import { ArenaHUD } from './ui/ArenaHUD.js';
 import { TechTreeUI } from './ui/TechTreeUI.js';
 import { RoundTransition } from './ui/RoundTransition.js';
 import { DamageNumbers } from './ui/DamageNumbers.js';
 import { HangarUI } from './ui/HangarUI.js';
 import { StoreUI } from './ui/StoreUI.js';
 import { ResearchUI } from './ui/ResearchUI.js';
-import { BLOOM, PLAYER, RUN, SCENE, WARP } from './constants.js';
+import { ArenaDirector } from './coordinators/ArenaDirector.js';
+import { BLOOM, PLAYER, RUN, SCENE, WARP, CAMPAIGN, BOSS_ARENA } from './constants.js';
+import { getPreset } from './scene/EnvironmentPresets.js';
 import * as THREE from 'three';
 
 const NOOP_MARK = () => {};
@@ -105,6 +108,7 @@ class Game {
 
     this.ui = new UIManager();
     this.hud = new HUD();
+    this.arenaHUD = new ArenaHUD();
     this.transition = new RoundTransition();
     this.damageNumbers = new DamageNumbers();
     this.settingsUI = new SettingsUI(this.settings, this.audio);
@@ -114,7 +118,11 @@ class Game {
     this.techTreeUI = null;
     this.spawnDirector = null;
     this.upgradeApplier = null;
+    this.arenaDirector = null;
     this.collision = new CollisionCoordinator(this.world);
+    this._arenaKeys = { left: false, right: false, up: false, down: false };
+    this._arenaSpeed = 0;
+    this._arenaBank = 0;
     this._prevBossMusicActive = false;
     this._paused = false;
     this._techTreeOpen = false;
@@ -130,6 +138,7 @@ class Game {
     this._setupClickHandling();
     this._setupManualGunInput();
     this._setupAbilityKeys();
+    this._setupArenaInput();
     this._setupSettingsButton();
     this._setupDebugMenuHotkey();
     this._setupPauseControls();
@@ -248,6 +257,9 @@ class Game {
 
     eventBus.on(EVENTS.UPGRADE_PURCHASED, () => { this._rebuildComputed(); this._saveNow(); });
     eventBus.on(EVENTS.UPGRADE_SOLD, () => { this._rebuildComputed(); this._saveNow(); });
+    eventBus.on(EVENTS.GALAXY_BOSS_PENDING, ({ galaxyIndex }) => this._enterBossArena(galaxyIndex));
+    eventBus.on(EVENTS.ARENA_WARNING, () => this.audio?.play('warning'));
+    eventBus.on(EVENTS.ARENA_TRANSITION_STARTED, () => this.audio?.play('warp'));
     eventBus.on(EVENTS.SHIP_PURCHASED, () => this._saveNow());
 
     eventBus.on(EVENTS.CURRENCY_CHANGED, () => {
@@ -311,6 +323,14 @@ class Game {
     if (!this.state.warpGates) this.state.warpGates = { maxTierReached: 0 };
     if (r.current > this.state.warpGates.maxTierReached) {
       this.state.warpGates.maxTierReached = r.current;
+    }
+
+    // Update campaign progress: track highest galaxy reached
+    if (this.state.campaign) {
+      const galaxyReached = Math.floor((r.current - 1) / CAMPAIGN.SECTORS_PER_GALAXY);
+      if (galaxyReached > this.state.campaign.galaxyIndex) {
+        this.state.campaign.galaxyIndex = Math.min(galaxyReached, CAMPAIGN.GALAXIES - 1);
+      }
     }
 
     r.phase = 'dead';
@@ -462,6 +482,28 @@ class Game {
     }
   }
 
+  /**
+   * Jump directly into the boss arena for a chosen galaxy, bypassing normal
+   * progression. Starts a fresh run at that galaxy's starting tier, then
+   * kicks off the arena transition immediately.
+   */
+  _debugJumpToArena(galaxyIndex) {
+    if (!this.state) return;
+    const clamped = Math.max(0, Math.min(CAMPAIGN.GALAXIES - 1, galaxyIndex | 0));
+    const phase = this.state.round.phase;
+    if (phase === 'boss_arena' || phase === 'arena_transition') {
+      this.arenaDirector?.exit();
+      this.state.bossArena = { active: false, subPhase: 'inactive', bossDefeated: false, gatesTotal: 3, gatesClosed: 0, buildProgress: 0 };
+      this.ui.hide('arenaHud');
+    }
+    this.ui.hide('death');
+    this.ui.hide('techTree');
+    this.ui.hide('warpGate');
+    this.ui.hide('hangar');
+    this._startNewRun(clamped);
+    this._enterBossArena(clamped);
+  }
+
   _debugResetGame() {
     this.setPaused(false);
     this.transition.hide();
@@ -498,7 +540,9 @@ class Game {
   _setupClickHandling() {
     document.getElementById('game-canvas').addEventListener('click', (ev) => {
       if (this._paused) return;
-      if (this._tryPriorityFocusClick(ev)) return;
+      const phase = this.state?.round?.phase;
+      if (phase !== 'combat' && phase !== 'boss_arena' && phase !== 'arena_transition') return;
+      if (phase === 'combat' && this._tryPriorityFocusClick(ev)) return;
       const manual = this.playerEntity?.get('ManualGunComponent');
       if (manual) { manual.fire(); return; }
       const rail = this.playerEntity?.get('RailgunComponent');
@@ -570,7 +614,8 @@ class Game {
     ];
     window.addEventListener('keydown', e => {
       if (this._paused) return;
-      if (!this.state || this.state.round.phase !== 'combat') return;
+      const phase = this.state?.round.phase;
+      if (phase !== 'combat' && phase !== 'boss_arena' && phase !== 'arena_transition') return;
       if (this._isTypingTarget(e.target)) return;
       const slot = parseInt(e.key, 10) - 1;
       if (slot < 0 || slot > 3) return;
@@ -579,6 +624,105 @@ class Game {
         .filter(Boolean);
       active[slot]?.trigger(this.world.ctx);
     });
+  }
+
+  _setupArenaInput() {
+    const setKey = (code, val) => {
+      if (code === 'ArrowLeft'  || code === 'KeyA') this._arenaKeys.left  = val;
+      if (code === 'ArrowRight' || code === 'KeyD') this._arenaKeys.right = val;
+      if (code === 'ArrowUp'    || code === 'KeyW') this._arenaKeys.up    = val;
+      if (code === 'ArrowDown'  || code === 'KeyS') this._arenaKeys.down  = val;
+    };
+    window.addEventListener('keydown', e => {
+      if (this._paused) return;
+      const phase = this.state?.round?.phase;
+      if (phase !== 'boss_arena' && phase !== 'arena_transition') return;
+      if (this._isTypingTarget(e.target)) return;
+      setKey(e.code, true);
+    });
+    window.addEventListener('keyup', e => {
+      setKey(e.code, false);
+    });
+  }
+
+  /**
+   * Free-flight arena controller. Ship is always moving forward; A/D yaw,
+   * W/S throttle. Soft edge steering gently curls the ship back toward origin
+   * inside the wall band — no hard clamps, so the arena feels open.
+   */
+  _tickArenaInput(dt) {
+    if (!this.playerEntity) return;
+    const t = this.playerEntity.get('TransformComponent');
+    if (!t) return;
+
+    const baseSpd = (this.computed?.speed ?? 3) * BOSS_ARENA.BASE_SPEED_MULT;
+    const MIN_SPD = baseSpd * BOSS_ARENA.MIN_SPEED_MULT;
+    const MAX_SPD = baseSpd * BOSS_ARENA.MAX_SPEED_MULT;
+    const CRUISE  = baseSpd * BOSS_ARENA.CRUISE_SPEED_MULT;
+
+    const yawInput = (this._arenaKeys.left ? 1 : 0) - (this._arenaKeys.right ? 1 : 0);
+    t.rotation.y += yawInput * BOSS_ARENA.YAW_SPEED * dt;
+
+    const targetSpeed = this._arenaKeys.up ? MAX_SPD
+      : this._arenaKeys.down ? MIN_SPD
+      : CRUISE;
+    const k = Math.min(1, dt * BOSS_ARENA.THROTTLE_ACCEL);
+    this._arenaSpeed += (targetSpeed - this._arenaSpeed) * k;
+
+    // Ship-local -Z is forward; rotation.y yaws around Y.
+    const yaw = t.rotation.y;
+
+    // Soft edge steering: inside EDGE_BAND of a wall, bias yaw toward origin
+    // and bleed throttle. Past the wall, steering scales above 1 so the ship
+    // snaps back hard instead of drifting out forever.
+    //
+    // Yaw convention: forward = (-sin(yaw), -cos(yaw)). To face origin from
+    // (px, pz) we need forward ∝ (-px, -pz), which gives yawTarget = atan2(px, pz).
+    const band = BOSS_ARENA.EDGE_BAND;
+    const px = t.position.x, pz = t.position.z;
+    const distToEdgeX = Math.min(px - BOSS_ARENA.X_MIN, BOSS_ARENA.X_MAX - px);
+    const distToEdgeZ = Math.min(pz - BOSS_ARENA.Z_MIN, BOSS_ARENA.Z_MAX - pz);
+    const minEdge = Math.min(distToEdgeX, distToEdgeZ);
+    // 0 inside (> band), 1 at wall, grows past 1 when outside bounds.
+    let edgePressure = 1 - minEdge / band;
+    if (edgePressure < 0) edgePressure = 0;
+    if (edgePressure > 0) {
+      const toOrigin = Math.atan2(px, pz);
+      let dyaw = toOrigin - yaw;
+      while (dyaw >  Math.PI) dyaw -= Math.PI * 2;
+      while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      // Strong turn authority: up to ~3 rad/s at the wall, clamped above 1.
+      const turnRate = Math.min(edgePressure, 4) * 3.0;
+      const maxDelta = turnRate * dt;
+      const step = Math.max(-maxDelta, Math.min(maxDelta, dyaw));
+      t.rotation.y += step;
+      // Bleed speed hardest when outside bounds.
+      const bleed = Math.min(edgePressure, 2) * 0.6;
+      this._arenaSpeed *= Math.max(0.2, 1 - bleed * dt);
+    }
+
+    // Recompute forward after possible edge-steering yaw update so movement
+    // reflects the corrected heading this very frame.
+    const yawPost = t.rotation.y;
+    const fx = -Math.sin(yawPost);
+    const fz = -Math.cos(yawPost);
+    t.position.x += fx * this._arenaSpeed * dt;
+    t.position.z += fz * this._arenaSpeed * dt;
+
+    // Visual bank: lerp toward −yawInput * constant
+    const targetBank = -yawInput * 0.38;
+    this._arenaBank += (targetBank - this._arenaBank) * Math.min(1, dt * 7);
+    t.rotation.z = this._arenaBank;
+    t.rotation.x = 0;
+
+    // Sync the ship mesh position/rotation (ShipVisualsComponent also mirrors
+    // from TransformComponent in its update, but this keeps the hull in sync
+    // the same frame for the camera follow below).
+    const vis = this.playerEntity.get('ShipVisualsComponent');
+    if (vis?._group) {
+      vis._group.position.copy(t.position);
+      vis._group.rotation.copy(t.rotation);
+    }
   }
 
   async start() {
@@ -597,7 +741,8 @@ class Game {
       this.techTree = new TechTreeState(this.state.seed);
       this.techTree.loadFromSave(
         saved.techTree?.unlockedNodes || {},
-        saved.techTree?.generatedTiers || 0
+        saved.techTree?.generatedTiers || 0,
+        saved.techTree?.masteryLevels || {}
       );
       this._initWorldForState();
       this._rebuildComputed();
@@ -650,6 +795,12 @@ class Game {
       world: this.world, state: this.state, currency: this.currency,
     });
     this.spawnDirector.init();
+
+    this.arenaDirector = new ArenaDirector({
+      world: this.world, state: this.state, scene: this.scene,
+      camera: this.camera, spawnDirector: this.spawnDirector, audio: this.audio,
+      synthGrid: this.synthGrid, starfield: this.starfield,
+    });
 
     this.upgradeApplier = new UpgradeApplier({
       world: this.world, state: this.state, playerEntity: this.playerEntity,
@@ -793,24 +944,29 @@ class Game {
     }
   }
 
-  _getUnlockedGates() {
-    const maxTier = this.state.warpGates?.maxTierReached || 0;
-    const count = Math.floor(maxTier / WARP.GATE_TIER_INTERVAL);
-    const gates = [];
-    for (let i = 1; i <= count; i++) {
-      gates.push({ gateNum: i, tier: i * WARP.GATE_TIER_INTERVAL });
+  _getUnlockedGalaxies() {
+    const c = this.state.campaign;
+    if (!c) return [{ galaxyIndex: 0, name: CAMPAIGN.GALAXY_NAMES[0], startTier: 1 }];
+    const maxUnlocked = Math.min(c.galaxyIndex, CAMPAIGN.GALAXIES - 1);
+    const galaxies = [];
+    for (let i = 0; i <= maxUnlocked; i++) {
+      galaxies.push({
+        galaxyIndex: i,
+        name: CAMPAIGN.GALAXY_NAMES[i] || `Galaxy ${i + 1}`,
+        startTier: i * CAMPAIGN.SECTORS_PER_GALAXY + 1,
+      });
     }
-    return gates;
+    return galaxies;
   }
 
   _showWarpGateAndLaunch() {
-    const gates = this._getUnlockedGates();
-    if (!gates.length) { this._startNewRun(1); return; }
+    const galaxies = this._getUnlockedGalaxies();
+    if (galaxies.length <= 1) { this._startNewRun(0); return; }
     this.ui.hide('death');
-    this.ui.showWarpGateSelect(gates, (startTier) => this._startNewRun(startTier));
+    this.ui.showGalaxySelect(galaxies, (galaxyIndex) => this._startNewRun(galaxyIndex));
   }
 
-  _startNewRun(startTier = 1) {
+  _startNewRun(galaxyIndex = 0) {
     this._techTreeOpen = false;
     this.ui.hide('techTree');
     this.ui.hide('death');
@@ -825,14 +981,24 @@ class Game {
       if (interest > 0) this.currency.add('scrapMetal', interest);
     }
 
-    const startDist = startTier > 1 ? (startTier - 1) * RUN.DISTANCE_PER_TIER : 0;
+    const clampedGalaxy = Math.max(0, Math.min(CAMPAIGN.GALAXIES - 1, galaxyIndex));
+    const startTier = clampedGalaxy * CAMPAIGN.SECTORS_PER_GALAXY + 1;
+    const startDist = clampedGalaxy > 0 ? (startTier - 1) * RUN.DISTANCE_PER_TIER : 0;
     r.distanceTraveled = startDist;
     r.current = startTier;
     r.enemiesDefeated = 0;
-    r.bossesDefeated = Math.floor(startDist / RUN.BOSS_DISTANCE_INTERVAL);
+    r.bossesDefeated = clampedGalaxy;
     r.bossIsActive = false;
     r.killsThisRun = 0;
     this.state.roundLoot = {};
+
+    // Sync campaign galaxy index to match chosen start point
+    if (!this.state.campaign) this.state.campaign = { galaxyIndex: 0, totalSectorsCleared: 0, infiniteMode: false, infiniteSector: 0 };
+    this.state.campaign.galaxyIndex = clampedGalaxy;
+
+    // Apply galaxy environment
+    this.scene.applyEnvironment(getPreset(clampedGalaxy), true);
+    this.synthGrid.setColor(getPreset(clampedGalaxy).gridColor);
 
     const health = this.playerEntity.get('HealthComponent');
     const shield = this.playerEntity.get('ShieldComponent');
@@ -851,6 +1017,97 @@ class Game {
 
     this._prevBossMusicActive = !!r.bossIsActive;
     this.audio.playMusic(this._combatMusicKey());
+  }
+
+  /**
+   * Triggered when the galaxy-end boss threshold is reached. Drives the
+   * cinematic warp transition; the arena HUD and gameplay flip on once the
+   * transition lands (ARENA_TRANSITION_ENDED).
+   */
+  _enterBossArena(galaxyIndex) {
+    this.audio.stopMusic();
+    this.hud.hideArenaWarning?.();
+
+    const finalize = () => this._finalizeBossArena();
+    this.arenaDirector.beginTransition(galaxyIndex, finalize);
+
+    // Reveal the arena HUD once the warp resolves, and kick off this
+    // galaxy's unique arena track.
+    const unsub = eventBus.on(EVENTS.ARENA_TRANSITION_ENDED, () => {
+      this.ui.show('arenaHud');
+      this.audio.playMusic(this._arenaMusicKey(galaxyIndex));
+      unsub();
+    });
+  }
+
+  _arenaMusicKey(galaxyIndex) {
+    const idx = Math.max(0, Math.min(CAMPAIGN.GALAXIES - 1, galaxyIndex ?? 0));
+    return `arena-${idx}`;
+  }
+
+  /**
+   * Called when the player flies through their built warp gate at the end
+   * of the arena. Advances the campaign to the next galaxy and drops the
+   * ship straight back into corridor combat — no death screen, no hangar.
+   */
+  _finalizeBossArena() {
+    const c = this.state.campaign;
+    if (!c) return;
+    c.totalSectorsCleared = (c.totalSectorsCleared || 0) + CAMPAIGN.SECTORS_PER_GALAXY;
+    c.galaxyIndex = Math.min(c.galaxyIndex + 1, CAMPAIGN.GALAXIES - 1);
+    if (c.galaxyIndex >= CAMPAIGN.GALAXIES - 1 && !c.infiniteMode) {
+      c.infiniteMode = true;
+    }
+    if (c.infiniteMode) c.infiniteSector = (c.infiniteSector || 0) + 1;
+
+    eventBus.emit(EVENTS.CAMPAIGN_ADVANCED, { galaxyIndex: c.galaxyIndex, infiniteMode: c.infiniteMode });
+
+    this.state.bossArena = { active: false, subPhase: 'inactive', bossDefeated: false, gatesTotal: 3, gatesClosed: 0, buildProgress: 0 };
+    this.arenaHUD.hide();
+    this.ui.hide('arenaHud');
+    this.arenaDirector?.exit();
+
+    const nextGalaxy = c.galaxyIndex;
+    const startTier = nextGalaxy * CAMPAIGN.SECTORS_PER_GALAXY + 1;
+    const startDist = nextGalaxy > 0 ? (startTier - 1) * RUN.DISTANCE_PER_TIER : 0;
+
+    const r = this.state.round;
+    r.phase = 'combat';
+    r.distanceTraveled = startDist;
+    r.current = startTier;
+    r.bossIsActive = false;
+
+    this.scene.applyEnvironment(getPreset(nextGalaxy), true);
+    this.synthGrid.setColor(getPreset(nextGalaxy).gridColor);
+
+    const playerT = this.playerEntity?.get('TransformComponent');
+    if (playerT) {
+      playerT.position.set(0, 0, 0);
+      playerT.rotation.set(0, 0, 0);
+    }
+
+    const health = this.playerEntity?.get('HealthComponent');
+    if (health) { health.hp = health.maxHp; health.dead = false; }
+    const shield = this.playerEntity?.get('ShieldComponent');
+    if (shield) shield.hp = shield.maxHp;
+    const energy = this.playerEntity?.get('EnergyComponent');
+    if (energy) energy.current = energy.max;
+
+    this.state.player.hp = health?.hp ?? this.state.player.hp;
+    this.state.player.shieldHp = shield?.hp ?? 0;
+    this.state.player.energy = energy?.current ?? this.state.player.energy;
+
+    this.spawnDirector.purgeCombatWorld();
+    for (const e of this.world.query('projectile_player')) e.destroy();
+    for (const e of this.world.query('projectile_enemy')) e.destroy();
+    for (const e of this.world.query('asteroid')) e.destroy();
+
+    this.spawnDirector.startRound();
+    this.hud.show();
+    this._prevBossMusicActive = false;
+    this.audio.playMusic(this._combatMusicKey());
+    this.audio.play('launch');
+    this._saveNow();
   }
 
   _captureVisualDefaults() {
@@ -1013,9 +1270,18 @@ class Game {
     mark('start');
 
     this.upgradeApplier?.tick(dt);                     mark('upgrade');
-    this.starfield.update(dt, worldSpeed);             mark('starfield');
-    this.synthGrid.update(dt, worldSpeed);             mark('synthgrid');
+    const arenaActive = phase === 'boss_arena';
+    const transitioning = phase === 'arena_transition';
+    const starfieldSpeed = transitioning
+      ? (this.arenaDirector?.getTransitionStarfieldSpeed?.() ?? worldSpeed)
+      : (arenaActive ? 0 : worldSpeed);
+    const gridSpeed = transitioning
+      ? (this.arenaDirector?.getTransitionGridSpeed?.() ?? worldSpeed)
+      : (arenaActive ? 0 : worldSpeed);
+    this.starfield.update(dt, starfieldSpeed);         mark('starfield');
+    this.synthGrid.update(dt, gridSpeed);              mark('synthgrid');
     this.camera.update(dt);                            mark('camera');
+    this.scene.lerpEnvironment(dt);                    mark('environment');
     this._updateShaders(dt);                           mark('shaders');
 
     if (phase === 'combat') {
@@ -1028,17 +1294,29 @@ class Game {
       }
     }
 
+    if (phase === 'boss_arena' || phase === 'arena_transition') {
+      this._tickArenaInput(dt);
+      this.arenaDirector?.update(dt);                  mark('arena');
+    }
+
     this.world.update(dt);                             mark('world');
-    if (phase === 'combat') {
+    if (phase === 'combat' || phase === 'boss_arena' || phase === 'arena_transition') {
       this.collision.update();                         mark('collision');
     }
 
     this._syncStateFromPlayer();                       mark('sync');
 
-    if (phase === 'combat') {
+    if (phase === 'combat' || phase === 'boss_arena' || phase === 'arena_transition') {
       const manual = this.playerEntity.get('ManualGunComponent');
       this.hud.update(this.state, this.computed, manual?.getHeatState?.() ?? null);
       mark('hud');
+    }
+
+    if (phase === 'boss_arena' || phase === 'arena_transition') {
+      const bossAlive = this.arenaDirector?._isBossAlive?.() ?? true;
+      this.arenaHUD.update(this.state.bossArena, { bossAlive });
+      const targets = this.arenaDirector?.getIndicatorTargets?.() || [];
+      this.arenaHUD.updateIndicators(targets, this.scene.camera, this.scene.renderer?.domElement);
     }
 
     if (this.techTreeUI && this._techTreeOpen) this.techTreeUI.tick(dt);

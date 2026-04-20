@@ -1,4 +1,4 @@
-import { CURRENCIES } from '../constants.js';
+import { CURRENCIES, CAMPAIGN } from '../constants.js';
 import { reticleDebug } from '../components/enemy/EnemyVisualsComponent.js';
 import { DEBUG_ENEMY_SPAWN_TYPES } from '../components/enemy/EnemyDefs.js';
 import {
@@ -112,6 +112,7 @@ export class DebugMenuUI {
     wrap.appendChild(pauseRow);
 
     this._buildSpawnSection(wrap);
+    this._buildArenaSection(wrap);
 
     this._buildPerformanceSection(wrap);
     this._buildVisualSection(wrap);
@@ -373,6 +374,38 @@ export class DebugMenuUI {
       btn.className = 'neon-btn small';
       btn.textContent = id.toUpperCase();
       btn.addEventListener('click', () => this._game._debugSpawnEnemy(id));
+      row.appendChild(btn);
+    }
+    sec.appendChild(row);
+    wrap.appendChild(sec);
+  }
+
+  _buildArenaSection(wrap) {
+    const sec = document.createElement('div');
+    sec.className = 'debug-menu-visual';
+    this._sectionTitle(sec, 'JUMP TO ARENA');
+
+    const hint = document.createElement('p');
+    hint.className = 'debug-menu-hint';
+    hint.style.marginTop = '0';
+    hint.textContent =
+      'Starts a fresh run at the selected galaxy and warps straight into its boss arena.';
+    sec.appendChild(hint);
+
+    const row = document.createElement('div');
+    row.className = 'debug-menu-spawn-btns';
+    const names = CAMPAIGN.GALAXY_NAMES || [];
+    for (let i = 0; i < CAMPAIGN.GALAXIES; i++) {
+      const name = names[i] || `Galaxy ${i + 1}`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'neon-btn small';
+      btn.textContent = `${i + 1}. ${name.toUpperCase()}`;
+      btn.title = `Jump to the ${name} boss arena.`;
+      btn.addEventListener('click', () => {
+        this._game._debugJumpToArena(i);
+        this.close();
+      });
       row.appendChild(btn);
     }
     sec.appendChild(row);

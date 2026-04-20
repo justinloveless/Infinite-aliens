@@ -11,6 +11,7 @@ export class TechTreeState {
     this._seed = seed;
     this._generator = new TechTreeGenerator(seed);
     this._unlocked = {};      // nodeId -> currentLevel
+    this._masteryLevels = {}; // nodeId -> masteryLevel
     this._frontier = 0;       // highest tier with any unlocked node
     this._unlockedCounts = {};// category -> count
     this._devExtraNodes = []; // nodes added at runtime via the upgrade editor
@@ -23,7 +24,7 @@ export class TechTreeState {
   }
 
   // Restore from saved state
-  loadFromSave(savedUnlocked, generatedTiers) {
+  loadFromSave(savedUnlocked, generatedTiers, savedMastery = {}) {
     // Re-generate up to saved depth
     if (generatedTiers > LOOK_AHEAD_TIERS) {
       this._generator.generateUpToTier(generatedTiers + LOOK_AHEAD_TIERS, this._unlockedCounts);
@@ -38,6 +39,15 @@ export class TechTreeState {
         const cat = node.category;
         this._unlockedCounts[cat] = (this._unlockedCounts[cat] || 0) + level;
         this._frontier = Math.max(this._frontier, node.tier);
+      }
+    }
+
+    // Restore mastery levels
+    for (const [nodeId, level] of Object.entries(savedMastery)) {
+      const node = this._generator.getNode(nodeId);
+      if (node?.isMaxed) {
+        node.masteryLevel = level;
+        this._masteryLevels[nodeId] = level;
       }
     }
 
@@ -199,11 +209,24 @@ export class TechTreeState {
     return nodes;
   }
 
+  purchaseMastery(nodeId, currencySystem) {
+    const node = this._generator.getNode(nodeId);
+    if (!node?.canMastery) return false;
+    const cost = node.getMasteryCost();
+    if (!currencySystem.canAfford(cost)) return false;
+    currencySystem.subtract(cost);
+    node.masteryLevel++;
+    this._masteryLevels[nodeId] = node.masteryLevel;
+    eventBus.emit(EVENTS.MASTERY_PURCHASED, { nodeId, masteryLevel: node.masteryLevel, source: 'techtree' });
+    return true;
+  }
+
   // Get serializable save data
   getSaveData() {
     return {
       unlockedNodes: { ...this._unlocked },
       generatedTiers: this._generator.getMaxGeneratedTier(),
+      masteryLevels: { ...this._masteryLevels },
     };
   }
 
@@ -239,7 +262,9 @@ export class TechTreeState {
     this._generator.generateUpToTier(999);
 
     // Restore unlock state onto the new node instances
+    const savedMastery = { ...this._masteryLevels };
     this._unlocked = {};
+    this._masteryLevels = {};
     this._unlockedCounts = {};
     this._frontier = 0;
     for (const [id, level] of Object.entries(savedLevels)) {
@@ -249,6 +274,10 @@ export class TechTreeState {
         this._unlocked[id] = level;
         this._unlockedCounts[node.category] = (this._unlockedCounts[node.category] || 0) + level;
         if (node.tier > this._frontier) this._frontier = node.tier;
+        if (savedMastery[id] && node.isMaxed) {
+          node.masteryLevel = savedMastery[id];
+          this._masteryLevels[id] = savedMastery[id];
+        }
       }
     }
   }

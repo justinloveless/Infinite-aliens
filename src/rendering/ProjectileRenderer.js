@@ -7,8 +7,9 @@ import * as THREE from 'three';
  *
  * Lifecycle:
  *   - Components call `allocate(spec)` to claim a slot and receive a handle.
- *   - Each frame components call `handle.setPosition(v3)` which writes into
- *     the InstancedMesh's `instanceMatrix` (we defer the upload flag until
+ *   - Each frame components call `handle.setTransform(pos, dir)` which writes
+ *     the projectile's position + velocity-aligned rotation into the
+ *     InstancedMesh's `instanceMatrix` (we defer the upload flag until
  *     `flush()` once per frame).
  *   - On destroy components call `handle.release()` which marks the slot free
  *     and hides it by parking the matrix far offscreen (cheap + no shader
@@ -26,6 +27,12 @@ const _tmpPos = new THREE.Vector3();
 const _tmpQuat = new THREE.Quaternion();
 const _tmpScale = new THREE.Vector3();
 const _tmpColor = new THREE.Color();
+const _tmpDir = new THREE.Vector3();
+// Cylinder/cone geometries default with their length along +Y. Aligning this
+// axis to the projectile's velocity makes the projectile point in the
+// direction of travel.
+const PROJECTILE_UP_AXIS = new THREE.Vector3(0, 1, 0);
+const DEFAULT_FORWARD = new THREE.Vector3(0, 0, -1);
 
 const INITIAL_CAPACITY = 64;
 
@@ -76,10 +83,9 @@ class Bucket {
     this._spec = spec;
     this._scene = scene;
     this._material = new THREE.MeshBasicMaterial({ color: spec.color });
-    this._baseQuat = new THREE.Quaternion();
-    if (spec.rotateX) {
-      this._baseQuat.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
-    }
+    // Projectiles orient to their velocity direction each frame, so no static
+    // base rotation is needed. `spec.rotateX` is kept for bucket-key parity but
+    // no longer applied.
     this._scale = spec.scale || 1;
     this.used = [];
     this.freeSlots = [];
@@ -152,10 +158,18 @@ class Bucket {
     this._resize(this.capacity * 2);
   }
 
-  setPosition(slot, x, y, z) {
+  setTransform(slot, x, y, z, dx, dy, dz) {
     _tmpPos.set(x, y, z);
     _tmpScale.set(this._scale, this._scale, this._scale);
-    _tmpMatrix.compose(_tmpPos, this._baseQuat, _tmpScale);
+    const lenSq = dx * dx + dy * dy + dz * dz;
+    if (lenSq > 1e-8) {
+      const inv = 1 / Math.sqrt(lenSq);
+      _tmpDir.set(dx * inv, dy * inv, dz * inv);
+    } else {
+      _tmpDir.copy(DEFAULT_FORWARD);
+    }
+    _tmpQuat.setFromUnitVectors(PROJECTILE_UP_AXIS, _tmpDir);
+    _tmpMatrix.compose(_tmpPos, _tmpQuat, _tmpScale);
     this.mesh.setMatrixAt(slot, _tmpMatrix);
     this.matrixDirty = true;
   }
@@ -194,9 +208,12 @@ class ProjectileHandle {
     this._released = false;
   }
 
-  setPosition(vec) {
+  setTransform(pos, dir) {
     if (this._released) return;
-    this._bucket.setPosition(this._slot, vec.x, vec.y, vec.z);
+    const dx = dir?.x ?? 0;
+    const dy = dir?.y ?? 0;
+    const dz = dir?.z ?? -1;
+    this._bucket.setTransform(this._slot, pos.x, pos.y, pos.z, dx, dy, dz);
   }
 
   setColor(hex) {
