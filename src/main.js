@@ -578,18 +578,18 @@ class Game {
   }
 
   _setupClickHandling() {
-    document.getElementById('game-canvas').addEventListener('click', (ev) => {
+    const canvas = document.getElementById('game-canvas');
+    canvas.addEventListener('click', (ev) => {
       if (this._paused) return;
       const phase = this.state?.round?.phase;
       if (phase !== 'combat' && phase !== 'boss_arena' && phase !== 'arena_transition') return;
       if (phase === 'combat' && this._tryPriorityFocusClick(ev)) return;
-      const manual = this.playerEntity?.get('ManualGunComponent');
-      if (manual) { manual.fire(); return; }
       const rail = this.playerEntity?.get('RailgunComponent');
       if (rail) rail.beginCharge();
     });
 
-    document.getElementById('game-canvas').addEventListener('mouseup', () => {
+    canvas.addEventListener('mouseup', (ev) => {
+      if (ev.button !== 0) return;
       this.playerEntity?.get('RailgunComponent')?.releaseCharge();
     });
   }
@@ -631,6 +631,20 @@ class Game {
   }
 
   _setupManualGunInput() {
+    const canvas = document.getElementById('game-canvas');
+    canvas.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      if (this._paused) return;
+      if (this._isTypingTarget(e.target)) return;
+      const phase = this.state?.round?.phase;
+      if (phase !== 'combat' && phase !== 'boss_arena' && phase !== 'arena_transition') return;
+      if (phase === 'combat' && this._tryPriorityFocusClick(e)) return;
+      const manual = this.playerEntity?.get('ManualGunComponent');
+      if (!manual) return;
+      e.preventDefault();
+      manual.fire();
+    });
+
     window.addEventListener('keydown', e => {
       if (e.code !== 'Space') return;
       if (this._paused) return;
@@ -640,6 +654,14 @@ class Game {
     });
     window.addEventListener('keyup', e => {
       if (e.code !== 'Space') return;
+      if (this._paused) return;
+      if (this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      this.playerEntity?.get('ManualGunComponent')?.stopFiring();
+    });
+
+    window.addEventListener('pointerup', e => {
+      if (e.button !== 0) return;
       if (this._paused) return;
       if (this._isTypingTarget(e.target)) return;
       e.preventDefault();
