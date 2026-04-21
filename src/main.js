@@ -39,6 +39,7 @@ import { StoreUI } from './ui/StoreUI.js';
 import { ResearchUI } from './ui/ResearchUI.js';
 import { ArenaDirector } from './coordinators/ArenaDirector.js';
 import { BLOOM, PLAYER, RUN, SCENE, WARP, CAMPAIGN, BOSS_ARENA } from './constants.js';
+import { isCombatPhase } from './core/phaseUtil.js';
 import { getPreset } from './scene/EnvironmentPresets.js';
 import * as THREE from 'three';
 
@@ -400,9 +401,28 @@ class Game {
       else this.settingsUI.open();
     };
     window.addEventListener('keydown', e => {
-      if (e.code === 'Escape' && this.settingsUI.isOpen) { this.settingsUI.close(); return; }
-      if (e.code === 'Escape' && this.debugMenu.isOpen) { this.debugMenu.close(); return; }
-      if (e.code === 'Escape' && this._paused && this.state) this.setPaused(false);
+      if (e.code !== 'Escape') return;
+      if (this._isTypingTarget(e.target)) return;
+      if (this.settingsUI.isOpen) {
+        this.settingsUI.close();
+        e.preventDefault();
+        return;
+      }
+      if (this.debugMenu.isOpen) {
+        this.debugMenu.close();
+        e.preventDefault();
+        return;
+      }
+      if (e.repeat) return;
+      if (this._paused && this.state) {
+        this.setPaused(false);
+        e.preventDefault();
+        return;
+      }
+      if (this.state && isCombatPhase(this.state.round.phase)) {
+        e.preventDefault();
+        this.setPaused(true);
+      }
     });
   }
 
@@ -441,6 +461,10 @@ class Game {
       this._confirmEndRunToHangarFromPauseMenu();
     });
     document.getElementById('pause-btn')?.addEventListener('click', () => this.togglePause());
+    document.getElementById('pause-settings-btn')?.addEventListener('click', () => {
+      if (this.settingsUI.isOpen) this.settingsUI.close();
+      else this.settingsUI.open();
+    });
     window.addEventListener('keydown', e => {
       if (e.code !== 'KeyP' || e.repeat) return;
       if (this._isTypingTarget(e.target)) return;

@@ -13,9 +13,10 @@
 
   <div id="pause-overlay" class="pause-screen hidden" aria-hidden="true">
     <div class="pause-title">PAUSED</div>
-    <p class="pause-hint">Press <kbd class="pause-kbd">P</kbd> or <kbd class="pause-kbd">Esc</kbd> to resume</p>
+    <p class="pause-hint">Press <kbd class="pause-kbd">P</kbd> or <kbd class="pause-kbd">Esc</kbd> to pause or resume</p>
     <div class="pause-actions">
       <button type="button" id="pause-resume-btn" class="neon-btn launch">RESUME</button>
+      <button type="button" id="pause-settings-btn" class="neon-btn">SETTINGS</button>
       <button type="button" id="pause-return-hangar-btn" class="neon-btn">RETURN TO HANGAR</button>
     </div>
   </div>
@@ -72,7 +73,7 @@
     </div>
 
     <div id="hud-top-right">
-      <button type="button" id="pause-btn" class="neon-btn small" title="Pause (P)">⏸</button>
+      <button type="button" id="pause-btn" class="neon-btn small" title="Pause / resume (P or Esc)">⏸</button>
       <button id="tech-tree-btn" class="neon-btn">TECH TREE</button>
       <button id="mute-btn" class="neon-btn small">♪</button>
       <button id="settings-btn" class="neon-btn small">⚙</button>

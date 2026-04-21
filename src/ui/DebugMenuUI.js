@@ -95,7 +95,7 @@ export class DebugMenuUI {
     const hint = document.createElement('p');
     hint.className = 'debug-menu-hint';
     hint.textContent =
-      'Ctrl+Shift+D to toggle. Drag the header to move this panel; the game stays visible and clickable outside it. P / ⏸ / Esc (when paused) for pause. Resource amounts and visual sliders are not saved.';
+      'Ctrl+Shift+D to toggle. Drag the header to move this panel; the game stays visible and clickable outside it. P / ⏸ / Esc for pause and resume during combat. Resource amounts and visual sliders are not saved.';
     wrap.appendChild(hint);
 
     const pauseRow = document.createElement('div');
