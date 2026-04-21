@@ -79,6 +79,12 @@ export default defineConfig({
     open: true,
   },
   plugins: [devUpgradesPlugin()],
+  // ECS components look each other up by class name (e.g. entity.get('ColliderComponent')).
+  // esbuild's minifier mangles class names by default, breaking every lookup in prod.
+  // keepNames preserves the `.name` property so component name keys stay stable.
+  esbuild: {
+    keepNames: true,
+  },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
