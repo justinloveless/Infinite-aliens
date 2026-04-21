@@ -12,6 +12,7 @@ import { GameLoop } from './core/GameLoop.js';
 import { createInitialState } from './core/GameState.js';
 import { SaveManager } from './core/SaveManager.js';
 import { AudioManager } from './core/AudioManager.js';
+import { VoiceManager } from './audio/VoiceManager.js';
 import { eventBus, EVENTS } from './core/EventBus.js';
 import { ProjectileRenderer } from './rendering/ProjectileRenderer.js';
 import { PerfOverlay } from './ui/PerfOverlay.js';
@@ -53,6 +54,14 @@ class Game {
     this.saveManager = new SaveManager();
     this.settings = new SettingsManager();
     this.audio = new AudioManager();
+    this.voice = new VoiceManager({
+      eventBus,
+      settings: this.settings,
+      getContext: () => ({
+        playerEntity: this.playerEntity,
+        galaxyIndex: this.state?.campaign?.galaxyIndex ?? 0,
+      }),
+    });
 
     // Toggles diagnostic perf logging: per-section tick breakdowns on hitches
     // (>50 ms), the hitch line from PerfOverlay, and the one-time GPU info
@@ -86,6 +95,7 @@ class Game {
       scene: this.scene,
       camera: this.scene.camera,
       audio: this.audio,
+      voice: this.voice,
       eventBus,
       currency: this.currency,
       createAsteroid,
@@ -111,7 +121,7 @@ class Game {
     this.arenaHUD = new ArenaHUD();
     this.transition = new RoundTransition();
     this.damageNumbers = new DamageNumbers();
-    this.settingsUI = new SettingsUI(this.settings, this.audio);
+    this.settingsUI = new SettingsUI(this.settings, this.audio, this.voice);
     this.debugMenu = new DebugMenuUI(this);
 
     this.techTree = null;
@@ -411,10 +421,12 @@ class Game {
       if (showOverlay) { ov?.classList.remove('hidden'); ov?.setAttribute('aria-hidden', 'false'); }
       else { ov?.classList.add('hidden'); ov?.setAttribute('aria-hidden', 'true'); }
       this.audio.pauseMusic();
+      this.voice?.pauseAll();
     } else {
       ov?.classList.add('hidden');
       ov?.setAttribute('aria-hidden', 'true');
       this.audio.resumeMusic();
+      this.voice?.resumeAll();
     }
   }
 
@@ -1300,6 +1312,7 @@ class Game {
     }
 
     this.world.update(dt);                             mark('world');
+    this.voice?.update(dt);                            mark('voice');
     if (phase === 'combat' || phase === 'boss_arena' || phase === 'arena_transition') {
       this.collision.update();                         mark('collision');
     }

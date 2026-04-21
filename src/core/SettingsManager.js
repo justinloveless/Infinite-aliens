@@ -10,10 +10,12 @@ export const KEYBIND_ACTIONS = [
 export const GRAPHICS_QUALITY_OPTIONS = ['auto', 'high', 'medium', 'low'];
 
 const DEFAULTS = {
-  sfxVolume:   0.5,
-  musicVolume: 0.25,
-  muted:       false,
-  showFps:     false,
+  sfxVolume:    0.5,
+  musicVolume:  0.25,
+  voiceVolume:  0.9,
+  voiceEnabled: true,
+  muted:        false,
+  showFps:      false,
   graphicsQuality: 'auto',
   keybinds: {
     moveUp:    'KeyW',
@@ -52,10 +54,12 @@ export class SettingsManager {
 
   // ---- Getters ----
 
-  get sfxVolume()   { return this._s.sfxVolume; }
-  get musicVolume() { return this._s.musicVolume; }
-  get muted()       { return this._s.muted; }
-  get showFps()     { return !!this._s.showFps; }
+  get sfxVolume()    { return this._s.sfxVolume; }
+  get musicVolume()  { return this._s.musicVolume; }
+  get voiceVolume()  { return this._s.voiceVolume ?? DEFAULTS.voiceVolume; }
+  get voiceEnabled() { return this._s.voiceEnabled !== false; }
+  get muted()        { return this._s.muted; }
+  get showFps()      { return !!this._s.showFps; }
   get graphicsQuality() {
     const v = this._s.graphicsQuality;
     return GRAPHICS_QUALITY_OPTIONS.includes(v) ? v : 'auto';
@@ -74,6 +78,18 @@ export class SettingsManager {
     this._s.musicVolume = Math.max(0, Math.min(1, v));
     this._save();
     this._emit('musicVolume', this._s.musicVolume);
+  }
+
+  setVoiceVolume(v) {
+    this._s.voiceVolume = Math.max(0, Math.min(1, v));
+    this._save();
+    this._emit('voiceVolume', this._s.voiceVolume);
+  }
+
+  setVoiceEnabled(v) {
+    this._s.voiceEnabled = !!v;
+    this._save();
+    this._emit('voiceEnabled', this._s.voiceEnabled);
   }
 
   setMuted(v) {

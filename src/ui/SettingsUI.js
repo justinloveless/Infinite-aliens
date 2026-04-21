@@ -21,10 +21,12 @@ export class SettingsUI {
   /**
    * @param {import('../core/SettingsManager.js').SettingsManager} settings
    * @param {import('../core/AudioManager.js').AudioManager} audio
+   * @param {import('../audio/VoiceManager.js').VoiceManager} [voice]
    */
-  constructor(settings, audio) {
+  constructor(settings, audio, voice = null) {
     this._settings = settings;
     this._audio    = audio;
+    this._voice    = voice;
     this._panel    = document.getElementById('settings-screen');
     this._capturingAction = null; // keybind action currently listening for a key
     this._captureHandler  = null; // active keydown listener
@@ -86,6 +88,7 @@ export class SettingsUI {
       this._audio.setMusicVolume(this._settings.musicVolume);
       this._audio.setSfxVolume(this._settings.sfxVolume);
       this._audio.setMuted(this._settings.muted);
+      this._voice?.setVolume(this._settings.voiceVolume);
       this._sync();
     };
     footer.appendChild(resetBtn);
@@ -132,6 +135,33 @@ export class SettingsUI {
         this._audio.play('pickup'); // preview the sfx
       }
     ));
+
+    el.appendChild(this._buildSlider(
+      'voice-vol', 'VOICE VOLUME',
+      () => this._settings.voiceVolume,
+      v => {
+        this._settings.setVoiceVolume(v);
+        this._voice?.setVolume(v);
+      }
+    ));
+
+    // Voice toggle row
+    const voiceRow = document.createElement('div');
+    voiceRow.className = 'settings-row';
+    const voiceLabel = document.createElement('span');
+    voiceLabel.className = 'settings-label';
+    voiceLabel.textContent = 'ASSISTANT VOICE';
+    this._voiceBtn = document.createElement('button');
+    this._voiceBtn.className = 'neon-btn small';
+    this._voiceBtn.onclick = () => {
+      const next = !this._settings.voiceEnabled;
+      this._settings.setVoiceEnabled(next);
+      if (!next) this._voice?.stopAll();
+      this._syncVoiceBtn();
+    };
+    voiceRow.appendChild(voiceLabel);
+    voiceRow.appendChild(this._voiceBtn);
+    el.appendChild(voiceRow);
 
     // Mute toggle row
     const muteRow = document.createElement('div');
@@ -308,9 +338,18 @@ export class SettingsUI {
   _sync() {
     this._syncSliders();
     this._syncMuteBtn();
+    this._syncVoiceBtn();
     this._syncKeybinds();
     this._syncShowFpsBtn();
     this._syncQualityBtns();
+  }
+
+  _syncVoiceBtn() {
+    if (!this._voiceBtn) return;
+    const on = this._settings.voiceEnabled;
+    this._voiceBtn.textContent = on ? 'ON' : 'OFF';
+    this._voiceBtn.style.borderColor = on ? 'var(--green)' : 'var(--pink)';
+    this._voiceBtn.style.color       = on ? 'var(--green)' : 'var(--pink)';
   }
 
   _syncShowFpsBtn() {
@@ -333,15 +372,16 @@ export class SettingsUI {
   }
 
   _syncSliders() {
+    const valueFor = (id) => {
+      if (id === 'music-vol') return this._settings.musicVolume;
+      if (id === 'voice-vol') return this._settings.voiceVolume;
+      return this._settings.sfxVolume;
+    };
     for (const slider of this._panel.querySelectorAll('.settings-slider')) {
-      const id = slider.dataset.id;
-      const v = id === 'music-vol' ? this._settings.musicVolume : this._settings.sfxVolume;
-      slider.value = v;
+      slider.value = valueFor(slider.dataset.id);
     }
     for (const pct of this._panel.querySelectorAll('.settings-slider-pct')) {
-      const id = pct.dataset.id;
-      const v = id === 'music-vol' ? this._settings.musicVolume : this._settings.sfxVolume;
-      pct.textContent = `${Math.round(v * 100)}%`;
+      pct.textContent = `${Math.round(valueFor(pct.dataset.id) * 100)}%`;
     }
   }
 
