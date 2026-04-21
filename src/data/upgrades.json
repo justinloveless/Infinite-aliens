@@ -51,7 +51,7 @@
         "starter_weapon"
       ],
       "name": "Linked Turret",
-      "description": "Brings your fixed forward turret online for continuous aimed fire. Until you install this, only your manual nose cannon fires in combat.",
+      "description": "Brings your fixed forward turret online for continuous aimed fire. Until you unlock this, only your manual nose cannon fires in combat.",
       "icon": "⬢",
       "maxLevel": 1,
       "baseCost": {

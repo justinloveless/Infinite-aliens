@@ -4,11 +4,10 @@
       "id": "main_cannon",
       "name": "Main Cannon",
       "slotType": "weapon",
-      "grantsNodeId": "auto_turret",
       "starter": true,
       "cost": {},
       "icon": "⬢",
-      "description": "Forward auto-cannon. Brings your fixed nose turret online for continuous aimed fire.",
+      "description": "Forward nose cannon. Click or hold to fire manually; link a turret via the tech tree for automatic fire.",
       "color": "#ffcc66"
     },
     {

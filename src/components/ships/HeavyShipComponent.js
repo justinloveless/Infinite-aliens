@@ -85,6 +85,8 @@ export class HeavyShipComponent extends ShipComponent {
     engineR.position.set(0.4, 0, 1.3);
     group.add(engineR);
     group.userData.engine = engineL;
+    group.userData.engines = [engineL, engineR];
+    group.userData.engineColor = 0xffa436;
 
     const glowMat = new THREE.MeshBasicMaterial({ color: 0xffa436, transparent: true, opacity: 0.9 });
     const glowL = new THREE.Mesh(new THREE.CircleGeometry(0.24, 12), glowMat);

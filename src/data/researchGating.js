@@ -2,7 +2,9 @@ import itemsData from './items.json';
 
 // Maps from item id -> its grantsNodeId (so research can resolve gating by category).
 const _itemByNode = new Map();
-for (const it of itemsData.items) _itemByNode.set(it.grantsNodeId, it.id);
+for (const it of itemsData.items) {
+  if (it.grantsNodeId) _itemByNode.set(it.grantsNodeId, it.id);
+}
 
 /**
  * Returns the item id required to keep a research node's effects active,

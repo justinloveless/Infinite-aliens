@@ -87,6 +87,8 @@ export class FighterShipComponent extends ShipComponent {
     engine.position.set(0, 0, 1.35);
     group.add(engine);
     group.userData.engine = engine;
+    group.userData.engines = [engine];
+    group.userData.engineColor = 0xff4020;
 
     const glow = new THREE.Mesh(
       new THREE.CircleGeometry(0.18, 12),

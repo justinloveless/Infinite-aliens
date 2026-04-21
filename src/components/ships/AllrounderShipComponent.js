@@ -60,6 +60,8 @@ export class AllrounderShipComponent extends ShipComponent {
     engine.position.z = 1.1;
     group.add(engine);
     group.userData.engine = engine;
+    group.userData.engines = [engine];
+    group.userData.engineColor = 0x00aaff;
 
     const glow = new THREE.Mesh(
       new THREE.CircleGeometry(0.2, 12),

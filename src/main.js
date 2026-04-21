@@ -132,8 +132,9 @@ class Game {
     this.arenaDirector = null;
     this.collision = new CollisionCoordinator(this.world);
     this._arenaKeys = { left: false, right: false, up: false, down: false };
-    this._arenaSpeed = 0;
+    this._arenaVel = { x: 0, z: 0 };
     this._arenaBank = 0;
+    this._arenaInitSpeed = false;
     this._prevBossMusicActive = false;
     this._paused = false;
     this._techTreeOpen = false;
@@ -270,7 +271,11 @@ class Game {
     eventBus.on(EVENTS.UPGRADE_SOLD, () => { this._rebuildComputed(); this._saveNow(); });
     eventBus.on(EVENTS.GALAXY_BOSS_PENDING, ({ galaxyIndex }) => this._enterBossArena(galaxyIndex));
     eventBus.on(EVENTS.ARENA_WARNING, () => this.audio?.play('warning'));
-    eventBus.on(EVENTS.ARENA_TRANSITION_STARTED, () => this.audio?.play('warp'));
+    eventBus.on(EVENTS.ARENA_TRANSITION_STARTED, () => {
+      this.audio?.play('warp');
+      this._resetArenaFlight();
+    });
+    eventBus.on(EVENTS.ARENA_COMPLETE, () => this._resetArenaFlight());
     eventBus.on(EVENTS.SHIP_PURCHASED, () => this._saveNow());
 
     eventBus.on(EVENTS.CURRENCY_CHANGED, () => {
@@ -544,7 +549,6 @@ class Game {
     this.setPaused(false);
     this.transition.hide();
     this.ui.hide('death');
-    this.ui.hide('welcome');
     this.settingsUI.close();
     document.getElementById('start-screen')?.classList.add('hidden');
 
@@ -682,9 +686,17 @@ class Game {
   }
 
   /**
-   * Free-flight arena controller. Ship is always moving forward; A/D yaw,
-   * W/S throttle. Soft edge steering gently curls the ship back toward origin
-   * inside the wall band — no hard clamps, so the arena feels open.
+   * Inertia-lite arena flight controller.
+   *
+   * Velocity is a world-space vector kept in `this._arenaVel`, independent of
+   * the ship's yaw. W adds thrust along the current nose; S applies retro
+   * thrust along the current velocity (brake). Releasing both = coast (no
+   * drag). A/D yaw the nose only — velocity lingers, so hard turns produce
+   * visible sideways drift. A mild "velocity relaxes toward nose" pull keeps
+   * the ship from ever flying permanently backwards.
+   *
+   * Soft edge-band steering auto-yaws toward origin and bleeds the outward
+   * component of velocity when inside EDGE_BAND of a wall.
    */
   _tickArenaInput(dt) {
     if (!this.playerEntity) return;
@@ -692,34 +704,61 @@ class Game {
     if (!t) return;
 
     const baseSpd = (this.computed?.speed ?? 3) * BOSS_ARENA.BASE_SPEED_MULT;
-    const MIN_SPD = baseSpd * BOSS_ARENA.MIN_SPEED_MULT;
-    const MAX_SPD = baseSpd * BOSS_ARENA.MAX_SPEED_MULT;
-    const CRUISE  = baseSpd * BOSS_ARENA.CRUISE_SPEED_MULT;
+    const maxV    = baseSpd * BOSS_ARENA.MAX_SPEED_MULT;
+
+    // Seed an initial forward coast the first frame the arena runs, so the
+    // ship doesn't start from a dead stop.
+    if (!this._arenaInitSpeed) {
+      const fx0 = -Math.sin(t.rotation.y);
+      const fz0 = -Math.cos(t.rotation.y);
+      const v0 = baseSpd * BOSS_ARENA.INITIAL_SPEED_MULT;
+      this._arenaVel.x = fx0 * v0;
+      this._arenaVel.z = fz0 * v0;
+      this._arenaInitSpeed = true;
+    }
 
     const yawInput = (this._arenaKeys.left ? 1 : 0) - (this._arenaKeys.right ? 1 : 0);
     t.rotation.y += yawInput * BOSS_ARENA.YAW_SPEED * dt;
 
-    const targetSpeed = this._arenaKeys.up ? MAX_SPD
-      : this._arenaKeys.down ? MIN_SPD
-      : CRUISE;
-    const k = Math.min(1, dt * BOSS_ARENA.THROTTLE_ACCEL);
-    this._arenaSpeed += (targetSpeed - this._arenaSpeed) * k;
-
     // Ship-local -Z is forward; rotation.y yaws around Y.
     const yaw = t.rotation.y;
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
 
-    // Soft edge steering: inside EDGE_BAND of a wall, bias yaw toward origin
-    // and bleed throttle. Past the wall, steering scales above 1 so the ship
-    // snaps back hard instead of drifting out forever.
-    //
-    // Yaw convention: forward = (-sin(yaw), -cos(yaw)). To face origin from
-    // (px, pz) we need forward ∝ (-px, -pz), which gives yawTarget = atan2(px, pz).
+    // Forward thrust along nose.
+    if (this._arenaKeys.up) {
+      const a = baseSpd * BOSS_ARENA.THRUST_ACCEL_MULT * dt;
+      this._arenaVel.x += fx * a;
+      this._arenaVel.z += fz * a;
+    }
+
+    // Retro brake along velocity (never flips sign — clamps to zero).
+    if (this._arenaKeys.down) {
+      const s = Math.hypot(this._arenaVel.x, this._arenaVel.z);
+      if (s > 0.001) {
+        const dv = Math.min(s, baseSpd * BOSS_ARENA.BRAKE_DECEL_MULT * dt);
+        this._arenaVel.x -= (this._arenaVel.x / s) * dv;
+        this._arenaVel.z -= (this._arenaVel.z / s) * dv;
+      }
+    }
+
+    // Mild velocity-aligns-with-nose pull (arcade forgiveness). Preserves
+    // speed magnitude; just rotates the vector toward (fx, fz).
+    let speed = Math.hypot(this._arenaVel.x, this._arenaVel.z);
+    if (speed > 0.001 && BOSS_ARENA.VELOCITY_ALIGN_TAU > 0) {
+      const k = 1 - Math.exp(-dt / BOSS_ARENA.VELOCITY_ALIGN_TAU);
+      this._arenaVel.x += (fx * speed - this._arenaVel.x) * k;
+      this._arenaVel.z += (fz * speed - this._arenaVel.z) * k;
+      speed = Math.hypot(this._arenaVel.x, this._arenaVel.z);
+    }
+
+    // Edge band: auto-steer yaw toward origin and scrub the outward component
+    // of velocity so the ship peels off the wall instead of sticking to it.
     const band = BOSS_ARENA.EDGE_BAND;
     const px = t.position.x, pz = t.position.z;
     const distToEdgeX = Math.min(px - BOSS_ARENA.X_MIN, BOSS_ARENA.X_MAX - px);
     const distToEdgeZ = Math.min(pz - BOSS_ARENA.Z_MIN, BOSS_ARENA.Z_MAX - pz);
     const minEdge = Math.min(distToEdgeX, distToEdgeZ);
-    // 0 inside (> band), 1 at wall, grows past 1 when outside bounds.
     let edgePressure = 1 - minEdge / band;
     if (edgePressure < 0) edgePressure = 0;
     if (edgePressure > 0) {
@@ -727,26 +766,62 @@ class Game {
       let dyaw = toOrigin - yaw;
       while (dyaw >  Math.PI) dyaw -= Math.PI * 2;
       while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-      // Strong turn authority: up to ~3 rad/s at the wall, clamped above 1.
       const turnRate = Math.min(edgePressure, 4) * 3.0;
       const maxDelta = turnRate * dt;
       const step = Math.max(-maxDelta, Math.min(maxDelta, dyaw));
       t.rotation.y += step;
-      // Bleed speed hardest when outside bounds.
-      const bleed = Math.min(edgePressure, 2) * 0.6;
-      this._arenaSpeed *= Math.max(0.2, 1 - bleed * dt);
+
+      // Bleed the outward radial component of velocity (toward origin = (-px,-pz)/|p|).
+      const pmag = Math.hypot(px, pz);
+      if (pmag > 0.001) {
+        const ox = px / pmag, oz = pz / pmag;           // outward unit vector
+        const radial = this._arenaVel.x * ox + this._arenaVel.z * oz; // positive = moving outward
+        if (radial > 0) {
+          const bleed = Math.min(1, Math.min(edgePressure, 2) * 4 * dt);
+          this._arenaVel.x -= ox * radial * bleed;
+          this._arenaVel.z -= oz * radial * bleed;
+        }
+      }
     }
 
-    // Recompute forward after possible edge-steering yaw update so movement
-    // reflects the corrected heading this very frame.
-    const yawPost = t.rotation.y;
-    const fx = -Math.sin(yawPost);
-    const fz = -Math.cos(yawPost);
-    t.position.x += fx * this._arenaSpeed * dt;
-    t.position.z += fz * this._arenaSpeed * dt;
+    // Hard cap on velocity magnitude.
+    speed = Math.hypot(this._arenaVel.x, this._arenaVel.z);
+    if (speed > maxV) {
+      const s = maxV / speed;
+      this._arenaVel.x *= s;
+      this._arenaVel.z *= s;
+      speed = maxV;
+    }
 
-    // Visual bank: lerp toward −yawInput * constant
-    const targetBank = -yawInput * 0.38;
+    // Minimum forward velocity — no full stop. Keeps pressure on the player
+    // and preserves the "flying through space" feel. Preserves current heading
+    // if one exists; otherwise nudges forward along the nose.
+    const minV = baseSpd * BOSS_ARENA.MIN_SPEED_MULT;
+    if (speed < minV) {
+      if (speed > 0.001) {
+        const s = minV / speed;
+        this._arenaVel.x *= s;
+        this._arenaVel.z *= s;
+      } else {
+        this._arenaVel.x = fx * minV;
+        this._arenaVel.z = fz * minV;
+      }
+      speed = minV;
+    }
+
+    t.position.x += this._arenaVel.x * dt;
+    t.position.z += this._arenaVel.z * dt;
+
+    // Visual bank: bank INTO the turn (left turn → left wing dips → right
+    // wing up → positive rotation.z in three.js). yawInput=+1 is a left turn,
+    // so bank term is +yawInput. Lateral slip reinforces it: slipNorm>0 means
+    // sliding to ship-right (= turning left faster than velocity follows), so
+    // bank further left (positive).
+    // Right vector (ship-local +X in world) = (cos(yaw), 0, -sin(yaw)).
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    const slipDot = this._arenaVel.x * rx + this._arenaVel.z * rz; // positive = sliding to ship-right
+    const slipNorm = Math.max(-1, Math.min(1, slipDot / Math.max(0.001, maxV)));
+    const targetBank = yawInput * 0.55 + slipNorm * 0.35;
     this._arenaBank += (targetBank - this._arenaBank) * Math.min(1, dt * 7);
     t.rotation.z = this._arenaBank;
     t.rotation.x = 0;
@@ -759,6 +834,40 @@ class Game {
       vis._group.position.copy(t.position);
       vis._group.rotation.copy(t.rotation);
     }
+
+    // Feed cinematic camera (roll already comes from ship rotation; these
+    // drive speed FOV and chase swing).
+    const speedRatio = Math.max(0, Math.min(1, speed / Math.max(0.001, maxV)));
+    this.camera?.setSpeedRatio?.(speedRatio);
+    this.camera?.setYawInput?.(yawInput);
+
+    // Trail component uses the same ratio to fade in/brighten the line.
+    const trail = this.playerEntity.get('ArenaTrailComponent');
+    trail?.setSpeedRatio?.(speedRatio);
+
+    // Thrust plume level: hold W for full flare, S cuts to near-zero,
+    // neither holds an idle baseline so the engines always read as "on".
+    const thrust = this._arenaKeys.up ? 1.0
+      : this._arenaKeys.down ? 0.05
+      : 0.4;
+    this.playerEntity.get('ShipVisualsComponent')?.setThrust?.(thrust);
+  }
+
+  /** Reset arena flight state on enter/exit so next run starts clean. */
+  _resetArenaFlight() {
+    this._arenaVel.x = 0;
+    this._arenaVel.z = 0;
+    this._arenaBank = 0;
+    this._arenaInitSpeed = false;
+    this.camera?.setSpeedRatio?.(0);
+    this.camera?.setYawInput?.(0);
+    this.playerEntity?.get('ArenaTrailComponent')?.reset?.();
+    this.playerEntity?.get('ShipVisualsComponent')?.setThrust?.(0.4);
+  }
+
+  /** Exposed so enemy AI / lead calculations can read the arena velocity. */
+  getArenaVelocity() {
+    return this._arenaVel;
   }
 
   async start() {
@@ -790,17 +899,15 @@ class Game {
       );
       this.state.round.phase = 'dead';
 
-      this.ui.showWelcome(offline, () => {
-        if (offline && offline.earnings.stellarDust > 0) {
-          this.currency.add('stellarDust', offline.earnings.stellarDust);
-        }
-        this.ui.showDeath(
-          this.state.lastRun ?? null,
-          () => this._openTechTree(),
-          () => this._showWarpGateAndLaunch(),
-          () => this._openHangar(),
-        );
-      });
+      if (offline && offline.earnings.stellarDust > 0) {
+        this.currency.add('stellarDust', offline.earnings.stellarDust);
+      }
+      this.ui.showDeath(
+        this.state.lastRun ?? null,
+        () => this._openTechTree(),
+        () => this._showWarpGateAndLaunch(),
+        () => this._openHangar(),
+      );
     } else {
       this._newGame();
     }
@@ -1316,6 +1423,18 @@ class Game {
       : (arenaActive ? 0 : worldSpeed);
     this.starfield.update(dt, starfieldSpeed);         mark('starfield');
     this.synthGrid.update(dt, gridSpeed);              mark('synthgrid');
+
+    // Feed the camera's combat-corridor screen tilt before it lerps this
+    // frame. Arena phases drive their own camera state; zero out here so
+    // the combat roll/sway relaxes back to level when we leave combat.
+    if (phase === 'combat') {
+      const t = this.playerEntity.get('TransformComponent');
+      const vel = this.playerEntity.get('PlayerInputComponent')?.getVelocity?.() || { x: 0 };
+      this.camera.setCombatSway({ roll: t?.rotation?.z ?? 0, vx: vel.x });
+    } else if (!arenaActive && !transitioning) {
+      this.camera.setCombatSway({ roll: 0, vx: 0 });
+    }
+
     this.camera.update(dt);                            mark('camera');
     this.scene.lerpEnvironment(dt);                    mark('environment');
     this._updateShaders(dt);                           mark('shaders');

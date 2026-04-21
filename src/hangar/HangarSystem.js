@@ -13,7 +13,7 @@ const _itemsById = new Map(itemsData.items.map(i => [i.id, i]));
 const _nodesById = new Map(upgradesData.nodes.map(n => [n.id, n]));
 
 const _itemIdSet = new Set(itemsData.items.map(i => i.id));
-const _grantedByItems = new Set(itemsData.items.map(i => i.grantsNodeId));
+const _grantedByItems = new Set(itemsData.items.map(i => i.grantsNodeId).filter(Boolean));
 
 export function getAllItems() { return itemsData.items; }
 /** All slot defs for the currently-active ship. */

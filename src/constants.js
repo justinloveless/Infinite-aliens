@@ -34,7 +34,7 @@ export const PLAYER = {
   BASE_HP_REGEN: 0,
   BASE_ARMOR: 0,
   BASE_SPEED: 3,
-  BASE_MAGNET_RANGE: 4,
+  BASE_MAGNET_RANGE: 0,
   BASE_VISION_RANGE: 60,
   BASE_TARGETING_RANGE: 50,
   BASE_LOOT_MULT: 1.0,
@@ -236,12 +236,14 @@ export const BOSS_ARENA = {
   BOSS_SPAWN_INTERVAL: 2.5,  // seconds between boss minion spawns while boss alive
   BOSS_MAX_LIVE_SPAWNS: 8,   // cap on concurrent minions spawned by the boss
 
-  // Flight controller
-  YAW_SPEED: 2.2,            // rad/sec per A/D hold
-  THROTTLE_ACCEL: 6,         // speed ramps up/down per sec
-  MIN_SPEED_MULT: 0.35,      // × baseSpeed when holding S
-  MAX_SPEED_MULT: 2.2,       // × baseSpeed when holding W
-  CRUISE_SPEED_MULT: 1.1,    // × baseSpeed when no throttle input
+  // Flight controller — inertia-lite (decoupled nose vs. velocity vector)
+  YAW_SPEED: 2.6,            // rad/sec per A/D hold (nose-only; does not redirect velocity)
+  THRUST_ACCEL_MULT: 3.5,    // × baseSpeed per sec while holding W (forward thrust along nose)
+  BRAKE_DECEL_MULT: 4.0,     // × baseSpeed per sec while holding S (retro thrust along velocity)
+  MIN_SPEED_MULT: 0.45,      // × baseSpeed — floor on velocity magnitude (no full stop)
+  MAX_SPEED_MULT: 2.4,       // × baseSpeed — hard cap on velocity magnitude
+  VELOCITY_ALIGN_TAU: 2.0,   // seconds for velocity to relax toward nose heading (arcade forgiveness)
+  INITIAL_SPEED_MULT: 1.0,   // × baseSpeed at arena start (coast forward)
   BASE_SPEED_MULT: 4,        // × computed.speed to get arena "base" speed
 
   // Transition

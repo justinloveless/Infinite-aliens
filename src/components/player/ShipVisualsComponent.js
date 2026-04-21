@@ -97,6 +97,14 @@ export class ShipVisualsComponent extends Component {
     /** @type {Map<string, THREE.Group>} */
     this._weaponSlotRoots = new Map();
     this._muzzleForwardLocal = new THREE.Vector3(0, 0, -0.25);
+    /** GPU particle system for engine exhaust. Built per attach. */
+    this._thrustParticles = null;
+    /** Engines list cached from hull userData for per-frame emission. */
+    this._thrustEngines = [];
+    /** Smoothed thrust intensity 0..1 actually rendered this frame. */
+    this._thrustLevel = 0.4;
+    /** Target intensity 0..1 fed by setThrust(); idle baseline = 0.4. */
+    this._thrustTarget = 0.4;
   }
 
   onAttach(ctx) {
@@ -105,6 +113,7 @@ export class ShipVisualsComponent extends Component {
     if (!scene) return;
 
     this._buildMesh();
+    this._buildThrustParticles();
     this._buildMagnetField();
     this._buildStellarNovaBurst();
 
@@ -138,6 +147,7 @@ export class ShipVisualsComponent extends Component {
     if (this._group) disposeDeep(this._group);
     if (this._magnetMesh) disposeDeep(this._magnetMesh);
     if (this._novaMesh) disposeDeep(this._novaMesh);
+    this._disposeThrustParticles();
   }
 
   update(dt, ctx) {
@@ -149,9 +159,19 @@ export class ShipVisualsComponent extends Component {
     this._group.position.copy(t.position);
     this._group.rotation.copy(t.rotation);
 
-    // Thruster pulse
-    const pulse = 1.8 + Math.sin(this._time * 8) * 0.6;
-    if (this._thrusterLight) this._thrusterLight.intensity = pulse;
+    // Smooth the thrust level toward whatever the flight controller last set.
+    // When no one calls setThrust() (combat phase), target stays at the idle
+    // baseline (0.4) so the plumes read as "engines on, not thrusting".
+    const THRUST_LERP = 10;
+    this._thrustLevel += (this._thrustTarget - this._thrustLevel) * Math.min(1, dt * THRUST_LERP);
+    const lvl = this._thrustLevel;
+
+    // Exhaust particle system — world-space so particles trail the ship.
+    this._tickThrustParticles(dt);
+
+    // Thruster point light also modulates with level + a small pulse.
+    const pulse = 1.2 + Math.sin(this._time * 8) * 0.25;
+    if (this._thrusterLight) this._thrusterLight.intensity = pulse * (0.5 + 1.8 * lvl);
 
     // Magnet ring
     const stats = this.entity.get('PlayerStatsComponent');
@@ -161,8 +181,8 @@ export class ShipVisualsComponent extends Component {
       this._magnetMesh.position.x = t.position.x;
       this._magnetMesh.position.y = t.position.y + 0.06;
       this._magnetMesh.position.z = t.position.z;
-      this._magnetMesh.scale.setScalar(mRange);
-      this._magnetMesh.visible = isCombatPhase(ctx?.state?.round?.phase);
+      this._magnetMesh.scale.setScalar(Math.max(0.001, mRange));
+      this._magnetMesh.visible = isCombatPhase(ctx?.state?.round?.phase) && mRange > 0;
     }
 
     // Stellar nova pulse
@@ -289,6 +309,15 @@ export class ShipVisualsComponent extends Component {
     });
   }
 
+  /**
+   * Drive the thrust visuals (plume size/brightness + thruster light).
+   * @param {number} level  0..1. 1 = full forward thrust, 0 = retro/cutoff,
+   *                        ~0.4 = idle baseline.
+   */
+  setThrust(level) {
+    this._thrustTarget = Math.max(0, Math.min(1, level || 0));
+  }
+
   // ── Internal build helpers ────────────────────────────────────────────
   _buildMesh() {
     const state = this.world?.ctx?.state;
@@ -325,6 +354,198 @@ export class ShipVisualsComponent extends Component {
     this._group.add(this._shieldMesh);
 
     this._buildWeaponSlotRoots(state);
+  }
+
+  /**
+   * Build a GPU particle system (THREE.Points + custom ShaderMaterial) for
+   * engine exhaust. Particles live in world space — they emit from each
+   * engine's current world position with a ship-rearward velocity, so they
+   * correctly trail behind the hull during hard turns (they stay put; the
+   * ship moves away).
+   *
+   * Per-particle size + alpha fade come from the shader using `aAge`/`aLifetime`
+   * attributes. Spawn rate and particle speed scale with `_thrustLevel` in
+   * `_tickThrustParticles()`.
+   */
+  _buildThrustParticles() {
+    this._disposeThrustParticles();
+
+    const hull = this._hullGroup;
+    if (!hull || !this._scene?.groups?.effects) return;
+
+    const engines = Array.isArray(hull.userData.engines) && hull.userData.engines.length
+      ? hull.userData.engines
+      : (hull.userData.engine ? [hull.userData.engine] : []);
+    if (!engines.length) return;
+
+    this._thrustEngines = engines.slice();
+
+    const CAP = 240;
+    const positions = new Float32Array(CAP * 3);
+    const ages      = new Float32Array(CAP);
+    const lifetimes = new Float32Array(CAP);
+    const velocities = new Float32Array(CAP * 3);
+    // Start all dead so nothing renders until spawned.
+    for (let i = 0; i < CAP; i++) { ages[i] = 1; lifetimes[i] = 1; }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position',   new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aAge',       new THREE.BufferAttribute(ages, 1));
+    geo.setAttribute('aLifetime',  new THREE.BufferAttribute(lifetimes, 1));
+    geo.setDrawRange(0, CAP);
+    // Large bounding sphere so THREE doesn't frustum-cull the whole system
+    // based on stale positions in the buffer.
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
+
+    const colorHex = hull.userData.engineColor ?? 0x66d9ff;
+    const pixelRatio = Math.min(typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, 2);
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor:      { value: new THREE.Color(colorHex) },
+        uSize:       { value: 140 },
+        uPixelRatio: { value: pixelRatio },
+      },
+      vertexShader: /* glsl */`
+        attribute float aAge;
+        attribute float aLifetime;
+        uniform float uSize;
+        uniform float uPixelRatio;
+        varying float vAlpha;
+        void main() {
+          float t = clamp(aAge / max(aLifetime, 0.0001), 0.0, 1.0);
+          vAlpha = 1.0 - t;
+          float sizeScale = mix(1.0, 0.25, t);
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = uSize * uPixelRatio * sizeScale / max(0.01, -mv.z);
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: /* glsl */`
+        precision highp float;
+        uniform vec3 uColor;
+        varying float vAlpha;
+        void main() {
+          vec2 c = gl_PointCoord - 0.5;
+          float d = length(c);
+          if (d > 0.5) discard;
+          float glow = smoothstep(0.5, 0.0, d);
+          float core = smoothstep(0.35, 0.0, d);
+          vec3 col = uColor * (glow + core * 0.8);
+          gl_FragColor = vec4(col * vAlpha, glow * vAlpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    const points = new THREE.Points(geo, mat);
+    points.frustumCulled = false;
+    this._scene.groups.effects.add(points);
+
+    this._thrustParticles = {
+      points, geo, mat,
+      positions, ages, lifetimes, velocities,
+      capacity: CAP,
+      cursor: 0,
+      spawnLeftover: 0,
+      vEngine: new THREE.Vector3(),
+      vDir: new THREE.Vector3(),
+    };
+  }
+
+  _disposeThrustParticles() {
+    const p = this._thrustParticles;
+    if (!p) return;
+    p.geo?.dispose?.();
+    p.mat?.dispose?.();
+    if (p.points?.parent) p.points.parent.remove(p.points);
+    this._thrustParticles = null;
+    this._thrustEngines = [];
+  }
+
+  _tickThrustParticles(dt) {
+    const p = this._thrustParticles;
+    if (!p || !this._thrustEngines?.length) return;
+
+    const lvl = this._thrustLevel;
+
+    // Bigger, brighter particles at higher thrust (in addition to spawn-rate
+    // + exhaust-speed modulation below).
+    p.mat.uniforms.uSize.value = 90 + 110 * lvl;
+
+    // Ensure hull world matrix is current before reading engine world positions.
+    this._group.updateMatrixWorld(true);
+
+    // Rearward direction in world = ship-local +Z mapped through hull rotation.
+    const dir = p.vDir.set(0, 0, 1).applyQuaternion(this._group.quaternion);
+    if (dir.lengthSq() < 1e-6) return;
+    dir.normalize();
+
+    // Spawn rate in particles per second.
+    const SPAWN_MIN = 30;
+    const SPAWN_MAX = 260;
+    const rate = SPAWN_MIN + (SPAWN_MAX - SPAWN_MIN) * lvl;
+    p.spawnLeftover += rate * dt;
+    const toSpawn = Math.floor(p.spawnLeftover);
+    p.spawnLeftover -= toSpawn;
+
+    // Per-particle physical params.
+    const EXHAUST_SPEED = 8 + 22 * lvl;   // world units/sec rearward
+    const JITTER_POS = 0.12;              // nozzle spread
+    const JITTER_DIR = 0.28;              // velocity cone spread
+    const LIFE_BASE = 0.55;
+
+    const engines = this._thrustEngines;
+    const positions = p.positions;
+    const ages = p.ages;
+    const lifetimes = p.lifetimes;
+    const velocities = p.velocities;
+
+    // Spawn phase — round-robin across engines.
+    for (let k = 0; k < toSpawn; k++) {
+      const eng = engines[k % engines.length];
+      eng.getWorldPosition(p.vEngine);
+      // Push the emitter slightly rearward of the engine body so particles
+      // don't pop out of the hull geometry.
+      p.vEngine.addScaledVector(dir, 0.35);
+
+      const idx = p.cursor;
+      p.cursor = (p.cursor + 1) % p.capacity;
+      const i3 = idx * 3;
+
+      positions[i3]     = p.vEngine.x + (Math.random() - 0.5) * JITTER_POS;
+      positions[i3 + 1] = p.vEngine.y + (Math.random() - 0.5) * JITTER_POS;
+      positions[i3 + 2] = p.vEngine.z + (Math.random() - 0.5) * JITTER_POS;
+
+      const dx = dir.x + (Math.random() - 0.5) * JITTER_DIR;
+      const dy = dir.y + (Math.random() - 0.5) * JITTER_DIR;
+      const dz = dir.z + (Math.random() - 0.5) * JITTER_DIR;
+      const spd = EXHAUST_SPEED * (0.75 + Math.random() * 0.5);
+      velocities[i3]     = dx * spd;
+      velocities[i3 + 1] = dy * spd;
+      velocities[i3 + 2] = dz * spd;
+
+      ages[idx] = 0;
+      lifetimes[idx] = LIFE_BASE * (0.7 + Math.random() * 0.7);
+    }
+
+    // Integrate every live particle. Pool is small (240), so the straight
+    // loop is cheap and avoids having to maintain a free-list.
+    for (let i = 0; i < p.capacity; i++) {
+      const life = lifetimes[i];
+      if (ages[i] >= life) continue;
+      ages[i] += dt;
+      const i3 = i * 3;
+      positions[i3]     += velocities[i3]     * dt;
+      positions[i3 + 1] += velocities[i3 + 1] * dt;
+      positions[i3 + 2] += velocities[i3 + 2] * dt;
+    }
+
+    p.geo.attributes.position.needsUpdate = true;
+    p.geo.attributes.aAge.needsUpdate = true;
+    p.geo.attributes.aLifetime.needsUpdate = true;
   }
 
   /** Empty groups at the active ship's weapon positions — turrets parent here. */

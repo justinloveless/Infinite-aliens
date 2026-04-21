@@ -139,7 +139,8 @@ export class UpgradeApplier {
       stellarDustRate: base.stellarDustRate ?? 0,
       projectileType: base.projectileType ?? 'laser',
       extraWeapons: [],
-      hasAutoFire: !!base.hasAutoFire,
+      // Only tech-tree / hangar effects may enable auto-fire (not state.player).
+      hasAutoFire: false,
       hasVampire: !!base.hasVampire,
       hasDamageReflect: !!base.hasDamageReflect,
       hasOvercharge: !!base.hasOvercharge,
@@ -274,7 +275,7 @@ export class UpgradeApplier {
     stats.projectileCount = clampOdd(stats.projectileCount);
     stats.maxShieldHp = Math.max(0, Math.floor(stats.maxShieldHp));
     stats.armor = Math.max(0, Math.floor(stats.armor));
-    stats.magnetRange = Math.max(1, stats.magnetRange);
+    stats.magnetRange = Math.max(0, stats.magnetRange);
     stats.visionRange = Math.max(20, stats.visionRange);
     stats.targetingRange = Math.max(10, stats.targetingRange);
     stats.lootMultiplier = Math.max(1, stats.lootMultiplier);

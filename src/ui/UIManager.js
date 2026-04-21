@@ -6,7 +6,6 @@ export class UIManager {
       techTree: document.getElementById('tech-tree-screen'),
       transition: document.getElementById('round-transition'),
       death: document.getElementById('death-screen'),
-      welcome: document.getElementById('welcome-screen'),
       warpGate: document.getElementById('warp-gate-screen'),
       hangar: document.getElementById('hangar-screen'),
       store: document.getElementById('store-screen'),
@@ -62,28 +61,6 @@ export class UIManager {
     document.getElementById('death-launch-btn').onclick = () => {
       this.hide('death');
       onLaunch();
-    };
-  }
-
-  showWelcome(offlineData, onOk) {
-    const earningsEl = document.getElementById('offline-earnings');
-    if (offlineData) {
-      const hrs = Math.floor(offlineData.elapsed / 3600);
-      const mins = Math.floor((offlineData.elapsed % 3600) / 60);
-      let timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-      let lines = [`While you were away for ${timeStr}...`];
-      for (const [type, amt] of Object.entries(offlineData.earnings)) {
-        if (amt > 0) lines.push(`+${amt} Stellar Dust collected`);
-      }
-      earningsEl.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
-    } else {
-      earningsEl.innerHTML = '<div>Your mission continues, Commander.</div>';
-    }
-
-    this.show('welcome');
-    document.getElementById('welcome-ok-btn').onclick = () => {
-      this.hide('welcome');
-      if (onOk) onOk();
     };
   }
 

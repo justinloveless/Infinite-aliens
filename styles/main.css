@@ -1249,23 +1249,6 @@ html, body {
   color: rgba(200, 220, 255, 0.85);
 }
 
-/* ===== WELCOME SCREEN ===== */
-#welcome-content { text-align: center; max-width: 400px; }
-#welcome-title {
-  font-family: var(--font-main);
-  font-size: 1.2rem;
-  letter-spacing: 0.15em;
-  color: var(--cyan);
-  text-shadow: var(--glow-cyan);
-  margin-bottom: 20px;
-}
-#offline-earnings {
-  margin-bottom: 24px;
-  font-size: 0.85rem;
-  color: rgba(255,255,255,0.7);
-  line-height: 1.6;
-}
-
 /* ===== DAMAGE NUMBERS ===== */
 .damage-number {
   position: fixed;
