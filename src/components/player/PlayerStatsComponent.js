@@ -38,7 +38,7 @@ export class PlayerStatsComponent extends Component {
     /** Transient boosts from trigger actions, e.g. Berserker Protocol. */
     this.activeBoosts = init.activeBoosts || [];
     /** Filled by UpgradeApplier: fire key → slot id (`primary`, `laser`, …). */
-    this.weaponSlotByFireType = init.weaponSlotByFireType || { primary: 'weapon_mid' };
+    this.weaponSlotByFireType = init.weaponSlotByFireType || { primary: 'weapon_mid', manualSlots: [] };
   }
 
   /** Effective damage factoring boosts + resonance stacks (kills this run). */

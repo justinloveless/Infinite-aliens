@@ -54,6 +54,50 @@
       "label": "PORT AUX",
       "description": "Port utility socket — magnets, generators, drones.",
       "panel": { "anchor": "left", "offsetX": 10, "offsetY": 0 }
+    },
+    {
+      "id": "passive_bay_1",
+      "type": "passive",
+      "shape": "circle",
+      "size": 0.36,
+      "position": [0, 0.5, 0.8],
+      "unlockCost": { "scrapMetal": 300 },
+      "label": "PASSIVE I",
+      "description": "Passive module bay — generators, labs, farms.",
+      "panel": { "anchor": "free", "offsetX": 75, "offsetY": 18 }
+    },
+    {
+      "id": "passive_bay_2",
+      "type": "passive",
+      "shape": "circle",
+      "size": 0.36,
+      "position": [0, -0.5, 0.8],
+      "unlockCost": { "scrapMetal": 500, "plasmaCrystals": 50 },
+      "label": "PASSIVE II",
+      "description": "Second passive module bay.",
+      "panel": { "anchor": "free", "offsetX": 75, "offsetY": 82 }
+    },
+    {
+      "id": "ability_slot_1",
+      "type": "ability",
+      "shape": "box",
+      "size": 0.3,
+      "position": [-1.05, 0.4, 0.0],
+      "unlockCost": { "plasmaCrystals": 80 },
+      "label": "ABILITY I",
+      "description": "Active ability slot — EMP, Warp Drive, Gravity Bomb, and more.",
+      "panel": { "anchor": "free", "offsetX": 18, "offsetY": 35 }
+    },
+    {
+      "id": "ability_slot_2",
+      "type": "ability",
+      "shape": "box",
+      "size": 0.3,
+      "position": [1.05, 0.4, 0.0],
+      "unlockCost": { "plasmaCrystals": 80, "darkMatter": 5 },
+      "label": "ABILITY II",
+      "description": "Second active ability slot.",
+      "panel": { "anchor": "free", "offsetX": 82, "offsetY": 35 }
     }
   ],
   "defaultUnlockedSlots": ["weapon_mid"],

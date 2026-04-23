@@ -53,6 +53,10 @@ export class LootDropComponent extends Component {
     this.mesh = new THREE.Mesh(LOOT_GEO, mat);
     this.mesh.scale.setScalar(sizeForAmount(amount));
 
+    const angle = Math.random() * Math.PI * 2;
+    this._vx = Math.cos(angle) * LOOT.SPAWN_SPEED;
+    this._vz = Math.sin(angle) * LOOT.SPAWN_SPEED;
+
     // Light is acquired from the pool on attach so the scene's light count
     // stays constant (see LightPool.js -- avoids shader recompile stalls).
     this._light = null;
@@ -96,6 +100,19 @@ export class LootDropComponent extends Component {
   update(dt, ctx) {
     this._time += dt * 2.5;
     const t = this.entity.get('TransformComponent'); if (!t) return;
+
+    if (this._vx !== 0 || this._vz !== 0) {
+      t.position.x += this._vx * dt;
+      t.position.z += this._vz * dt;
+      const decay = Math.exp(-LOOT.SPAWN_FRICTION * dt);
+      this._vx *= decay;
+      this._vz *= decay;
+      if (Math.abs(this._vx) < 0.01 && Math.abs(this._vz) < 0.01) {
+        this._vx = 0;
+        this._vz = 0;
+      }
+    }
+
     const playerEnt = ctx?.playerEntity;
     const playerT = playerEnt?.get('TransformComponent');
     if (playerT) {

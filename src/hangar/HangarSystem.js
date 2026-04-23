@@ -1,7 +1,7 @@
 import itemsData from '../data/items.json';
 import upgradesData from '../data/upgrades.json';
 import { eventBus, EVENTS } from '../core/EventBus.js';
-import { getRequiredItemForNode } from '../data/researchGating.js';
+import { createItemInstance } from '../core/GameState.js';
 import {
   getAllShips, getShipDef, getActiveShipDef, getActiveShipSlots, getActiveShipSlotById,
   createLoadoutForShip, rebindShipAlias, applyShipBaseStatsToState,
@@ -12,8 +12,16 @@ import {
 const _itemsById = new Map(itemsData.items.map(i => [i.id, i]));
 const _nodesById = new Map(upgradesData.nodes.map(n => [n.id, n]));
 
-const _itemIdSet = new Set(itemsData.items.map(i => i.id));
 const _grantedByItems = new Set(itemsData.items.map(i => i.grantsNodeId).filter(Boolean));
+
+// Forward adjacency: nodeId → [child nodeIds that list it in their prereqs]
+const _forwardAdj = new Map();
+for (const node of upgradesData.nodes) {
+  for (const pid of node.prereqs || []) {
+    if (!_forwardAdj.has(pid)) _forwardAdj.set(pid, []);
+    _forwardAdj.get(pid).push(node.id);
+  }
+}
 
 export function getAllItems() { return itemsData.items; }
 /** All slot defs for the currently-active ship. */
@@ -23,10 +31,10 @@ export function getItem(id) { return _itemsById.get(id) || null; }
 export function getSlot(state, id) { return getActiveShipSlotById(state, id); }
 export function getNodeTemplate(id) { return _nodesById.get(id) || null; }
 
-/** True if this node's `id` is granted by an item (i.e. belongs in the Store, not the Research Lab). */
+/** True if this node's `id` is the grant node of some item. */
 export function isItemGrantedNode(nodeId) { return _grantedByItems.has(nodeId); }
 
-// ─── Slot / inventory helpers ──────────────────────────────────────────────
+// ─── Slot helpers ──────────────────────────────────────────────────────────
 
 /** Is a slot def currently unlocked (installable) for this ship? */
 export function isSlotUnlocked(state, slotId) {
@@ -68,9 +76,30 @@ export function unlockSlot(state, currency, slotId) {
   if (Object.keys(cost).length) currency.subtract(cost);
   state.ship.unlockedSlots ||= [];
   if (!state.ship.unlockedSlots.includes(slotId)) state.ship.unlockedSlots.push(slotId);
-  if (!state.ship.slots[slotId]) state.ship.slots[slotId] = { installedItemId: null };
+  if (!state.ship.slots[slotId]) state.ship.slots[slotId] = { installedInstanceId: null };
   eventBus.emit(EVENTS.UPGRADE_PURCHASED, { slotId, slotUnlock: true });
   return true;
+}
+
+// ─── Inventory / instance helpers ─────────────────────────────────────────
+
+/** All item instances in the shared inventory. */
+export function getInventoryInstances(state) {
+  return state?.inventory?.ownedItems || [];
+}
+
+/** Lookup a specific instance by id. */
+export function getInstance(state, instanceId) {
+  return getInventoryInstances(state).find(i => i.instanceId === instanceId) || null;
+}
+
+/** Installed instance object for a slot (null if empty). */
+export function getInstalledInstance(state, slotId) {
+  const ship = state?.ship;
+  if (!ship) return null;
+  const entry = ship.slots[slotId];
+  if (!entry?.installedInstanceId) return null;
+  return getInstance(state, entry.installedInstanceId);
 }
 
 export function listInstalledItems(state) {
@@ -78,104 +107,181 @@ export function listInstalledItems(state) {
   if (!ship) return [];
   const items = [];
   for (const slot of listActiveSlots(state)) {
-    const entry = ship.slots[slot.id];
-    if (entry?.installedItemId) {
-      const item = _itemsById.get(entry.installedItemId);
-      if (item) items.push({ slot, item });
+    const instance = getInstalledInstance(state, slot.id);
+    if (instance) {
+      const item = _itemsById.get(instance.itemId);
+      if (item) items.push({ slot, item, instance });
     }
   }
   return items;
 }
 
-/**
- * Runtime map for combat visuals: which ship slot each weapon fires from.
- * Keys: `primary` (auto / nose-aligned), plus any `add_weapon` values (`laser`,
- * `missile`, `plasma`, `beam`) from the item installed in that weapon slot.
- */
-export function getWeaponSlotAssignments(state) {
-  const weaponSlotByFireType = { primary: 'weapon_mid' };
-  if (!state?.ship) return weaponSlotByFireType;
-
-  for (const { slot, item } of listInstalledItems(state)) {
-    if (slot.type !== 'weapon') continue;
-    const node = getNodeTemplate(item.grantsNodeId);
-    if (!node) continue;
-
-    if (item.grantsNodeId === 'auto_turret' || item.id === 'main_cannon') {
-      weaponSlotByFireType.primary = slot.id;
-    }
-    for (const eff of node.effects || []) {
-      if (eff.type === 'add_weapon' && eff.value) {
-        weaponSlotByFireType[eff.value] = slot.id;
-      }
-    }
-  }
-  return weaponSlotByFireType;
-}
-
 export function hasItemInstalled(state, itemId) {
-  const ship = state?.ship;
-  if (!ship) return false;
+  if (!state?.ship) return false;
   for (const slot of listActiveSlots(state)) {
-    if (ship.slots[slot.id]?.installedItemId === itemId) return true;
+    const inst = getInstalledInstance(state, slot.id);
+    if (inst?.itemId === itemId) return true;
   }
   return false;
 }
 
+/**
+ * Runtime map for combat visuals: which ship slot(s) each weapon fires from.
+ * - `primary` is a single slotId string (nose-aligned main cannon / auto turret)
+ *   used by `AutoFireWeaponComponent` and primary-muzzle visuals.
+ * - `manualSlots` is an array of slotIds hosting a main cannon. `ManualGunComponent`
+ *   spawns one projectile per slot, so installing a second main cannon on
+ *   another hardpoint fires both on every trigger pull.
+ * - Every other key (`laser`, `missile`, `plasma`, `beam`, …) is an array of
+ *   slotIds — one entry per installed item whose grant node produces an
+ *   `add_weapon` effect for that type. Installing two laser turrets yields
+ *   `{ laser: ['weapon_port', 'weapon_starboard'] }` so each physical slot
+ *   gets its own turret mesh and projectile spawn.
+ */
+export function getWeaponSlotAssignments(state) {
+  const weaponSlotByFireType = { primary: 'weapon_mid', manualSlots: [] };
+  if (!state?.ship) return weaponSlotByFireType;
+
+  for (const { slot, item } of listInstalledItems(state)) {
+    if (slot.type !== 'weapon') continue;
+
+    // Track main-cannon slots independently of the grant-node lookup so the
+    // manual fire pipeline works even when the cannon item's node is missing
+    // from upgrades.json.
+    if (item.id === 'main_cannon' || item.grantsNodeId === 'auto_turret') {
+      if (!weaponSlotByFireType.manualSlots.includes(slot.id)) {
+        weaponSlotByFireType.manualSlots.push(slot.id);
+      }
+    }
+
+    const node = getNodeTemplate(item.grantsNodeId);
+    if (!node) continue;
+
+    for (const eff of node.effects || []) {
+      if (eff.type === 'add_weapon' && eff.value) {
+        const arr = weaponSlotByFireType[eff.value] || (weaponSlotByFireType[eff.value] = []);
+        if (!arr.includes(slot.id)) arr.push(slot.id);
+      }
+    }
+  }
+
+  if (weaponSlotByFireType.manualSlots.length) {
+    weaponSlotByFireType.primary = weaponSlotByFireType.manualSlots[0];
+  }
+  return weaponSlotByFireType;
+}
+
+/** Resolve a fire-type entry to a slotId list. Accepts legacy scalar values. */
+export function getSlotsForFireType(slotMap, type) {
+  if (!slotMap) return [];
+  const v = slotMap[type];
+  if (!v) return [];
+  return Array.isArray(v) ? v.slice() : [v];
+}
+
 // ─── Actions ───────────────────────────────────────────────────────────────
 
-/** Buy a catalog item. Returns true on success. Emits UPGRADE_PURCHASED. */
+/** Buy a catalog item. Creates a new instance — duplicates allowed. Returns true on success. */
 export function buyItem(state, currency, itemId) {
   const item = _itemsById.get(itemId);
   if (!item) return false;
-  if (state.ship.ownedItems.includes(itemId)) return false;
   const cost = item.cost || {};
   if (!currency.canAfford(cost)) return false;
   currency.subtract(cost);
-  state.ship.ownedItems.push(itemId);
-  eventBus.emit(EVENTS.UPGRADE_PURCHASED, { itemId });
+  const inst = createItemInstance(itemId);
+  state.inventory.ownedItems.push(inst);
+  eventBus.emit(EVENTS.UPGRADE_PURCHASED, { itemId, instanceId: inst.instanceId });
   return true;
 }
 
-/** Install an owned item into a slot. Pass `null` to uninstall. */
-export function installItem(state, slotId, itemId) {
+/** Install an instance into a slot. Pass `null` to uninstall. */
+export function installItem(state, slotId, instanceId) {
   const slot = getActiveShipSlotById(state, slotId);
   if (!slot) return false;
-  if (!state.ship.slots[slotId]) state.ship.slots[slotId] = { installedItemId: null };
+  if (!state.ship.slots[slotId]) state.ship.slots[slotId] = { installedInstanceId: null };
 
-  if (itemId === null) {
-    state.ship.slots[slotId].installedItemId = null;
-    eventBus.emit(EVENTS.UPGRADE_PURCHASED, { slotId, itemId: null });
+  if (instanceId === null) {
+    state.ship.slots[slotId].installedInstanceId = null;
+    eventBus.emit(EVENTS.UPGRADE_PURCHASED, { slotId, instanceId: null });
     return true;
   }
 
-  const item = _itemsById.get(itemId);
+  const inst = getInstance(state, instanceId);
+  if (!inst) return false;
+  const item = _itemsById.get(inst.itemId);
   if (!item) return false;
   if (item.slotType !== slot.type) return false;
-  if (!state.ship.ownedItems.includes(itemId)) return false;
 
-  // Uninstall this item from any other slot first (unique placement).
+  // Uninstall from any other slot first (one instance occupies one slot at a time).
   for (const [sid, entry] of Object.entries(state.ship.slots)) {
-    if (sid !== slotId && entry.installedItemId === itemId) entry.installedItemId = null;
+    if (sid !== slotId && entry?.installedInstanceId === instanceId) {
+      entry.installedInstanceId = null;
+    }
   }
 
-  state.ship.slots[slotId].installedItemId = itemId;
-  eventBus.emit(EVENTS.UPGRADE_PURCHASED, { slotId, itemId });
+  state.ship.slots[slotId].installedInstanceId = instanceId;
+  eventBus.emit(EVENTS.UPGRADE_PURCHASED, { slotId, instanceId });
   return true;
 }
 
-// ─── Research ──────────────────────────────────────────────────────────────
+// ─── Item upgrade system ───────────────────────────────────────────────────
 
-/** All nodes eligible for the flat research lab (excludes item-grant nodes). */
-export function getResearchCatalog() {
-  return upgradesData.nodes.filter(n => !_grantedByItems.has(n.id));
+/**
+ * All upgrade nodes purchasable for a given item: forward BFS from
+ * item.grantsNodeId through the prereq graph. The grant node itself is
+ * excluded (auto-applied on install). Traversal stops at other items'
+ * grant nodes.
+ */
+export function getUpgradesForItem(itemId) {
+  const item = _itemsById.get(itemId);
+  if (!item?.grantsNodeId) return [];
+
+  const result = [];
+  const visited = new Set([item.grantsNodeId]);
+  const queue = [...(_forwardAdj.get(item.grantsNodeId) || [])];
+
+  while (queue.length) {
+    const nid = queue.shift();
+    if (visited.has(nid)) continue;
+    visited.add(nid);
+    const node = _nodesById.get(nid);
+    if (!node) continue;
+    // Do not cross into another item's grant subtree.
+    if (_grantedByItems.has(nid)) continue;
+    result.push(node);
+    for (const child of _forwardAdj.get(nid) || []) {
+      if (!visited.has(child)) queue.push(child);
+    }
+  }
+  return result;
 }
 
-export function getResearchLevel(state, nodeId) {
-  return state?.ship?.research?.[nodeId] ?? 0;
+export function getInstanceUpgradeLevel(state, instanceId, nodeId) {
+  const inst = getInstance(state, instanceId);
+  return inst?.upgrades?.[nodeId] ?? 0;
 }
 
-function _costForResearchLevel(node, level) {
+function _instancePrereqsMet(inst, item, node) {
+  if (!node.prereqs?.length) return true;
+  return node.prereqs.every(pid => {
+    if (pid === item.grantsNodeId) return true;
+    return (inst.upgrades?.[pid] ?? 0) >= 1;
+  });
+}
+
+export function canPurchaseInstanceUpgrade(state, instanceId, nodeId) {
+  const inst = getInstance(state, instanceId);
+  if (!inst) return false;
+  const item = _itemsById.get(inst.itemId);
+  if (!item) return false;
+  const node = _nodesById.get(nodeId);
+  if (!node) return false;
+  const level = getInstanceUpgradeLevel(state, instanceId, nodeId);
+  if (level >= (node.maxLevel ?? 1)) return false;
+  return _instancePrereqsMet(inst, item, node);
+}
+
+function _costForInstanceLevel(node, level) {
   const mult = Math.pow(1.4, level);
   const out = {};
   for (const [k, v] of Object.entries(node.baseCost || {})) {
@@ -184,129 +290,140 @@ function _costForResearchLevel(node, level) {
   return out;
 }
 
-export function canPurchaseResearch(state, nodeId) {
+/** Buy one upgrade level on a specific item instance. Returns true on success. */
+export function purchaseInstanceUpgrade(state, currency, instanceId, nodeId) {
+  if (!canPurchaseInstanceUpgrade(state, instanceId, nodeId)) return false;
+  const inst = getInstance(state, instanceId);
   const node = _nodesById.get(nodeId);
-  if (!node) return false;
-  const level = getResearchLevel(state, nodeId);
-  if (level >= (node.maxLevel ?? 1)) return false;
-  if (!_prereqsMet(state, node)) return false;
-  return true;
-}
-
-// ─── Research Mastery ──────────────────────────────────────────────────────
-
-export function getResearchMasteryLevel(state, nodeId) {
-  return state?.ship?.researchMastery?.[nodeId] ?? 0;
-}
-
-export function getResearchMasteryCost(node, masteryLevel) {
-  const maxLevel = node.maxLevel ?? 1;
-  const baseMult = Math.pow(1.4, maxLevel - 1); // cost of the last regular level
-  const masteryMult = Math.pow(2.5, masteryLevel);
-  const out = {};
-  for (const [k, v] of Object.entries(node.baseCost || {})) {
-    out[k] = Math.ceil(v * baseMult * masteryMult);
-  }
-  return out;
-}
-
-export function purchaseResearchMastery(state, currency, nodeId) {
-  const node = _nodesById.get(nodeId);
-  if (!node) return false;
-  const level = getResearchLevel(state, nodeId);
-  if (level < (node.maxLevel ?? 1)) return false; // must be maxed first
-  const masteryLevel = getResearchMasteryLevel(state, nodeId);
-  const cost = getResearchMasteryCost(node, masteryLevel);
+  const level = getInstanceUpgradeLevel(state, instanceId, nodeId);
+  const cost = _costForInstanceLevel(node, level);
   if (!currency.canAfford(cost)) return false;
   currency.subtract(cost);
-  if (!state.ship.researchMastery) state.ship.researchMastery = {};
-  state.ship.researchMastery[nodeId] = masteryLevel + 1;
-  eventBus.emit(EVENTS.MASTERY_PURCHASED, { nodeId, masteryLevel: masteryLevel + 1, source: 'research' });
+  if (!inst.upgrades) inst.upgrades = {};
+  inst.upgrades[nodeId] = level + 1;
+  eventBus.emit(EVENTS.UPGRADE_PURCHASED, { instanceId, nodeId, level: level + 1 });
   return true;
 }
 
-/** Buy one level of a research node. */
-export function purchaseResearch(state, currency, nodeId) {
+/** Sell one upgrade level back for a partial refund. Returns true on success. */
+export function sellInstanceUpgrade(state, currency, instanceId, nodeId, refundRatio = 0.5) {
+  const inst = getInstance(state, instanceId);
+  if (!inst) return false;
   const node = _nodesById.get(nodeId);
   if (!node) return false;
-  const level = getResearchLevel(state, nodeId);
-  if (level >= (node.maxLevel ?? 1)) return false;
-  if (!_prereqsMet(state, node)) return false;
-  const cost = _costForResearchLevel(node, level);
-  if (!currency.canAfford(cost)) return false;
-  currency.subtract(cost);
-  state.ship.research[nodeId] = level + 1;
-  eventBus.emit(EVENTS.UPGRADE_PURCHASED, { nodeId, level: level + 1, research: true });
-  return true;
-}
-
-/** Sell one level back for a partial refund. */
-export function sellResearchLevel(state, currency, nodeId, refundRatio = 0.5) {
-  const node = _nodesById.get(nodeId);
-  if (!node) return false;
-  const level = getResearchLevel(state, nodeId);
+  const level = getInstanceUpgradeLevel(state, instanceId, nodeId);
   if (level <= 0) return false;
-  const paid = _costForResearchLevel(node, level - 1);
+  const paid = _costForInstanceLevel(node, level - 1);
   const refund = Object.fromEntries(
     Object.entries(paid)
       .map(([k, v]) => [k, Math.floor(v * refundRatio)])
       .filter(([, v]) => v > 0)
   );
-  state.ship.research[nodeId] = level - 1;
-  if (state.ship.research[nodeId] <= 0) delete state.ship.research[nodeId];
+  inst.upgrades[nodeId] = level - 1;
+  if (inst.upgrades[nodeId] <= 0) delete inst.upgrades[nodeId];
   currency.addCosts(refund);
-  eventBus.emit(EVENTS.UPGRADE_SOLD, { nodeId, level: level - 1, refund, research: true });
+  eventBus.emit(EVENTS.UPGRADE_SOLD, { instanceId, nodeId, level: level - 1, refund });
   return true;
-}
-
-function _prereqsMet(state, node) {
-  if (!node.prereqs?.length) return true;
-  return node.prereqs.every(pid => {
-    if (getResearchLevel(state, pid) > 0) return true;
-    // Counts as met if a currently-installed item grants this prereq.
-    for (const { item } of listInstalledItems(state)) {
-      if (item.grantsNodeId === pid) return true;
-    }
-    return false;
-  });
-}
-
-export function getRequiredItem(node) {
-  return getRequiredItemForNode(node, _itemIdSet);
 }
 
 /**
  * Build the pseudo-unlocked node list for UpgradeApplier.
- * Returns TechNode-shaped plain objects with `currentLevel` set appropriately.
- * Nodes whose required item is missing are omitted (effects don't apply).
+ * For each installed instance: grant node at level 1, plus all instance.upgrades.
+ * Levels for the same nodeId are summed across all instances (multi-copy stacking).
  */
 export function buildHangarUnlockedNodes(state) {
   if (!state?.ship) return [];
-  const out = [];
-  const seen = new Set();
+  const levelMap = new Map();
 
-  // Installed items → their grant nodes at level 1
-  for (const { item } of listInstalledItems(state)) {
-    const node = _nodesById.get(item.grantsNodeId);
-    if (node && !seen.has(node.id)) {
-      out.push(_materializeNode(node, 1));
-      seen.add(node.id);
+  for (const { item, instance } of listInstalledItems(state)) {
+    if (item.grantsNodeId) {
+      levelMap.set(item.grantsNodeId, (levelMap.get(item.grantsNodeId) || 0) + 1);
+    }
+    for (const [nodeId, level] of Object.entries(instance.upgrades || {})) {
+      if (level > 0) levelMap.set(nodeId, (levelMap.get(nodeId) || 0) + level);
     }
   }
 
-  // Research purchases → gated by installed items
-  for (const [nodeId, level] of Object.entries(state.ship.research || {})) {
-    if (seen.has(nodeId)) continue;
+  const out = [];
+  for (const [nodeId, level] of levelMap) {
     const node = _nodesById.get(nodeId);
-    if (!node || level <= 0) continue;
-    const requiredItem = getRequiredItem(node);
-    if (requiredItem && !hasItemInstalled(state, requiredItem)) continue;
-    const masteryLevel = getResearchMasteryLevel(state, nodeId);
-    out.push(_materializeNode(node, level, masteryLevel));
-    seen.add(nodeId);
+    if (node && level > 0) out.push(_materializeNode(node, level));
+  }
+  return out;
+}
+
+// ─── Item Fusion ──────────────────────────────────────────────────────────
+
+const _recipesById = new Map((itemsData.recipes || []).map(r => [r.id, r]));
+
+/**
+ * Returns all fusion recipes whose ingredients are all present in inventory
+ * (installed or not). Does not check upgrade requirements.
+ */
+export function getAvailableRecipes(state) {
+  const owned = getInventoryInstances(state);
+  return (itemsData.recipes || []).filter(recipe => {
+    return recipe.ingredients.every(ing => {
+      const hasInInventory = owned.some(inst => inst.itemId === ing.itemId);
+      if (!hasInInventory) return false;
+      if (!ing.requiredUpgrades) return true;
+      const inst = owned.find(i => i.itemId === ing.itemId);
+      return Object.entries(ing.requiredUpgrades).every(
+        ([nodeId, minLevel]) => (inst?.upgrades?.[nodeId] ?? 0) >= minLevel
+      );
+    });
+  });
+}
+
+/**
+ * Fuse items per a recipe. Validates all ingredients are owned, removes them
+ * from inventory (uninstalling from any slot first), then creates the output
+ * item instance. Returns true on success.
+ */
+export function fuseItems(state, currency, recipeId) {
+  const recipe = _recipesById.get(recipeId);
+  if (!recipe) return false;
+
+  const owned = getInventoryInstances(state);
+
+  // Collect one matching instance per ingredient (earliest match).
+  const toConsume = [];
+  for (const ing of recipe.ingredients) {
+    const inst = owned.find(
+      i => i.itemId === ing.itemId && !toConsume.includes(i)
+    );
+    if (!inst) return false;
+    if (ing.requiredUpgrades) {
+      const ok = Object.entries(ing.requiredUpgrades).every(
+        ([nodeId, minLevel]) => (inst.upgrades?.[nodeId] ?? 0) >= minLevel
+      );
+      if (!ok) return false;
+    }
+    toConsume.push(inst);
   }
 
-  return out;
+  // Optional additional cost.
+  if (recipe.additionalCost && Object.keys(recipe.additionalCost).length) {
+    if (!currency.canAfford(recipe.additionalCost)) return false;
+    currency.subtract(recipe.additionalCost);
+  }
+
+  // Uninstall ingredients from any slot, then remove from inventory.
+  for (const inst of toConsume) {
+    for (const [slotId, entry] of Object.entries(state.ship.slots || {})) {
+      if (entry?.installedInstanceId === inst.instanceId) {
+        entry.installedInstanceId = null;
+      }
+    }
+    const idx = state.inventory.ownedItems.indexOf(inst);
+    if (idx !== -1) state.inventory.ownedItems.splice(idx, 1);
+  }
+
+  // Create output.
+  const output = createItemInstance(recipe.outputItemId);
+  state.inventory.ownedItems.push(output);
+  eventBus.emit(EVENTS.UPGRADE_PURCHASED, { fused: true, recipeId, instanceId: output.instanceId });
+  return true;
 }
 
 // ─── Ship roster ───────────────────────────────────────────────────────────

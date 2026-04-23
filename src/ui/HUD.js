@@ -33,6 +33,12 @@ export class HUD {
     });
     eventBus.on(EVENTS.ARENA_WARNING, () => this.showArenaWarning());
     eventBus.on(EVENTS.ARENA_TRANSITION_STARTED, () => this.hideArenaWarning());
+    eventBus.on(EVENTS.ENERGY_OFFLINE, () => {
+      document.getElementById('energy-container')?.classList.add('energy-offline');
+    });
+    eventBus.on(EVENTS.ENERGY_ONLINE, () => {
+      document.getElementById('energy-container')?.classList.remove('energy-offline');
+    });
   }
 
   /** Show the sector-9 heads-up banner for ~4 seconds. */
@@ -98,12 +104,10 @@ export class HUD {
       document.getElementById('shield-container').style.display = 'none';
     }
 
-    if (this._energyBar && computed && computed.energyRegen > 0) {
+    if (this._energyBar && computed) {
       const energyPct = (p.energy / computed.maxEnergy) * 100;
       this._energyBar.style.width = `${Math.max(0, Math.min(100, energyPct))}%`;
       document.getElementById('energy-container').style.display = '';
-    } else if (this._energyBar) {
-      document.getElementById('energy-container').style.display = 'none';
     }
 
     const r = state.round;

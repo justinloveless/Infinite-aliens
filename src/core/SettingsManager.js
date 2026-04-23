@@ -10,13 +10,15 @@ export const KEYBIND_ACTIONS = [
 export const GRAPHICS_QUALITY_OPTIONS = ['auto', 'high', 'medium', 'low'];
 
 const DEFAULTS = {
-  sfxVolume:    0.5,
-  musicVolume:  0.25,
-  voiceVolume:  0.9,
-  voiceEnabled: true,
-  muted:        false,
-  showFps:      false,
-  graphicsQuality: 'auto',
+  sfxVolume:        0.5,
+  musicVolume:      0.25,
+  voiceVolume:      0.9,
+  voiceEnabled:     true,
+  subtitlesEnabled: true,
+  muted:            false,
+  showFps:          false,
+  cameraTiltEnabled: true,
+  graphicsQuality:  'auto',
   keybinds: {
     moveUp:    'KeyW',
     moveDown:  'KeyS',
@@ -57,9 +59,11 @@ export class SettingsManager {
   get sfxVolume()    { return this._s.sfxVolume; }
   get musicVolume()  { return this._s.musicVolume; }
   get voiceVolume()  { return this._s.voiceVolume ?? DEFAULTS.voiceVolume; }
-  get voiceEnabled() { return this._s.voiceEnabled !== false; }
-  get muted()        { return this._s.muted; }
+  get voiceEnabled()     { return this._s.voiceEnabled !== false; }
+  get subtitlesEnabled() { return this._s.subtitlesEnabled !== false; }
+  get muted()            { return this._s.muted; }
   get showFps()      { return !!this._s.showFps; }
+  get cameraTiltEnabled() { return this._s.cameraTiltEnabled !== false; }
   get graphicsQuality() {
     const v = this._s.graphicsQuality;
     return GRAPHICS_QUALITY_OPTIONS.includes(v) ? v : 'auto';
@@ -92,6 +96,12 @@ export class SettingsManager {
     this._emit('voiceEnabled', this._s.voiceEnabled);
   }
 
+  setSubtitlesEnabled(v) {
+    this._s.subtitlesEnabled = !!v;
+    this._save();
+    this._emit('subtitlesEnabled', this._s.subtitlesEnabled);
+  }
+
   setMuted(v) {
     this._s.muted = !!v;
     this._save();
@@ -102,6 +112,12 @@ export class SettingsManager {
     this._s.showFps = !!v;
     this._save();
     this._emit('showFps', this._s.showFps);
+  }
+
+  setCameraTiltEnabled(v) {
+    this._s.cameraTiltEnabled = !!v;
+    this._save();
+    this._emit('cameraTiltEnabled', this._s.cameraTiltEnabled);
   }
 
   setGraphicsQuality(v) {

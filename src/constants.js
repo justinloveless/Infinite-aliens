@@ -1,7 +1,7 @@
 // ===== GAME CONSTANTS =====
 
 export const GAME = {
-  VERSION: 18,
+  VERSION: 21,
   AUTO_SAVE_INTERVAL: 30000,  // ms
   OFFLINE_CAP: 8 * 3600,     // seconds
   OFFLINE_EFFICIENCY: 0.5,
@@ -38,6 +38,7 @@ export const PLAYER = {
   BASE_VISION_RANGE: 60,
   BASE_TARGETING_RANGE: 50,
   BASE_LOOT_MULT: 1.0,
+  BASE_ENERGY_REGEN: 8,       // default ship energy generation; ships override via baseStats.BASE_ENERGY_REGEN
   STELLAR_DUST_RATE: 0,       // per second, unlocked via tree
   CLICK_COOLDOWN: 0.2,        // seconds
   COLLISION_RADIUS: 1.0,
@@ -58,6 +59,10 @@ export const LOOT = {
   MAGNET_MULT_BASE: 2.15,
   /** Extra multiplier per unit of magnet range above the player base. */
   MAGNET_MULT_PER_RANGE: 0.065,
+  /** Initial burst speed on spawn (units/s). */
+  SPAWN_SPEED: 4.5,
+  /** Exponential decay rate for spawn velocity (higher = stops faster). */
+  SPAWN_FRICTION: 6,
 };
 
 export const ENEMY = {
@@ -119,6 +124,14 @@ export const BLOOM = {
 };
 
 // ===== UPGRADE GRAMMAR ENUMS =====
+
+export const SLOT_TYPES = {
+  WEAPON:  'weapon',
+  DEFENSE: 'defense',
+  UTILITY: 'utility',
+  PASSIVE: 'passive',
+  ABILITY: 'ability',
+};
 
 export const EFFECT_OPERATORS = {
   MULTIPLY:   'multiply',
@@ -237,11 +250,11 @@ export const BOSS_ARENA = {
   BOSS_MAX_LIVE_SPAWNS: 8,   // cap on concurrent minions spawned by the boss
 
   // Flight controller — inertia-lite (decoupled nose vs. velocity vector)
-  YAW_SPEED: 2.6,            // rad/sec per A/D hold (nose-only; does not redirect velocity)
-  THRUST_ACCEL_MULT: 3.5,    // × baseSpeed per sec while holding W (forward thrust along nose)
-  BRAKE_DECEL_MULT: 4.0,     // × baseSpeed per sec while holding S (retro thrust along velocity)
+  YAW_SPEED: 2.0,            // rad/sec per A/D hold (nose-only; does not redirect velocity)
+  THRUST_ACCEL_MULT: 2.0,    // × baseSpeed per sec while holding W (forward thrust along nose)
+  BRAKE_DECEL_MULT: 3.0,     // × baseSpeed per sec while holding S (retro thrust along velocity)
   MIN_SPEED_MULT: 0.45,      // × baseSpeed — floor on velocity magnitude (no full stop)
-  MAX_SPEED_MULT: 2.4,       // × baseSpeed — hard cap on velocity magnitude
+  MAX_SPEED_MULT: 1.5,       // × baseSpeed — hard cap on velocity magnitude
   VELOCITY_ALIGN_TAU: 2.0,   // seconds for velocity to relax toward nose heading (arcade forgiveness)
   INITIAL_SPEED_MULT: 1.0,   // × baseSpeed at arena start (coast forward)
   BASE_SPEED_MULT: 4,        // × computed.speed to get arena "base" speed
@@ -250,6 +263,7 @@ export const BOSS_ARENA = {
   TRANSITION_DURATION: 3.5,  // total seconds combat → boss_arena
   BOSS_SPAWN_AT: 2.5,        // seconds into transition when boss + gates appear
   CAMERA_SETTLE_AT: 3.2,     // seconds when camera finishes pulling into follow
+  LEAVE_DURATION: 2.0,       // total seconds for warp-out animation when departing
 };
 
 export const ASTEROID = {
@@ -258,7 +272,16 @@ export const ASTEROID = {
 
 export const ENERGY = {
   BASE_MAX:   100,
-  BASE_REGEN:   0,   // zero until generators are installed
+  BASE_REGEN:   0,   // zero until generators are installed (ship baseline is in PLAYER.BASE_ENERGY_REGEN)
+  OFFLINE_THRESHOLD: 0,            // current ≤ this → systems go offline
+  ONLINE_THRESHOLD_FRACTION: 0.15, // fraction of max needed to come back online
+  SHIELD_RECHARGE_COST_RATIO: 0.5, // extra energy spent per HP recharged by shield
+  COST_AUTO_FIRE: 3,               // energy per primary auto-fire shot
+  COST_TURRET_LASER: 4,
+  COST_TURRET_MISSILE: 5,
+  COST_TURRET_PLASMA: 6,
+  COST_BEAM_LASER_PER_SEC: 10,     // energy per second while beam is ON
+  COST_MANUAL_GUN: 3,              // energy per manual gun shot
 };
 
 export const BEAM_LASER = {

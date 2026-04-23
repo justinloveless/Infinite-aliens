@@ -20,7 +20,18 @@ export class PlayerDamageHandlerComponent extends Component {
     const visuals = this.entity.get('ShipVisualsComponent');
     const audio = ctx?.audio;
 
-    const remaining = shield ? shield.absorb(amount) : amount;
+    let remaining = amount;
+    if (shield && shield.maxHp > 0) {
+      const hpBefore = shield.hp;
+      remaining = shield.absorb(amount);
+      const absorbed = amount - remaining;
+      if (absorbed > 0) {
+        eventBus.emit(EVENTS.SHIELD_DAMAGED, { absorbed, hp: shield.hp, maxHp: shield.maxHp });
+        if (hpBefore > 0 && shield.hp <= 0) {
+          eventBus.emit(EVENTS.SHIELD_BROKEN, { maxHp: shield.maxHp });
+        }
+      }
+    }
     if (!shield || shield.hp <= 0 || remaining === amount) {
       // Shield absent or broken — full damage flashes red.
       if (remaining > 0) {

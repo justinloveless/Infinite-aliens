@@ -146,6 +146,21 @@ export class AlienWarpGateComponent extends Component {
     }
   }
 
+  /**
+   * Debug: destroy crystals and hide gate without emitting ARENA_GATE_CLOSED.
+   * ArenaDirector sets `gatesClosed` in state when batch-skipping objectives.
+   */
+  debugForceClose() {
+    for (const c of [...this._crystals]) {
+      if (c && !c._destroyed) c.destroy();
+    }
+    this._crystals.clear();
+    if (!this._closed) {
+      this._closed = true;
+      this.close();
+    }
+  }
+
   onDetach() {
     if (this._crystalUnsub) { this._crystalUnsub(); this._crystalUnsub = null; }
     // Destroy any surviving crystals bound to this gate; they should not

@@ -22,44 +22,11 @@ export function buildShipHull({ variant = 'allrounder', withLights = false } = {
   return Cls.buildHull({ withLights });
 }
 
-/**
- * Build a simple visible-marker mesh for an item installed in a slot.
- * Shape + color come from the item def; shape matches slot.shape.
- */
-export function buildItemMarker(item, slot) {
-  const color = parseColor(item?.color ?? 0xffffff);
-  const group = new THREE.Group();
-  const shape = slot?.shape || 'box';
-  const size = slot?.size ?? 0.35;
-
-  if (shape === 'box') {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(size * 0.9, size * 0.9, size * 1.3),
-      new THREE.MeshStandardMaterial({
-        color, emissive: color, emissiveIntensity: 0.8,
-        metalness: 0.4, roughness: 0.35,
-      }),
-    );
-    group.add(mesh);
-  } else {
-    const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(size * 0.55, 16, 12),
-      new THREE.MeshStandardMaterial({
-        color, emissive: color, emissiveIntensity: 0.9,
-        metalness: 0.3, roughness: 0.4,
-      }),
-    );
-    group.add(mesh);
-  }
-  group.add(new THREE.PointLight(color, 0.6, 2.0));
-  return group;
-}
-
 /** Wireframe indicator shown when a slot is empty or highlighted. */
 export function buildSlotIndicator(slot, { color = 0x39ff14, opacity = 0.85 } = {}) {
   const group = new THREE.Group();
   const size = slot?.size ?? 0.35;
-  const shape = slot?.shape || 'box';
+  const shape = getWireframeShapeForSlot(slot);
   const material = new THREE.LineBasicMaterial({
     color, transparent: true, opacity,
     depthTest: false,
@@ -92,6 +59,12 @@ export function buildSlotIndicator(slot, { color = 0x39ff14, opacity = 0.85 } = 
   }
   group.renderOrder = 10;
   return group;
+}
+
+function getWireframeShapeForSlot(slot) {
+  if (slot?.type === 'weapon') return 'box';
+  if (slot?.type === 'defense' || slot?.type === 'utility') return 'circle';
+  return slot?.shape || 'box';
 }
 
 function parseColor(raw) {

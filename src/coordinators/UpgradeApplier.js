@@ -67,44 +67,29 @@ export class UpgradeApplier {
     this._lastStats = null;
   }
 
-  /** Apply current tech-tree unlocks to the player entity. */
-  apply(techTreeState) {
-    const stats = this._buildStats(techTreeState);
+  /** Rebuild player stats from all installed item upgrades. */
+  apply() {
+    const stats = this._buildStats();
     this._syncPlayerStats(stats);
     this._syncDependentComponents(stats);
     this._unregisterTriggers();
-    const unlocked = this._gatherAllUnlocked(techTreeState);
+    const unlocked = this._gatherAllUnlocked();
     this._registerTriggers(unlocked, stats);
     this._lastStats = stats;
     return stats;
   }
 
-  /**
-   * Build the full unlocked-node list from all three sources:
-   *   1. Installed items (state.ship.slots)
-   *   2. Research purchases (state.ship.research)
-   *   3. Legacy tech tree unlocks
-   * Hangar nodes come first so the tech tree ones dedupe against them.
-   */
-  _gatherAllUnlocked(techTreeState) {
-    const hangar = buildHangarUnlockedNodes(this.state);
-    const seen = new Set(hangar.map(n => n.id));
-    const tree = techTreeState ? techTreeState.getVisibleNodes().filter(n => n.isUnlocked) : [];
-    for (const n of tree) {
-      if (!seen.has(n.templateId || n.id)) {
-        hangar.push(n);
-        seen.add(n.templateId || n.id);
-      }
-    }
-    return hangar;
+  /** Build the full unlocked-node list from installed items and their upgrades. */
+  _gatherAllUnlocked() {
+    return buildHangarUnlockedNodes(this.state);
   }
 
   /** Dry-run: compute stats for an arbitrary candidate ship state (for hangar previews). */
-  preview(techTreeState, candidateShipState) {
+  preview(candidateShipState) {
     const originalShip = this.state.ship;
     this.state.ship = candidateShipState;
     try {
-      return this._buildStats(techTreeState);
+      return this._buildStats();
     } finally {
       this.state.ship = originalShip;
     }
@@ -117,7 +102,7 @@ export class UpgradeApplier {
     }
   }
 
-  _buildStats(techTreeState) {
+  _buildStats() {
     const base = this.state.player;
     const stats = {
       maxHp: base.maxHp ?? PLAYER.BASE_HP,
@@ -139,7 +124,7 @@ export class UpgradeApplier {
       stellarDustRate: base.stellarDustRate ?? 0,
       projectileType: base.projectileType ?? 'laser',
       extraWeapons: [],
-      // Only tech-tree / hangar effects may enable auto-fire (not state.player).
+      // Only upgrade effects may enable auto-fire (not state.player directly).
       hasAutoFire: false,
       hasVampire: !!base.hasVampire,
       hasDamageReflect: !!base.hasDamageReflect,
@@ -168,7 +153,7 @@ export class UpgradeApplier {
       damageReflect: 0,
 
       maxEnergy: ENERGY.BASE_MAX,
-      energyRegen: ENERGY.BASE_REGEN,
+      energyRegen: base.energyRegen ?? PLAYER.BASE_ENERGY_REGEN,
       energyDrain: 0,
 
       repulserActive: false, repulserInterval: 6, repulserRadius: 8, repulserDamage: 0,
@@ -194,7 +179,7 @@ export class UpgradeApplier {
       __pendingComponentOps: [], // new grammar ops captured here
     };
 
-    const unlocked = this._gatherAllUnlocked(techTreeState);
+    const unlocked = this._gatherAllUnlocked();
 
     if (!unlocked.length) {
       stats.projectileCount = clampOdd(stats.projectileCount);
@@ -473,7 +458,7 @@ export class UpgradeApplier {
     if (visuals) {
       visuals.syncVisualModifiers(stats.visualModifiers);
       visuals.syncAttachments(stats.attachments);
-      visuals.resyncWeaponTurretParents();
+      visuals.syncTurretsFromSlotMap(stats.weaponSlotByFireType);
     }
   }
 

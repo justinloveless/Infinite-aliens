@@ -4,6 +4,12 @@ import {
   rebindShipAlias, applyShipBaseStatsToState,
 } from '../data/ships.js';
 
+let _instSeq = 0;
+/** Create a fresh ItemInstance with a unique ID. */
+export function createItemInstance(itemId) {
+  return { instanceId: `inst_${Date.now()}_${_instSeq++}`, itemId, upgrades: {} };
+}
+
 /**
  * Legacy shape of `state.ship` used by the v14 migration path. Preserved so
  * pre-v16 saves can be upgraded through v14 → v15 → v16 using the existing
@@ -35,7 +41,7 @@ export function createInitialShipsState() {
 }
 
 export function createInitialInventory() {
-  return { ownedItems: ['main_cannon'] };
+  return { ownedItems: [createItemInstance('main_cannon')] };
 }
 
 export function createInitialState() {
@@ -85,6 +91,7 @@ export function createInitialState() {
       hasOvercharge: false,
       overchargeCounter: 0,
       energy: ENERGY.BASE_MAX,
+      energyRegen: PLAYER.BASE_ENERGY_REGEN,
     },
 
     computed: null,
@@ -99,11 +106,6 @@ export function createInitialState() {
     },
 
     roundLoot: {},
-
-    techTree: {
-      unlockedNodes: {},
-      generatedTiers: 0,
-    },
 
     warpGates: {
       maxTierReached: 0,
@@ -137,6 +139,13 @@ export function createInitialState() {
 
   rebindShipAlias(state);
   applyShipBaseStatsToState(state, getShipDef(state.ships.selectedId));
+
+  // Install the starter main_cannon instance in the default weapon slot.
+  const starterInst = state.inventory.ownedItems[0];
+  if (starterInst && state.ship?.slots?.weapon_mid) {
+    state.ship.slots.weapon_mid.installedInstanceId = starterInst.instanceId;
+  }
+
   return state;
 }
 

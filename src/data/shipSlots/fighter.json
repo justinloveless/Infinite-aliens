@@ -17,6 +17,7 @@
       "shape": "box",
       "size": 0.28,
       "position": [-1.5, 0.05, 0.65],
+      "rotation": [0, 1.25, 0],
       "unlockCost": { "credits": 400 },
       "label": "PORT WINGTIP",
       "description": "Port wingtip weapon hardpoint.",
@@ -28,6 +29,7 @@
       "shape": "box",
       "size": 0.28,
       "position": [1.5, 0.05, 0.65],
+      "rotation": [0, -1.25, 0],
       "unlockCost": { "credits": 400 },
       "label": "STBD WINGTIP",
       "description": "Starboard wingtip weapon hardpoint.",
@@ -54,6 +56,50 @@
       "label": "AUX BAY",
       "description": "Dorsal utility bay — magnets, thrusters, drones.",
       "panel": { "anchor": "top-right", "offsetX": 10, "offsetY": 10 }
+    },
+    {
+      "id": "passive_bay_1",
+      "type": "passive",
+      "shape": "circle",
+      "size": 0.28,
+      "position": [-0.7, 0.2, 0.4],
+      "unlockCost": { "scrapMetal": 300 },
+      "label": "PASSIVE I",
+      "description": "Passive module bay — generators, labs, farms.",
+      "panel": { "anchor": "free", "offsetX": 22, "offsetY": 18 }
+    },
+    {
+      "id": "passive_bay_2",
+      "type": "passive",
+      "shape": "circle",
+      "size": 0.28,
+      "position": [0.7, 0.2, 0.4],
+      "unlockCost": { "scrapMetal": 500, "plasmaCrystals": 50 },
+      "label": "PASSIVE II",
+      "description": "Second passive module bay.",
+      "panel": { "anchor": "free", "offsetX": 78, "offsetY": 18 }
+    },
+    {
+      "id": "ability_slot_1",
+      "type": "ability",
+      "shape": "box",
+      "size": 0.25,
+      "position": [-1.5, 0.1, 0.2],
+      "unlockCost": { "plasmaCrystals": 80 },
+      "label": "ABILITY I",
+      "description": "Active ability slot — EMP, Warp Drive, Gravity Bomb, and more.",
+      "panel": { "anchor": "free", "offsetX": 18, "offsetY": 68 }
+    },
+    {
+      "id": "ability_slot_2",
+      "type": "ability",
+      "shape": "box",
+      "size": 0.25,
+      "position": [1.5, 0.1, 0.2],
+      "unlockCost": { "plasmaCrystals": 80, "darkMatter": 5 },
+      "label": "ABILITY II",
+      "description": "Second active ability slot.",
+      "panel": { "anchor": "free", "offsetX": 82, "offsetY": 68 }
     }
   ],
   "defaultUnlockedSlots": ["weapon_mid"],

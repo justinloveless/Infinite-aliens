@@ -96,21 +96,17 @@ export class ShipComponent extends Component {
       visionRange: base.BASE_VISION_RANGE ?? PLAYER.BASE_VISION_RANGE,
       targetingRange: base.BASE_TARGETING_RANGE ?? PLAYER.BASE_TARGETING_RANGE,
       lootMultiplier: base.BASE_LOOT_MULT ?? PLAYER.BASE_LOOT_MULT,
+      energyRegen: base.BASE_ENERGY_REGEN ?? PLAYER.BASE_ENERGY_REGEN,
     };
   }
 
   /** Build a fresh per-ship loadout using the subclass' defaults. */
   static createLoadout() {
     const slots = {};
-    for (const def of this.slots) slots[def.id] = { installedItemId: null };
-    for (const [slotId, itemId] of Object.entries(this.defaultLoadout)) {
-      if (slots[slotId]) slots[slotId].installedItemId = itemId;
-    }
+    for (const def of this.slots) slots[def.id] = { installedInstanceId: null };
     return {
       slots,
       unlockedSlots: [...this.defaultUnlockedSlots],
-      research: {},
-      researchMastery: {},
     };
   }
 

@@ -40,6 +40,10 @@ export const EVENTS = {
   UPGRADE_SOLD:        'upgrade:sold',
   CURRENCY_CHANGED:    'currency:changed',
   PLAYER_DAMAGED:      'player:damaged',
+  /** Shield absorbed all or part of a hit. { absorbed: number, hp, maxHp } */
+  SHIELD_DAMAGED:      'player:shield_damaged',
+  /** Shield HP reached 0 from damage. { maxHp } */
+  SHIELD_BROKEN:       'player:shield_broken',
   PLAYER_HEALED:       'player:healed',
   PLAYER_DIED:         'player:died',
   STATS_UPDATED:       'stats:updated',
@@ -65,4 +69,7 @@ export const EVENTS = {
   CAMPAIGN_ADVANCED:         'campaign:advanced',         // { galaxyIndex, infiniteMode }
   // Infinite mastery
   MASTERY_PURCHASED:   'mastery:purchased',   // { nodeId, masteryLevel }
+  // Energy system
+  ENERGY_OFFLINE: 'player:energy_offline',   // systems shut down (current hit 0)
+  ENERGY_ONLINE:  'player:energy_online',    // systems restored (current recovered above threshold)
 };

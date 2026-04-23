@@ -5,10 +5,12 @@
       "name": "Main Cannon",
       "slotType": "weapon",
       "starter": true,
+      "grantsNodeId": "main_cannon",
       "cost": {},
       "icon": "⬢",
-      "description": "Forward nose cannon. Click or hold to fire manually; link a turret via the tech tree for automatic fire.",
-      "color": "#ffcc66"
+      "description": "Forward nose cannon. Click or hold to fire manually. Install a second cannon on another weapon slot and both fire together.",
+      "color": "#ffcc66",
+      "energyCostPerShot": 3
     },
     {
       "id": "laser_turret",
@@ -17,8 +19,9 @@
       "grantsNodeId": "laser_type",
       "cost": { "scrapMetal": 80, "plasmaCrystals": 10 },
       "icon": "|",
-      "description": "Mounts a continuous plasma beam turret that fires alongside your main cannon.",
-      "color": "#00f5ff"
+      "description": "Mounts a continuous plasma beam turret that fires automatically. Unlock Trigger Link to switch to manual fire.",
+      "color": "#00f5ff",
+      "energyCostPerShot": 4
     },
     {
       "id": "missile_turret",
@@ -27,8 +30,9 @@
       "grantsNodeId": "missile_type",
       "cost": { "scrapMetal": 120, "plasmaCrystals": 20 },
       "icon": "➹",
-      "description": "Homing missile rack. Fire-and-forget ordnance that tracks the nearest hostile.",
-      "color": "#ff8800"
+      "description": "Homing missile rack that fires automatically. Unlock Trigger Link to switch to manual launch.",
+      "color": "#ff8800",
+      "energyCostPerShot": 5
     },
     {
       "id": "plasma_turret",
@@ -37,8 +41,9 @@
       "grantsNodeId": "plasma_type",
       "cost": { "scrapMetal": 150, "plasmaCrystals": 30, "darkMatter": 2 },
       "icon": "◈",
-      "description": "Heavy plasma cannon. Slower fire rate but devastating per shot.",
-      "color": "#ff00ff"
+      "description": "Heavy plasma cannon. Slower fire rate but devastating per shot. Auto-fires or manual with Trigger Link.",
+      "color": "#ff00ff",
+      "energyCostPerShot": 6
     },
     {
       "id": "beam_laser",
@@ -47,8 +52,20 @@
       "grantsNodeId": "beam_laser",
       "cost": { "scrapMetal": 180, "plasmaCrystals": 35 },
       "icon": "━",
-      "description": "High-intensity beam emitter. Sustained damage on any target held in line.",
-      "color": "#ff1133"
+      "description": "High-intensity sustained beam. Auto-locks to nearest enemy. Unlock Trigger Link to hold manually.",
+      "color": "#ff1133",
+      "energyDrainPerSec": 10
+    },
+    {
+      "id": "rail_gun",
+      "name": "Rail Gun",
+      "slotType": "weapon",
+      "grantsNodeId": "rail_gun",
+      "cost": { "scrapMetal": 200, "plasmaCrystals": 40, "darkMatter": 3 },
+      "icon": "⬛",
+      "description": "Magnetic accelerator that builds charge then fires a devastating piercing shot. Draws significant energy.",
+      "color": "#aaddff",
+      "energyCostPerShot": 40
     },
     {
       "id": "hull_plating",
@@ -78,7 +95,8 @@
       "cost": { "scrapMetal": 110, "plasmaCrystals": 25 },
       "icon": "◯",
       "description": "Electromagnetic shield. Absorbs damage before hull; draws continuous energy.",
-      "color": "#00f5ff"
+      "color": "#00f5ff",
+      "energyDrainPerSec": 2
     },
     {
       "id": "magnet_coil",
@@ -87,7 +105,7 @@
       "grantsNodeId": "magnet",
       "cost": { "scrapMetal": 50 },
       "icon": "⊕",
-      "description": "Extends loot tether range.",
+      "description": "Extends loot tether range and unlocks salvage upgrades.",
       "color": "#ffcc00"
     },
     {
@@ -109,6 +127,299 @@
       "icon": "⬡",
       "description": "Self-replicating nanobots slowly repair hull damage.",
       "color": "#39ff14"
+    },
+    {
+      "id": "repulser",
+      "name": "Repulser Field",
+      "slotType": "utility",
+      "grantsNodeId": "repulser",
+      "cost": { "scrapMetal": 120, "plasmaCrystals": 20 },
+      "icon": "↔",
+      "description": "Periodic EM pulse violently pushes nearby enemies away from your ship.",
+      "color": "#ff9900"
+    },
+    {
+      "id": "scanner",
+      "name": "Combat Scanner",
+      "slotType": "utility",
+      "grantsNodeId": "scanner",
+      "cost": { "scrapMetal": 100, "plasmaCrystals": 25 },
+      "icon": "📡",
+      "description": "Deep-scan sensors extend vision range and reveal enemy weak points.",
+      "color": "#00ffcc"
+    },
+    {
+      "id": "salvaging_beam",
+      "name": "Salvaging Beam",
+      "slotType": "utility",
+      "grantsNodeId": "salvaging_beam",
+      "cost": { "scrapMetal": 130, "plasmaCrystals": 30 },
+      "icon": "⊘",
+      "description": "Tractor beam tears scrap from destroyed enemies, converting it directly into hull repairs.",
+      "color": "#88ff44"
+    },
+    {
+      "id": "mining_laser",
+      "name": "Mining Laser",
+      "slotType": "utility",
+      "grantsNodeId": "mining_laser",
+      "cost": { "scrapMetal": 110, "plasmaCrystals": 20 },
+      "icon": "🔦",
+      "description": "High-powered cutting laser extracts rare minerals from asteroids.",
+      "color": "#ffee00"
+    },
+    {
+      "id": "stellar_gen",
+      "name": "Stellar Generator",
+      "slotType": "passive",
+      "grantsNodeId": "stellar_gen",
+      "cost": { "plasmaCrystals": 40, "stellarDust": 10 },
+      "icon": "★",
+      "description": "Cosmic array passively generates Stellar Dust. The foundation of late-game economy.",
+      "color": "#ffd700"
+    },
+    {
+      "id": "reactor",
+      "name": "Reactor Core",
+      "slotType": "passive",
+      "grantsNodeId": "reactor",
+      "cost": { "scrapMetal": 120, "plasmaCrystals": 20 },
+      "icon": "⚛",
+      "description": "Compact fission reactor generates a steady stream of energy for high-drain systems.",
+      "color": "#ff6600",
+      "energyRegenPerSec": 8
+    },
+    {
+      "id": "solar_cells",
+      "name": "Solar Cells",
+      "slotType": "passive",
+      "grantsNodeId": "solar_cells",
+      "cost": { "scrapMetal": 40 },
+      "icon": "☀",
+      "description": "Arrays of photovoltaic panels harvest starlight for clean, scalable energy.",
+      "color": "#ffdd00",
+      "energyRegenPerSec": 2
+    },
+    {
+      "id": "bio_lab",
+      "name": "Bio Lab",
+      "slotType": "passive",
+      "grantsNodeId": "bio_lab",
+      "cost": { "scrapMetal": 80, "plasmaCrystals": 15 },
+      "icon": "🔬",
+      "description": "Pressurized cultivation chamber generates Bio Essence passively from stellar radiation.",
+      "color": "#39ff14"
+    },
+    {
+      "id": "plasma_farm",
+      "name": "Plasma Farm",
+      "slotType": "passive",
+      "grantsNodeId": "plasma_farm",
+      "cost": { "scrapMetal": 100, "plasmaCrystals": 20 },
+      "icon": "◆",
+      "description": "Magnetic coils harvest trace plasma from engine exhaust, slowly crystallizing it.",
+      "color": "#00f5ff"
+    },
+    {
+      "id": "particle_collider",
+      "name": "Particle Collider",
+      "slotType": "passive",
+      "grantsNodeId": "particle_collider",
+      "cost": { "plasmaCrystals": 60, "darkMatter": 5 },
+      "icon": "⊕",
+      "description": "Ring-shaped accelerator smashes particles together, producing trace dark matter.",
+      "color": "#9b30ff"
+    },
+    {
+      "id": "emp",
+      "name": "EMP Device",
+      "slotType": "ability",
+      "grantsNodeId": "emp",
+      "cost": { "plasmaCrystals": 60, "scrapMetal": 80 },
+      "icon": "☇",
+      "description": "Massive electromagnetic pulse stuns all enemies for several seconds. Press assigned key to activate.",
+      "color": "#ffff00",
+      "energyCostPerUse": 30
+    },
+    {
+      "id": "warp_drive",
+      "name": "Warp Drive",
+      "slotType": "ability",
+      "grantsNodeId": "warp_drive",
+      "cost": { "plasmaCrystals": 50, "darkMatter": 8 },
+      "icon": "⌖",
+      "description": "Teleports your ship forward instantly, phasing through danger. Press assigned key to activate.",
+      "color": "#aa44ff",
+      "energyCostPerUse": 20
+    },
+    {
+      "id": "gravity_bomb",
+      "name": "Gravity Bomb",
+      "slotType": "ability",
+      "grantsNodeId": "gravity_bomb",
+      "cost": { "darkMatter": 15, "plasmaCrystals": 30 },
+      "icon": "◉",
+      "description": "Detonates a localized gravity singularity, pulling all nearby enemies inward.",
+      "color": "#8800ff",
+      "energyCostPerUse": 25
+    },
+    {
+      "id": "decoy",
+      "name": "Combat Decoy",
+      "slotType": "ability",
+      "grantsNodeId": "decoy",
+      "cost": { "plasmaCrystals": 40, "scrapMetal": 60 },
+      "icon": "◈",
+      "description": "Projects a holographic duplicate of your ship that draws enemy fire.",
+      "color": "#00ccff",
+      "energyCostPerUse": 20
+    },
+    {
+      "id": "speed_booster",
+      "name": "Speed Booster",
+      "slotType": "ability",
+      "grantsNodeId": "speed_booster",
+      "cost": { "scrapMetal": 90, "plasmaCrystals": 20 },
+      "icon": "💨",
+      "description": "Afterburner that temporarily doubles thrust for rapid repositioning.",
+      "color": "#ffffff",
+      "energyCostPerUse": 15
+    },
+    {
+      "id": "wing_cannons",
+      "name": "Wing Cannons",
+      "slotType": "weapon",
+      "fused": true,
+      "grantsNodeId": "wing_cannons",
+      "cost": {},
+      "icon": "⟺",
+      "description": "Reinforced wing struts mount heavy forward cannons. Obtained by fusing Main Cannon + Hull Plating.",
+      "color": "#ff8800",
+      "energyCostPerShot": 3
+    },
+    {
+      "id": "phoenix_drive",
+      "name": "Phoenix Drive",
+      "slotType": "defense",
+      "fused": true,
+      "grantsNodeId": "phoenix_drive",
+      "cost": {},
+      "icon": "🔁",
+      "description": "Emergency resurrection system. Auto-revives on death with a long recharge. Obtained by fusing Hull Plating + Shield Generator.",
+      "color": "#ff4400"
+    },
+    {
+      "id": "juggernaut",
+      "name": "Juggernaut",
+      "slotType": "defense",
+      "fused": true,
+      "grantsNodeId": "juggernaut",
+      "cost": {},
+      "icon": "🛡",
+      "description": "Armored fortress hull. Max hull doubled, massive armor — but barely maneuverable. Obtained by fusing Hull Plating + Thruster Module.",
+      "color": "#3366ff"
+    },
+    {
+      "id": "gravity_well",
+      "name": "Gravity Well",
+      "slotType": "utility",
+      "fused": true,
+      "grantsNodeId": "gravity_well",
+      "cost": {},
+      "icon": "⊗",
+      "description": "Graviton field slows all enemies within magnet range to 45% speed. Obtained by fusing Shield Generator + Magnet Coil.",
+      "color": "#6600ff"
+    },
+    {
+      "id": "stellar_burst",
+      "name": "Stellar Burst",
+      "slotType": "passive",
+      "fused": true,
+      "grantsNodeId": "stellar_burst",
+      "cost": {},
+      "icon": "✸",
+      "description": "Periodically releases bursts of stellar energy that damage all nearby enemies. Obtained by fusing Stellar Generator + Plasma Turret.",
+      "color": "#ffaa00"
+    },
+    {
+      "id": "nova_core",
+      "name": "Nova Core",
+      "slotType": "passive",
+      "fused": true,
+      "grantsNodeId": "nova_core",
+      "cost": {},
+      "icon": "✺",
+      "description": "A miniature stellar core amplifies all combat and triggers powerful on-kill chain reactions. Obtained by fusing Stellar Generator + Reactor Core.",
+      "color": "#ffd700"
+    },
+    {
+      "id": "drone",
+      "name": "Drone Companion",
+      "slotType": "utility",
+      "fused": true,
+      "grantsNodeId": "drone",
+      "cost": {},
+      "icon": "🤖",
+      "description": "A loyal combat drone orbits your ship and assists in battle. Obtained by fusing Main Cannon + Combat Scanner.",
+      "color": "#0088ff"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "recipe_wing_cannons",
+      "outputItemId": "wing_cannons",
+      "ingredients": [
+        { "itemId": "main_cannon" },
+        { "itemId": "hull_plating" }
+      ]
+    },
+    {
+      "id": "recipe_phoenix_drive",
+      "outputItemId": "phoenix_drive",
+      "ingredients": [
+        { "itemId": "hull_plating" },
+        { "itemId": "shield_generator" }
+      ]
+    },
+    {
+      "id": "recipe_juggernaut",
+      "outputItemId": "juggernaut",
+      "ingredients": [
+        { "itemId": "hull_plating" },
+        { "itemId": "thrusters" }
+      ]
+    },
+    {
+      "id": "recipe_gravity_well",
+      "outputItemId": "gravity_well",
+      "ingredients": [
+        { "itemId": "shield_generator" },
+        { "itemId": "magnet_coil" }
+      ]
+    },
+    {
+      "id": "recipe_stellar_burst",
+      "outputItemId": "stellar_burst",
+      "ingredients": [
+        { "itemId": "stellar_gen" },
+        { "itemId": "plasma_turret" }
+      ]
+    },
+    {
+      "id": "recipe_nova_core",
+      "outputItemId": "nova_core",
+      "ingredients": [
+        { "itemId": "stellar_gen" },
+        { "itemId": "reactor" }
+      ]
+    },
+    {
+      "id": "recipe_drone",
+      "outputItemId": "drone",
+      "ingredients": [
+        { "itemId": "main_cannon" },
+        { "itemId": "scanner" }
+      ]
     }
   ]
 }

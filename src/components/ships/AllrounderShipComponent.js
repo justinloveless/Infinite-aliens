@@ -14,7 +14,7 @@ export class AllrounderShipComponent extends ShipComponent {
   static meshVariant = 'allrounder';
   static cost = { credits: 0 };
   static ownedByDefault = true;
-  static baseStats = {};
+  static baseStats = { BASE_ENERGY_REGEN: 8 };
 
   static get slots() { return slotsData.slots; }
   static get defaultUnlockedSlots() { return slotsData.defaultUnlockedSlots; }

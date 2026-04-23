@@ -1,4 +1,5 @@
 import { Component } from '../../ecs/Component.js';
+import { ENERGY } from '../../constants.js';
 
 /**
  * Absorbs damage before HealthComponent. The player's damage path checks this
@@ -26,8 +27,12 @@ export class ShieldComponent extends Component {
   }
 
   update(dt) {
+    const energy = this.entity?.get('EnergyComponent');
+    if (energy && !energy.systemsOnline) return;
     if (this.regen > 0 && this.hp < this.maxHp) {
-      this.hp = Math.min(this.maxHp, this.hp + this.regen * dt);
+      const healed = Math.min(this.maxHp - this.hp, this.regen * dt);
+      this.hp += healed;
+      energy?.spend(healed * ENERGY.SHIELD_RECHARGE_COST_RATIO);
     }
   }
 }

@@ -8,6 +8,7 @@ import { StatusEffectsComponent } from '../components/enemy/StatusEffectsCompone
 import { ContactDamageComponent } from '../components/enemy/ContactDamageComponent.js';
 import { RangedAttackerComponent } from '../components/enemy/RangedAttackerComponent.js';
 import { LootTableComponent } from '../components/enemy/LootTableComponent.js';
+import { EnemySeparationComponent } from '../components/enemy/EnemySeparationComponent.js';
 import { BEHAVIOR_COMPONENTS } from '../components/enemy/behaviors.js';
 import { ENEMY_DEFS } from '../components/enemy/EnemyDefs.js';
 
@@ -80,6 +81,7 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
   }
 
   entity.add(new LootTableComponent({ table: def.loot }));
+  entity.add(new EnemySeparationComponent());
   entity.enemyType = def.type;
   entity.collisionRadius = def.collisionRadius;
 

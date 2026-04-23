@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
-import { MANUAL_GUN, PLAYER } from '../../constants.js';
+import { MANUAL_GUN, PLAYER, ENERGY } from '../../constants.js';
 import { isCombatPhase } from '../../core/phaseUtil.js';
 import { createProjectile } from '../../prefabs/createProjectile.js';
 
@@ -34,6 +34,10 @@ export class ManualGunComponent extends Component {
     if (!ctx || !isCombatPhase(ctx.state?.round?.phase)) return;
     if (this._overheated || this._fireCooldown > 0) return;
 
+    const energy = this.entity.get('EnergyComponent');
+    if (energy && !energy.systemsOnline) return;
+    energy?.spend(ENERGY.COST_MANUAL_GUN);
+
     this._fireCooldown = MANUAL_GUN.FIRE_COOLDOWN;
     this._heat += MANUAL_GUN.HEAT_PER_SHOT * this.heatPerShotMult;
     const ratio = this._heat / MANUAL_GUN.HEAT_MAX;
@@ -50,21 +54,25 @@ export class ManualGunComponent extends Component {
     const t = this.entity.get('TransformComponent');
     const stats = this.entity.get('PlayerStatsComponent');
     const visuals = this.entity.get('ShipVisualsComponent');
-    const pos = visuals
-      ? visuals.getPrimaryWeaponMuzzleWorldPosition()
-      : t.position.clone().add(new THREE.Vector3(0, 0, -1.0));
+    // Spawn one projectile per installed main cannon. Extra cannons fire
+    // parallel to the primary along the ship's yaw (not converging).
+    const positions = visuals
+      ? visuals.getManualMuzzleWorldPositions()
+      : [t.position.clone().add(new THREE.Vector3(0, 0, -1.0))];
     // Fire along the ship's current yaw so the manual gun points where the
     // ship's nose is (essential for arena flight controls).
     const yaw = t?.rotation?.y ?? 0;
-    const dir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const baseDir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     const damage = stats?.damage ?? PLAYER.BASE_DAMAGE;
     const pierces = stats?.projectilePierces ?? 0;
 
-    ctx.world.spawn(createProjectile({
-      position: pos, direction: dir,
-      type: 'manual', damage, isCrit: false, isPlayer: true,
-      pierces, heatRatio: ratio,
-    }));
+    for (const pos of positions) {
+      ctx.world.spawn(createProjectile({
+        position: pos, direction: baseDir.clone(),
+        type: 'manual', damage, isCrit: false, isPlayer: true,
+        pierces, heatRatio: ratio,
+      }));
+    }
     eventBus.emit(EVENTS.MANUAL_FIRED);
     this._firing = true;
   }

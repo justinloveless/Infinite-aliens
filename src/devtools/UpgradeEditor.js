@@ -1,11 +1,7 @@
 /**
  * In-game upgrade node editor (DEV only).
  * Opens with Ctrl+Shift+U. Lets you compose a new node, preview it as JSON,
- * add it to the live tree immediately, and persist it to upgrades.json via
- * the Vite dev server plugin at POST /dev/save-upgrades.
- *
- * References to TechTreeState and TechTreeUI are passed as getter functions
- * so the editor stays valid across new-game resets.
+ * and persist it to upgrades.json via the Vite dev server plugin at POST /dev/save-upgrades.
  */
 
 import upgradesData from '../data/upgrades.json';
@@ -132,13 +128,9 @@ function selectEl(options) {
 
 export class UpgradeEditor {
   /**
-   * @param {()=>import('../techtree/TechTreeState.js').TechTreeState} getTree
-   * @param {()=>import('../ui/TechTreeUI.js').TechTreeUI} getUI
    * @param {()=>void} onRebuildComputed
    */
-  constructor(getTree, getUI, onRebuildComputed) {
-    this._getTree = getTree;
-    this._getUI   = getUI;
+  constructor(onRebuildComputed) {
     this._onRebuildComputed = onRebuildComputed;
 
     this._isOpen = false;
@@ -420,10 +412,7 @@ export class UpgradeEditor {
 
   _refreshPrereqList() {
     this._prereqBox.innerHTML = '';
-    const tree = this._getTree();
-    const allNodes = tree
-      ? [...upgradesData.nodes, ...(tree.devExtraNodes || [])]
-      : upgradesData.nodes;
+    const allNodes = upgradesData.nodes;
 
     // Group by category
     const byCategory = {};
@@ -460,11 +449,7 @@ export class UpgradeEditor {
   // ── Node selector helpers ──────────────────────────────────────────────────
 
   _allNodeData() {
-    const tree = this._getTree();
-    const devIds = new Set((tree?.devExtraNodes || []).map(n => n.id));
-    // Base nodes (not overridden) + dev extras
-    const base = upgradesData.nodes.filter(n => !devIds.has(n.id));
-    return [...base, ...(tree?.devExtraNodes || [])];
+    return upgradesData.nodes;
   }
 
   _refreshNodeSelect() {
@@ -692,17 +677,7 @@ export class UpgradeEditor {
     this._statusMsg.style.color = '#fa6';
     this._statusMsg.textContent = isEditing ? 'Updating node...' : 'Adding node...';
 
-    // Apply to live tree
-    const tree = this._getTree();
-    if (tree) {
-      if (isEditing) {
-        tree.updateDevNode(this._editingId, node);
-      } else {
-        tree.addDevNode(node);
-      }
-      this._onRebuildComputed();
-      this._getUI()?.render();
-    }
+    this._onRebuildComputed();
 
     if (!isEditing) {
       this._addedThisSession.push(node.id);

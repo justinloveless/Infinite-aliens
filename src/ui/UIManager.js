@@ -3,13 +3,11 @@ export class UIManager {
     this._screens = {
       start: document.getElementById('start-screen'),
       hud: document.getElementById('hud'),
-      techTree: document.getElementById('tech-tree-screen'),
       transition: document.getElementById('round-transition'),
       death: document.getElementById('death-screen'),
       warpGate: document.getElementById('warp-gate-screen'),
       hangar: document.getElementById('hangar-screen'),
       store: document.getElementById('store-screen'),
-      research: document.getElementById('research-screen'),
       arenaHud: document.getElementById('arena-hud'),
     };
   }
@@ -30,11 +28,10 @@ export class UIManager {
 
   /**
    * @param {object|null} stats  - lastRun stats, or null for first-run "ready" state
-   * @param {function} onViewTree - open tech tree overlay
    * @param {function} onLaunch   - start a new run
    * @param {function} [onViewHangar] - open hangar overlay
    */
-  showDeath(stats, onViewTree, onLaunch, onViewHangar) {
+  showDeath(stats, onLaunch, onViewHangar) {
     const title = document.getElementById('death-title');
     const statsEl = document.getElementById('death-stats');
 
@@ -55,7 +52,6 @@ export class UIManager {
     }
 
     this.show('death');
-    document.getElementById('view-tree-btn').onclick = onViewTree;
     const hangarBtn = document.getElementById('view-hangar-btn');
     if (hangarBtn) hangarBtn.onclick = onViewHangar || null;
     document.getElementById('death-launch-btn').onclick = () => {
@@ -102,11 +98,6 @@ export class UIManager {
        ...gates.map(g => ({ galaxyIndex: Math.floor(g.tier / 10), name: `Sector ${g.tier}`, startTier: g.tier }))],
       (idx) => onSelect(idx * 10 + 1),
     );
-  }
-
-  bindTechTreeButtons(onOpen, onClose) {
-    document.getElementById('tech-tree-btn').onclick = onOpen;
-    document.getElementById('close-tree-btn').onclick = onClose;
   }
 
   bindMuteButton(audioManager, settingsManager) {

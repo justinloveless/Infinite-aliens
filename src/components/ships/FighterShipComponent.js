@@ -19,6 +19,7 @@ export class FighterShipComponent extends ShipComponent {
     BASE_DAMAGE: 8,
     BASE_ATTACK_SPEED: 1.1,
     BASE_SPEED: 4.5,
+    BASE_ENERGY_REGEN: 5,
   };
 
   static get slots() { return slotsData.slots; }

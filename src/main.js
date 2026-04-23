@@ -26,20 +26,16 @@ import { SpawnDirector } from './coordinators/SpawnDirector.js';
 import { UpgradeApplier } from './coordinators/UpgradeApplier.js';
 
 import { CurrencySystem } from './systems/CurrencySystem.js';
-import { TechTreeState } from './techtree/TechTreeState.js';
 
 import { UIManager } from './ui/UIManager.js';
 import { HUD } from './ui/HUD.js';
 import { ArenaHUD } from './ui/ArenaHUD.js';
-import { TechTreeUI } from './ui/TechTreeUI.js';
 import { RoundTransition } from './ui/RoundTransition.js';
 import { DamageNumbers } from './ui/DamageNumbers.js';
 import { HangarUI } from './ui/HangarUI.js';
 import { StoreUI } from './ui/StoreUI.js';
-import { ResearchUI } from './ui/ResearchUI.js';
 import { ArenaDirector } from './coordinators/ArenaDirector.js';
 import { BLOOM, PLAYER, RUN, SCENE, WARP, CAMPAIGN, BOSS_ARENA } from './constants.js';
-import { isCombatPhase } from './core/phaseUtil.js';
 import { getPreset } from './scene/EnvironmentPresets.js';
 import * as THREE from 'three';
 
@@ -74,6 +70,7 @@ class Game {
     this.starfield = new Starfield(this.scene.scene);
     this.synthGrid = new SynthGrid(this.scene.scene);
     this.camera = new CameraController(this.scene.camera);
+    this.camera.setCameraTiltEnabled(this.settings.cameraTiltEnabled);
 
     const { composer, postPasses } = setupPostProcessing(
       this.scene.renderer, this.scene.scene, this.scene.camera
@@ -125,8 +122,6 @@ class Game {
     this.settingsUI = new SettingsUI(this.settings, this.audio, this.voice);
     this.debugMenu = new DebugMenuUI(this);
 
-    this.techTree = null;
-    this.techTreeUI = null;
     this.spawnDirector = null;
     this.upgradeApplier = null;
     this.arenaDirector = null;
@@ -137,10 +132,8 @@ class Game {
     this._arenaInitSpeed = false;
     this._prevBossMusicActive = false;
     this._paused = false;
-    this._techTreeOpen = false;
     this.hangarUI = null;
     this.storeUI = null;
-    this.researchUI = null;
     this.upgradeEditor = null;
 
     this._focusPickRaycaster = new THREE.Raycaster();
@@ -163,6 +156,7 @@ class Game {
     if (this.settings.showFps) this.perfOverlay.show();
     else this.perfOverlay.hide();
     this.qualityController.setMode(this.settings.graphicsQuality);
+    this.camera.setCameraTiltEnabled(this.settings.cameraTiltEnabled);
   }
 
   _setupSettingsListener() {
@@ -172,6 +166,8 @@ class Game {
         else this.perfOverlay.hide();
       } else if (key === 'graphicsQuality') {
         this.qualityController.setMode(this.settings.graphicsQuality);
+      } else if (key === 'cameraTiltEnabled') {
+        this.camera.setCameraTiltEnabled(this.settings.cameraTiltEnabled);
       } else if (key === 'reset') {
         this._applySettingsToPerf();
       }
@@ -275,12 +271,9 @@ class Game {
       this.audio?.play('warp');
       this._resetArenaFlight();
     });
+    eventBus.on(EVENTS.ARENA_LEAVE_REQUESTED, () => this.audio?.play('warp'));
     eventBus.on(EVENTS.ARENA_COMPLETE, () => this._resetArenaFlight());
     eventBus.on(EVENTS.SHIP_PURCHASED, () => this._saveNow());
-
-    eventBus.on(EVENTS.CURRENCY_CHANGED, () => {
-      if (this.techTreeUI) this.techTreeUI.updateCurrencyBar(this.state);
-    });
 
     eventBus.on(EVENTS.SHIP_SELECTED, () => this._rebuildPlayerEntityForShipChange());
 
@@ -293,10 +286,10 @@ class Game {
     });
   }
 
-  /** Immediate save if state + techTree are ready. Safe to call any time. */
+  /** Immediate save if state is ready. Safe to call any time. */
   _saveNow() {
-    if (!this.state || !this.techTree) return;
-    this.saveManager.save(this.state, this.techTree);
+    if (!this.state) return;
+    this.saveManager.save(this.state);
   }
 
   /**
@@ -352,12 +345,6 @@ class Game {
     r.phase = 'dead';
     r.bossIsActive = false;
 
-    if (this._techTreeOpen) {
-      this._techTreeOpen = false;
-      this.ui.hide('techTree');
-      if (this.techTreeUI) this.techTreeUI.close();
-    }
-
     this.spawnDirector.purgeCombatWorld();
     for (const e of this.world.query('projectile_player')) e.destroy();
     for (const e of this.world.query('projectile_enemy')) e.destroy();
@@ -379,7 +366,6 @@ class Game {
 
     this.ui.showDeath(
       this.state.lastRun,
-      () => this._openTechTree(),
       () => this._showWarpGateAndLaunch(),
       () => this._openHangar(),
     );
@@ -387,7 +373,9 @@ class Game {
 
   /** Pause menu only: must already be paused during combat. */
   _confirmEndRunToHangarFromPauseMenu() {
-    if (!this.state || this.state.round.phase !== 'combat' || !this._paused) return;
+    const phase = this.state?.round?.phase;
+    const canReturnToHangar = phase === 'combat' || phase === 'boss_arena' || phase === 'arena_transition';
+    if (!canReturnToHangar || !this._paused) return;
     const ok = window.confirm(
       'Return to the hangar? This ends the current run. Your currencies, upgrades, and sector stats are saved.',
     );
@@ -395,7 +383,7 @@ class Game {
     this.setPaused(false);
     this.audio.stopMusic();
     this._finalizeCombatRunForMeta();
-    this.saveManager.save(this.state, this.techTree);
+    this.saveManager.save(this.state);
     this._openHangar();
   }
 
@@ -424,7 +412,7 @@ class Game {
         e.preventDefault();
         return;
       }
-      if (this.state && isCombatPhase(this.state.round.phase)) {
+      if (this.state) {
         e.preventDefault();
         this.setPaused(true);
       }
@@ -438,11 +426,17 @@ class Game {
   setPaused(on, options = {}) {
     const want = !!on;
     if (want === this._paused) return;
-    if (want && (!this.state || this.state.round.phase === 'dead')) return;
+    if (want && !this.state) return;
     this._paused = want;
     const ov = document.getElementById('pause-overlay');
     const showOverlay = options.showPauseOverlay !== false;
+    const returnBtn = document.getElementById('pause-return-hangar-btn');
     if (want && this.state) {
+      if (returnBtn) {
+        const phase = this.state.round.phase;
+        const showReturn = phase === 'combat' || phase === 'boss_arena' || phase === 'arena_transition';
+        returnBtn.style.display = showReturn ? '' : 'none';
+      }
       if (showOverlay) { ov?.classList.remove('hidden'); ov?.setAttribute('aria-hidden', 'false'); }
       else { ov?.classList.add('hidden'); ov?.setAttribute('aria-hidden', 'true'); }
       this.audio.pauseMusic();
@@ -492,8 +486,6 @@ class Game {
     try {
       const { UpgradeEditor } = await import('./devtools/UpgradeEditor.js');
       this.upgradeEditor = new UpgradeEditor(
-        () => this.techTree,
-        () => this.techTreeUI,
         () => this._rebuildComputed()
       );
       window.addEventListener('keydown', e => {
@@ -538,11 +530,18 @@ class Game {
       this.ui.hide('arenaHud');
     }
     this.ui.hide('death');
-    this.ui.hide('techTree');
     this.ui.hide('warpGate');
     this.ui.hide('hangar');
     this._startNewRun(clamped);
     this._enterBossArena(clamped);
+  }
+
+  /** Debug: boss arena only — snap to built player gate; you still fly through to leave. */
+  _debugSkipArenaToFlyThroughReady() {
+    const r = this.arenaDirector?.debugSkipToFlyThroughReady?.();
+    if (!r?.ok) {
+      window.alert(r?.reason || 'Cannot skip arena right now.');
+    }
   }
 
   _debugResetGame() {
@@ -561,20 +560,14 @@ class Game {
     this.saveManager.clearSave();
     this.state = createInitialState();
     this.state.round.phase = 'dead';
-    this.techTree = new TechTreeState(this.state.seed);
     this._initWorldForState();
     this._rebuildComputed();
     this.currency.init(this.state);
+    this._setupUI();
 
-    if (this.techTreeUI) this.techTreeUI.setTree(this.techTree);
-    else this._setupTechTreeUI();
-
-    this._techTreeOpen = false;
     this.ui.hide('hud');
-    this.ui.hide('techTree');
-    if (this.techTreeUI) this.techTreeUI.close();
     this.audio.stopMusic();
-    this.ui.showDeath(null, () => this._openTechTree(), () => this._startNewRun(), () => this._openHangar());
+    this.ui.showDeath(null, () => this._showWarpGateAndLaunch(), () => this._openHangar());
   }
 
   _setupClickHandling() {
@@ -905,15 +898,9 @@ class Game {
     const saved = this.saveManager.load();
     if (saved) {
       this.state = saved;
-      this.techTree = new TechTreeState(this.state.seed);
-      this.techTree.loadFromSave(
-        saved.techTree?.unlockedNodes || {},
-        saved.techTree?.generatedTiers || 0,
-        saved.techTree?.masteryLevels || {}
-      );
       this._initWorldForState();
       this._rebuildComputed();
-      this._setupTechTreeUI();
+      this._setupUI();
 
       const offline = this.saveManager.calculateOfflineEarnings(
         saved.lastActiveTime,
@@ -926,7 +913,6 @@ class Game {
       }
       this.ui.showDeath(
         this.state.lastRun ?? null,
-        () => this._openTechTree(),
         () => this._showWarpGateAndLaunch(),
         () => this._openHangar(),
       );
@@ -939,11 +925,10 @@ class Game {
   _newGame() {
     this.state = createInitialState();
     this.state.round.phase = 'dead';
-    this.techTree = new TechTreeState(this.state.seed);
     this._initWorldForState();
     this._rebuildComputed();
-    this._setupTechTreeUI();
-    this.ui.showDeath(null, () => this._openTechTree(), () => this._showWarpGateAndLaunch(), () => this._openHangar());
+    this._setupUI();
+    this.ui.showDeath(null, () => this._showWarpGateAndLaunch(), () => this._openHangar());
   }
 
   _initWorldForState() {
@@ -972,13 +957,8 @@ class Game {
     });
   }
 
-  _setupTechTreeUI() {
+  _setupUI() {
     this.currency.init(this.state);
-    this.techTreeUI = new TechTreeUI(this.techTree, this.currency, this.audio);
-    this.ui.bindTechTreeButtons(
-      () => this._openTechTree(),
-      () => this._closeTechTree()
-    );
     this.ui.bindMuteButton(this.audio, this.settings);
     this._setupHangarUI();
   }
@@ -989,11 +969,8 @@ class Game {
       state: this.state,
       currency: this.currency,
       upgradeApplier: this.upgradeApplier,
-      techTree: this.techTree,
       onLaunch: () => { this._closeHangar(); this._showWarpGateAndLaunch(); },
       onOpenStore: (slotId) => this._openStore(slotId),
-      onOpenResearch: () => this._openResearch(),
-      onOpenTechTree: () => { this._closeHangar(); this._openTechTree(); },
       onClose: () => this._onHangarClosed(),
     });
     this.storeUI = new StoreUI({
@@ -1001,19 +978,11 @@ class Game {
       currency: this.currency,
       onClose: () => this._onStoreClosed(),
     });
-    this.researchUI = new ResearchUI({
-      state: this.state,
-      currency: this.currency,
-      onClose: () => this._onResearchClosed(),
-    });
   }
 
   _openHangar() {
-    this._techTreeOpen = false;
     this.ui.hide('hud');
     this.ui.hide('death');
-    this.ui.hide('techTree');
-    this.techTreeUI?.close?.();
     this.ui.show('hangar');
     this.hangarUI.open();
     if (this.state.round.phase !== 'combat') this.audio.playMusic('tech-tree');
@@ -1028,7 +997,6 @@ class Game {
     if (this.state.round.phase !== 'combat') {
       this.ui.showDeath(
         this.state.lastRun,
-        () => this._openTechTree(),
         () => this._showWarpGateAndLaunch(),
         () => this._openHangar(),
       );
@@ -1044,20 +1012,13 @@ class Game {
 
   _onStoreClosed() { this.ui.hide('store'); }
 
-  _openResearch() {
-    this.ui.show('research');
-    this.researchUI.open();
-  }
-
-  _onResearchClosed() { this.ui.hide('research'); }
-
   _combatMusicKey() {
     return this.state?.round?.bossIsActive ? 'boss' : 'combat';
   }
 
   _rebuildComputed() {
     if (!this.upgradeApplier) return;
-    this.computed = this.upgradeApplier.apply(this.techTree);
+    this.computed = this.upgradeApplier.apply();
     this.state._computed = this.computed;
 
     const p = this.state.player;
@@ -1079,34 +1040,6 @@ class Game {
     }
 
     eventBus.emit(EVENTS.STATS_UPDATED, this.computed);
-  }
-
-  _openTechTree() {
-    this._techTreeOpen = true;
-    this.ui.hide('hud');
-    this.ui.hide('death');
-    this.ui.show('techTree');
-    this.techTreeUI.open(this.state, this.computed);
-    if (this.state.round.phase !== 'combat') this.audio.playMusic('tech-tree');
-  }
-
-  _closeTechTree() {
-    this._techTreeOpen = false;
-    this.ui.hide('techTree');
-    this.techTreeUI.close();
-    const phase = this.state.round.phase;
-    if (phase === 'combat') {
-      this.ui.show('hud');
-      this._prevBossMusicActive = !!this.state.round.bossIsActive;
-      this.audio.playMusic(this._combatMusicKey());
-    } else {
-      this.ui.showDeath(
-        this.state.lastRun,
-        () => this._openTechTree(),
-        () => this._showWarpGateAndLaunch(),
-        () => this._openHangar(),
-      );
-    }
   }
 
   _getUnlockedGalaxies() {
@@ -1132,11 +1065,8 @@ class Game {
   }
 
   _startNewRun(galaxyIndex = 0) {
-    this._techTreeOpen = false;
-    this.ui.hide('techTree');
     this.ui.hide('death');
     this.ui.hide('warpGate');
-    if (this.techTreeUI) this.techTreeUI.close();
     this.ui.show('hud');
     this.audio.play('launch');
 
@@ -1170,7 +1100,8 @@ class Game {
     const energy = this.playerEntity.get('EnergyComponent');
     if (health) { health.hp = health.maxHp; health.dead = false; }
     if (shield) shield.hp = 0;
-    if (energy) energy.current = energy.max;
+    if (energy) { energy.current = energy.max; energy.systemsOnline = true; }
+    eventBus.emit(EVENTS.ENERGY_ONLINE);
 
     this.spawnDirector.purgeCombatWorld();
     for (const e of this.world.query('projectile_player')) e.destroy();
@@ -1437,14 +1368,26 @@ class Game {
     this.upgradeApplier?.tick(dt);                     mark('upgrade');
     const arenaActive = phase === 'boss_arena';
     const transitioning = phase === 'arena_transition';
-    const starfieldSpeed = transitioning
-      ? (this.arenaDirector?.getTransitionStarfieldSpeed?.() ?? worldSpeed)
-      : (arenaActive ? 0 : worldSpeed);
-    const gridSpeed = transitioning
-      ? (this.arenaDirector?.getTransitionGridSpeed?.() ?? worldSpeed)
-      : (arenaActive ? 0 : worldSpeed);
+    const leaving = arenaActive && (this.arenaDirector?.isLeaving ?? false);
+    const starfieldSpeed = leaving
+      ? (this.arenaDirector?.getLeavingStarfieldSpeed?.() ?? worldSpeed)
+      : transitioning
+        ? (this.arenaDirector?.getTransitionStarfieldSpeed?.() ?? worldSpeed)
+        : (arenaActive ? 0 : worldSpeed);
+    const gridSpeed = leaving
+      ? (this.arenaDirector?.getLeavingGridSpeed?.() ?? worldSpeed)
+      : transitioning
+        ? (this.arenaDirector?.getTransitionGridSpeed?.() ?? worldSpeed)
+        : (arenaActive ? 0 : worldSpeed);
     this.starfield.update(dt, starfieldSpeed);         mark('starfield');
     this.synthGrid.update(dt, gridSpeed);              mark('synthgrid');
+
+    const warpFov = leaving
+      ? (this.arenaDirector?.getLeavingFovBonus?.() ?? 0)
+      : transitioning
+        ? (this.arenaDirector?.getTransitionFovBonus?.() ?? 0)
+        : 0;
+    this.camera.setWarpFovBonus(warpFov);
 
     // Feed the camera's combat-corridor screen tilt before it lerps this
     // frame. Arena phases drive their own camera state; zero out here so
@@ -1497,9 +1440,7 @@ class Game {
       this.arenaHUD.updateIndicators(targets, this.scene.camera, this.scene.renderer?.domElement);
     }
 
-    if (this.techTreeUI && this._techTreeOpen) this.techTreeUI.tick(dt);
-
-    if (this.techTree) this.saveManager.update(dt, this.state, this.techTree);
+    this.saveManager.update(dt, this.state);
     mark('save');
 
     this.projectileRenderer.flush();                   mark('projFlush');

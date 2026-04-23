@@ -73,6 +73,7 @@ export function applyShipBaseStatsToState(state, shipDef) {
   p.visionRange = vals.visionRange;
   p.targetingRange = vals.targetingRange;
   p.lootMultiplier = vals.lootMultiplier;
+  p.energyRegen = vals.energyRegen;
 }
 
 /** Build a fresh per-ship loadout using the ship's defaults. */

@@ -1,8 +1,8 @@
-import { GAME, RUN } from '../constants.js';
+import { GAME, PLAYER, RUN } from '../constants.js';
 import { eventBus, EVENTS } from './EventBus.js';
 import {
   createInitialState, createInitialShip, createInitialInventory, createInitialShipsState,
-  serializeState, deserializeState,
+  createItemInstance, serializeState, deserializeState,
 } from './GameState.js';
 import {
   getDefaultShipId, getShipDef, createLoadoutForShip,
@@ -29,10 +29,9 @@ export class SaveManager {
     this._saveTimer = 0;
   }
 
-  save(state, techTreeState) {
+  save(state) {
     const saveData = {
       ...JSON.parse(serializeState(state)),
-      techTree: techTreeState.getSaveData(),
       lastActiveTime: Date.now(),
     };
     try {
@@ -191,6 +190,55 @@ export class SaveManager {
           data.bossArena.bossDefeated = false;
         }
       }
+      // v19: item instances — ownedItems changes from string[] to ItemInstance[];
+      // slot.installedItemId → installedInstanceId. Research progress is dropped
+      // (all future upgrades live on instances via the new inline upgrade panel).
+      if (data.version === 18) {
+        data.version = 19;
+        let seq = 0;
+        const makeInst = (itemId) =>
+          ({ instanceId: `inst_${Date.now()}_${seq++}`, itemId, upgrades: {} });
+
+        const rawOwned = data.inventory?.ownedItems;
+        const ownedItemIds = Array.isArray(rawOwned)
+          ? rawOwned.filter(x => typeof x === 'string')
+          : ['main_cannon'];
+
+        // Build one instance per owned item and a fast lookup by itemId (first wins).
+        const newInstances = ownedItemIds.map(id => makeInst(id));
+        const firstInstByItemId = new Map();
+        for (const inst of newInstances) {
+          if (!firstInstByItemId.has(inst.itemId)) firstInstByItemId.set(inst.itemId, inst.instanceId);
+        }
+
+        // Migrate all ship slot installedItemId → installedInstanceId.
+        if (data.ships?.loadouts) {
+          for (const loadout of Object.values(data.ships.loadouts)) {
+            for (const slot of Object.values(loadout.slots || {})) {
+              if (slot && 'installedItemId' in slot) {
+                const oldId = slot.installedItemId;
+                slot.installedInstanceId = (oldId && firstInstByItemId.get(oldId)) || null;
+                delete slot.installedItemId;
+              }
+            }
+            delete loadout.research;
+            delete loadout.researchMastery;
+          }
+        }
+        if (data.inventory) data.inventory.ownedItems = newInstances;
+      }
+      // v20: tech tree removed. Drop techTree state from old saves.
+      if (data.version === 19) {
+        data.version = 20;
+        delete data.techTree;
+      }
+      // v21: per-ship energy regen baseline added to player state.
+      if (data.version === 20) {
+        data.version = 21;
+        if (data.player && data.player.energyRegen == null) {
+          data.player.energyRegen = PLAYER.BASE_ENERGY_REGEN;
+        }
+      }
       if (data.version !== GAME.VERSION) return null;
 
       // Post-load: rehydrate transients + aliases that serializeState stripped.
@@ -221,11 +269,11 @@ export class SaveManager {
   }
 
   // Auto-save tick
-  update(delta, state, techTreeState) {
+  update(delta, state) {
     this._saveTimer += delta * 1000;
     if (this._saveTimer >= GAME.AUTO_SAVE_INTERVAL) {
       this._saveTimer = 0;
-      this.save(state, techTreeState);
+      this.save(state);
     }
   }
 }

@@ -19,6 +19,7 @@ export class HeavyShipComponent extends ShipComponent {
     BASE_ATTACK_SPEED: 0.4,
     BASE_SPEED: 2.1,
     BASE_ARMOR: 3,
+    BASE_ENERGY_REGEN: 12,
   };
 
   static get slots() { return slotsData.slots; }

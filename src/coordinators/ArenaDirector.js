@@ -49,6 +49,7 @@ export class ArenaDirector {
     this._playerGateEntity = null;
     this._completionTimer = 0;
     this._completing = false;
+    this._leaveT = 0;
     this._onComplete = null;
     this._bossSpawnTimer = 0;
     this._bossLiveSpawns = new Set();
@@ -283,6 +284,7 @@ export class ArenaDirector {
     this._tickBossSpawns(dt);
 
     if (this._completing) {
+      this._leaveT += dt;
       this._completionTimer -= dt;
       if (this._completionTimer <= 0) {
         this._completing = false;
@@ -317,10 +319,51 @@ export class ArenaDirector {
     const distSq = dx * dx + dz * dz;
     const r = BOSS_ARENA.GATE_FLY_THROUGH_RADIUS;
     if (distSq <= r * r) {
-      this._completing = true;
-      this._completionTimer = 0.75;
-      eventBus.emit(EVENTS.ARENA_LEAVE_REQUESTED, {});
+      this._beginLeave();
     }
+  }
+
+  _beginLeave() {
+    this._completing = true;
+    this._leaveT = 0;
+    this._completionTimer = BOSS_ARENA.LEAVE_DURATION;
+
+    const title = document.querySelector('#arena-transition-banner .arena-banner-title');
+    const sub   = document.querySelector('#arena-transition-banner .arena-banner-sub');
+    if (title) title.textContent = 'WARPING OUT';
+    if (sub)   sub.textContent   = 'Jump drive engaged. Hold steady.';
+
+    if (this._transitionOverlay) {
+      this._transitionOverlay.classList.remove('hidden');
+      requestAnimationFrame(() => this._transitionOverlay?.classList.add('visible'));
+    }
+
+    this.camera.shake?.(0.4, 0.35);
+    eventBus.emit(EVENTS.ARENA_LEAVE_REQUESTED, {});
+  }
+
+  get isLeaving() { return this._completing; }
+
+  getLeavingStarfieldSpeed() {
+    const p = Math.min(1, this._leaveT / BOSS_ARENA.LEAVE_DURATION);
+    return 260 * p * p;
+  }
+
+  getLeavingGridSpeed() {
+    const p = Math.min(1, this._leaveT / BOSS_ARENA.LEAVE_DURATION);
+    return 80 * p * p;
+  }
+
+  /** 0..1 warp intensity for FOV during the entry transition (sin bump). */
+  getTransitionFovBonus() {
+    const p = this.getTransitionProgress();
+    return Math.sin(Math.min(1, p / 0.75) * Math.PI);
+  }
+
+  /** 0..1 warp intensity for FOV during the leave animation (quadratic ramp). */
+  getLeavingFovBonus() {
+    const p = Math.min(1, this._leaveT / BOSS_ARENA.LEAVE_DURATION);
+    return p * p;
   }
 
   _updateTransition(dt) {
@@ -404,6 +447,32 @@ export class ArenaDirector {
     // _checkFlyThroughGate on subsequent ticks.
   }
 
+  /**
+   * Debug: jump arena state to the same point as a finished player gate build
+   * — alien objectives shut, gate built, proximity fly-through enabled. Does
+   * not warp out; normal leave sequence runs when the player enters the gate.
+   * @returns {{ ok: true } | { ok: false, reason: string }}
+   */
+  debugSkipToFlyThroughReady() {
+    const arena = this.state.bossArena;
+    if (!arena?.active) return { ok: false, reason: 'No boss arena active.' };
+    if (this._transitioning) return { ok: false, reason: 'Still in arena warp transition.' };
+    if (this._completing) return { ok: false, reason: 'Already warping out.' };
+    if (this.state.round.phase !== 'boss_arena') return { ok: false, reason: 'Not in boss arena phase (wait until transition ends).' };
+    if (arena.subPhase === 'complete') return { ok: false, reason: 'Already at fly-through stage.' };
+
+    for (const g of this._gateEntities) {
+      g?.get('AlienWarpGateComponent')?.debugForceClose?.();
+    }
+    arena.gatesClosed = arena.gatesTotal;
+    arena.buildProgress = 1;
+    const pgComp = this._playerGateEntity?.get('PlayerWarpGateComponent');
+    if (pgComp) pgComp.setProgress(1);
+    this._advanceSubPhase('complete');
+    eventBus.emit(EVENTS.ARENA_COMPLETE, { bossAlive: this._isBossAlive() });
+    return { ok: true };
+  }
+
   _isBossAlive() {
     const b = this._bossEntity;
     return !!(b && !b._destroyed && b.active && !this.state.bossArena.bossDefeated);
@@ -432,10 +501,18 @@ export class ArenaDirector {
     this._bossEntity = null;
     this._transitioning = false;
     this._bossSpawned = false;
+    this._completing = false;
+    this._leaveT = 0;
 
     if (this._transitionOverlay) {
       this._transitionOverlay.classList.remove('visible');
-      this._transitionOverlay.classList.add('hidden');
+      const el = this._transitionOverlay;
+      setTimeout(() => el?.classList.add('hidden'), 350);
+      // Restore entry text for next visit
+      const title = el.querySelector('.arena-banner-title');
+      const sub   = el.querySelector('.arena-banner-sub');
+      if (title) title.textContent = 'ENTERING ENEMY HUB';
+      if (sub)   sub.textContent   = 'Hold course. Warp engaged.';
     }
 
     this.synthGrid?.setArenaMode?.(false);

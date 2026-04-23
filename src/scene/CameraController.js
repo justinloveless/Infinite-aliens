@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 
 const FOV_SPEED_BONUS = 10;      // degrees of extra FOV at max speed
+const FOV_WARP_BONUS  = 55;      // additional degrees during warp transition peaks
 const FOV_LERP_RATE   = 3;       // per-sec lerp for FOV toward target
-const ROLL_FACTOR     = 0.75;    // camera roll as fraction of ship's rotation.z
+const FOV_WARP_LERP   = 10;      // faster lerp so warp FOV tracks the ramp tightly
+const ROLL_FACTOR     = 0.3;    // camera roll as fraction of ship's rotation.z
 const ROLL_LERP_RATE  = 8;       // per-sec lerp for camera roll
 const SWING_AMOUNT    = 3.2;     // lateral camera offset at full yaw input (world units)
 const SWING_LERP_RATE = 5;       // per-sec lerp for swing offset
@@ -41,6 +43,7 @@ export class CameraController {
     this._fov = camera.fov;
     this._roll = 0;
     this._swing = 0;
+    this._warpFovBonus = 0;     // 0..1 driven by ArenaDirector during warp transitions
 
     // Combat-corridor screen tilt state. Targets are pushed from main loop;
     // smoothed values are what actually drive the camera this frame.
@@ -48,6 +51,12 @@ export class CameraController {
     this._combatRoll = 0;
     this._combatSwayTarget = 0;
     this._combatSway = 0;
+    /** Roll/sway in combat + arena chase when false. */
+    this._cameraTiltEnabled = true;
+  }
+
+  setCameraTiltEnabled(on) {
+    this._cameraTiltEnabled = !!on;
   }
 
   shake(intensity = 0.4, duration = 0.25) {
@@ -65,16 +74,13 @@ export class CameraController {
     this._arenaMode = on;
     this._trackT = trackTransform;
     if (!on) {
-      // Snap FOV and cinematic state back to baseline when leaving arena.
       this._speedRatio = 0;
       this._yawInput = 0;
       this._roll = 0;
       this._swing = 0;
-      this._fov = this._baseFov;
-      if (this._camera.fov !== this._baseFov) {
-        this._camera.fov = this._baseFov;
-        this._camera.updateProjectionMatrix();
-      }
+      this._warpFovBonus = 0;
+      // Do NOT snap _fov — let the non-arena update path lerp it back so the
+      // corridor reveal during the overlay fade-out feels like warp deceleration.
       this._camera.up.set(0, 1, 0);
     }
   }
@@ -98,6 +104,11 @@ export class CameraController {
   /** Drives the chase swing. -1..1; sign matches yaw direction. */
   setYawInput(y) {
     this._yawInput = Math.max(-1, Math.min(1, y || 0));
+  }
+
+  /** 0..1 warp intensity; lerped to FOV_WARP_BONUS degrees of extra FOV. */
+  setWarpFovBonus(t) {
+    this._warpFovBonus = Math.max(0, Math.min(1, t || 0));
   }
 
   /**
@@ -156,7 +167,7 @@ export class CameraController {
 
       // Chase swing: lerp toward yawInput * SWING_AMOUNT, applied along
       // ship-right so the camera appears to swing wide opposite the turn.
-      const swingTarget = this._yawInput * SWING_AMOUNT;
+      const swingTarget = this._cameraTiltEnabled ? this._yawInput * SWING_AMOUNT : 0;
       this._swing += (swingTarget - this._swing) * Math.min(1, delta * SWING_LERP_RATE);
       const swingX = rx * this._swing;
       const swingZ = rz * this._swing;
@@ -172,7 +183,7 @@ export class CameraController {
       // axis (which is (fx, 0, fz) in world), then call lookAt so THREE
       // composes the camera basis accordingly.
       const shipRoll = t.rotation?.z ?? 0;
-      const targetRoll = shipRoll * ROLL_FACTOR;
+      const targetRoll = this._cameraTiltEnabled ? shipRoll * ROLL_FACTOR : 0;
       this._roll += (targetRoll - this._roll) * Math.min(1, delta * ROLL_LERP_RATE);
       const forward = new THREE.Vector3(fx, 0, fz).normalize();
       const up = new THREE.Vector3(0, 1, 0).applyAxisAngle(forward, this._roll);
@@ -184,9 +195,10 @@ export class CameraController {
         t.position.z + fz * this._arenaLead,
       );
 
-      // Speed-based FOV pulse.
-      const targetFov = this._baseFov + this._speedRatio * FOV_SPEED_BONUS;
-      this._fov += (targetFov - this._fov) * Math.min(1, delta * FOV_LERP_RATE);
+      // Speed-based FOV pulse + warp bonus (faster lerp so it tracks the ramp).
+      const targetFov = this._baseFov + this._speedRatio * FOV_SPEED_BONUS + this._warpFovBonus * FOV_WARP_BONUS;
+      const lerpRate = this._warpFovBonus > 0 ? FOV_WARP_LERP : FOV_LERP_RATE;
+      this._fov += (targetFov - this._fov) * Math.min(1, delta * lerpRate);
       if (Math.abs(this._camera.fov - this._fov) > 0.01) {
         this._camera.fov = this._fov;
         this._camera.updateProjectionMatrix();
@@ -206,8 +218,10 @@ export class CameraController {
 
     // Combat screen tilt: lerp roll + lateral sway toward whatever the main
     // loop last fed us (zeroed automatically outside combat phase).
-    this._combatRoll += (this._combatRollTarget - this._combatRoll) * Math.min(1, delta * COMBAT_ROLL_LERP);
-    this._combatSway += (this._combatSwayTarget - this._combatSway) * Math.min(1, delta * COMBAT_SWAY_LERP);
+    const rollTarget = this._cameraTiltEnabled ? this._combatRollTarget : 0;
+    const swayTarget = this._cameraTiltEnabled ? this._combatSwayTarget : 0;
+    this._combatRoll += (rollTarget - this._combatRoll) * Math.min(1, delta * COMBAT_ROLL_LERP);
+    this._combatSway += (swayTarget - this._combatSway) * Math.min(1, delta * COMBAT_SWAY_LERP);
 
     // Sign is negated vs. ship rotation.z because the combat camera looks
     // down at the ship (forward has a large -Y component), which inverts the
@@ -235,5 +249,17 @@ export class CameraController {
     }
 
     this._camera.lookAt(lookX, lookY, lookZ);
+
+    // Return FOV to base after warp. Uses the fast warp lerp rate so the
+    // corridor is at near-normal FOV by the time the transition overlay clears.
+    if (Math.abs(this._fov - this._baseFov) > 0.05) {
+      this._fov += (this._baseFov - this._fov) * Math.min(1, delta * FOV_WARP_LERP);
+      this._camera.fov = this._fov;
+      this._camera.updateProjectionMatrix();
+    } else if (this._camera.fov !== this._baseFov) {
+      this._fov = this._baseFov;
+      this._camera.fov = this._baseFov;
+      this._camera.updateProjectionMatrix();
+    }
   }
 }

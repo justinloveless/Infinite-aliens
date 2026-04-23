@@ -73,6 +73,10 @@ export class VoiceManager {
     /** @type {Array<() => void>} unsubscribe fns */
     this._unsubs = [];
 
+    this._subtitleEl     = document.getElementById('pip-subtitle');
+    this._subtitleTextEl = document.getElementById('pip-subtitle-text');
+    this._subtitleTimer  = null;
+
     this._preload();
     this._subscribe();
   }
@@ -153,10 +157,13 @@ export class VoiceManager {
     this._recentVariantByKey.set(triggerKey, choice.id);
     this._idleTimer = 0;
 
+    this._showSubtitle(choice.text);
+
     if (playPromise && typeof playPromise.catch === 'function') {
       playPromise.catch(() => {
         // Autoplay blocked (pre-user-gesture) or file missing — free the slot.
         if (this._current && this._current.audio === audio) this._current = null;
+        this._hideSubtitle();
       });
     }
   }
@@ -347,10 +354,29 @@ export class VoiceManager {
     try { this._current.audio.pause(); } catch (_) {}
     try { this._current.audio.currentTime = 0; } catch (_) {}
     this._current = null;
+    this._hideSubtitle();
   }
 
   _onEnded(audio) {
-    if (this._current && this._current.audio === audio) this._current = null;
+    if (this._current && this._current.audio === audio) {
+      this._current = null;
+      this._hideSubtitle();
+    }
+  }
+
+  _showSubtitle(text) {
+    if (!text || !this._subtitleEl || !this._subtitleTextEl) return;
+    if (!this._settings?.subtitlesEnabled) return;
+    if (this._subtitleTimer) { clearTimeout(this._subtitleTimer); this._subtitleTimer = null; }
+    this._subtitleTextEl.textContent = text;
+    this._subtitleEl.classList.remove('hidden');
+    // Safety fallback: hide after 30 s even if audio never fires 'ended'.
+    this._subtitleTimer = setTimeout(() => this._hideSubtitle(), 30_000);
+  }
+
+  _hideSubtitle() {
+    if (this._subtitleTimer) { clearTimeout(this._subtitleTimer); this._subtitleTimer = null; }
+    if (this._subtitleEl) this._subtitleEl.classList.add('hidden');
   }
 
   _currentVolume() {

@@ -11,9 +11,6 @@ function devUpgradesPlugin() {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         // Redirect clean URL → HTML file for dev-only tool pages
-        if (req.url === '/dev/techtreedesigner') {
-          req.url = '/dev/techtreedesigner.html';
-        }
         if (req.url === '/dev/shipslotdesigner') {
           req.url = '/dev/shipslotdesigner.html';
         }
@@ -91,7 +88,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve('./index.html'),
-        techDesigner: resolve('./dev/techtreedesigner.html'),
         shipSlotDesigner: resolve('./dev/shipslotdesigner.html'),
       },
     },

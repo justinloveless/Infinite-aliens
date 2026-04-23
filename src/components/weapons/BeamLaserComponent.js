@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
-import { eventBus, EVENTS } from '../../core/EventBus.js';
-import { BEAM_LASER } from '../../constants.js';
+import { BEAM_LASER, ENERGY } from '../../constants.js';
 import { isCombatPhase } from '../../core/phaseUtil.js';
 import { resolveTarget } from './CombatTargeting.js';
 
@@ -9,9 +8,11 @@ const _yAxis = new THREE.Vector3(0, 1, 0);
 const _xAxis = new THREE.Vector3(1, 0, 0);
 
 /**
- * Continuous beam weapon with a duty cycle. Owns its own mesh and light and
- * damages the currently-targeted enemy at a fixed tick rate. Swaps in/out the
- * beam turret visual on attach/detach.
+ * Continuous beam weapon with a duty cycle. Owns its own meshes and lights —
+ * one set of visuals per slot hosting a beam emitter (supports multiple
+ * beam lasers installed on different slots). Each beam damages the currently
+ * targeted enemy at a fixed tick rate; two beams installed therefore double
+ * effective DPS while the duty cycle is shared.
  */
 export class BeamLaserComponent extends Component {
   constructor() {
@@ -20,57 +21,74 @@ export class BeamLaserComponent extends Component {
     this._isOn = false;
     this._cycleTimer = 0;
     this._damageTimer = 0;
-    this._core = null;
-    this._glow = null;
-    this._light = null;
     this._scene = null;
+    /** Map<slotId, { core, glow, light }>  */
+    this._beams = new Map();
   }
 
   onAttach(ctx) {
-    const visuals = this.entity.get('ShipVisualsComponent');
-    if (visuals) visuals.syncTurrets([...Object.keys(visuals._turretMeshes), 'beam']);
-
     this._scene = ctx.scene.scene;
-
-    const coreGeo = new THREE.CylinderGeometry(0.035, 0.035, 1, 6);
-    const coreMat = new THREE.MeshBasicMaterial({ color: 0xff1133, transparent: true, opacity: 0.95 });
-    this._core = new THREE.Mesh(coreGeo, coreMat);
-    this._core.visible = false;
-    this._core.frustumCulled = false;
-    this._scene.add(this._core);
-
-    const glowGeo = new THREE.CylinderGeometry(0.1, 0.1, 1, 6);
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff4466, transparent: true, opacity: 0.18 });
-    this._glow = new THREE.Mesh(glowGeo, glowMat);
-    this._glow.visible = false;
-    this._glow.frustumCulled = false;
-    this._scene.add(this._glow);
-
-    this._light = new THREE.PointLight(0xff1133, 0, 8);
-    this._scene.add(this._light);
   }
 
   onDetach() {
-    if (this._scene && this._core) this._scene.remove(this._core);
-    if (this._scene && this._glow) this._scene.remove(this._glow);
-    if (this._scene && this._light) this._scene.remove(this._light);
-    this._core?.geometry.dispose();
-    this._core?.material.dispose();
-    this._glow?.geometry.dispose();
-    this._glow?.material.dispose();
-    const visuals = this.entity.get('ShipVisualsComponent');
-    if (visuals) {
-      const remaining = Object.keys(visuals._turretMeshes).filter(k => k !== 'beam');
-      visuals.syncTurrets(remaining);
+    for (const slotId of [...this._beams.keys()]) this._destroyBeam(slotId);
+  }
+
+  _createBeam(slotId) {
+    const coreGeo = new THREE.CylinderGeometry(0.035, 0.035, 1, 6);
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xff1133, transparent: true, opacity: 0.95 });
+    const core = new THREE.Mesh(coreGeo, coreMat);
+    core.visible = false;
+    core.frustumCulled = false;
+    this._scene.add(core);
+
+    const glowGeo = new THREE.CylinderGeometry(0.1, 0.1, 1, 6);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff4466, transparent: true, opacity: 0.18 });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.visible = false;
+    glow.frustumCulled = false;
+    this._scene.add(glow);
+
+    const light = new THREE.PointLight(0xff1133, 0, 8);
+    this._scene.add(light);
+
+    const beam = { core, glow, light };
+    this._beams.set(slotId, beam);
+    return beam;
+  }
+
+  _destroyBeam(slotId) {
+    const b = this._beams.get(slotId);
+    if (!b) return;
+    if (this._scene) {
+      this._scene.remove(b.core);
+      this._scene.remove(b.glow);
+      this._scene.remove(b.light);
+    }
+    b.core.geometry.dispose();
+    b.core.material.dispose();
+    b.glow.geometry.dispose();
+    b.glow.material.dispose();
+    this._beams.delete(slotId);
+  }
+
+  /** Reconcile beam visuals to match the active slot set. */
+  _syncBeams(slotIds) {
+    const desired = new Set(slotIds);
+    for (const slotId of [...this._beams.keys()]) {
+      if (!desired.has(slotId)) this._destroyBeam(slotId);
+    }
+    for (const slotId of desired) {
+      if (!this._beams.has(slotId)) this._createBeam(slotId);
     }
   }
 
-  _setVisible(v) {
-    this._core.visible = v;
-    this._glow.visible = v;
+  _setBeamVisible(beam, v) {
+    beam.core.visible = v;
+    beam.glow.visible = v;
   }
 
-  _orientBeam(from, to) {
+  _orientBeam(beam, from, to) {
     const dir = new THREE.Vector3().subVectors(to, from);
     const dist = dir.length();
     if (dist < 0.01) return;
@@ -78,20 +96,33 @@ export class BeamLaserComponent extends Component {
     const mid = from.clone().lerp(to, 0.5);
     const refUp = Math.abs(normDir.dot(_yAxis)) > 0.98 ? _xAxis : _yAxis;
     const quat = new THREE.Quaternion().setFromUnitVectors(refUp, normDir);
-    for (const m of [this._core, this._glow]) {
+    for (const m of [beam.core, beam.glow]) {
       m.position.copy(mid);
       m.scale.set(1, dist, 1);
       m.quaternion.copy(quat);
     }
-    this._light.position.copy(mid);
+    beam.light.position.copy(mid);
+  }
+
+  _hideAll() {
+    for (const beam of this._beams.values()) {
+      this._setBeamVisible(beam, false);
+      beam.light.intensity = 0;
+    }
   }
 
   update(dt, ctx) {
     this._time += dt;
 
-    if (!isCombatPhase(ctx?.state?.round?.phase)) {
-      this._setVisible(false);
-      this._light.intensity = 0;
+    const visuals = this.entity.get('ShipVisualsComponent');
+    const slotIds = visuals ? visuals.getTurretSlotsFor('beam') : [];
+    this._syncBeams(slotIds);
+
+    const energy = this.entity.get('EnergyComponent');
+    const energyOnline = !energy || energy.systemsOnline;
+
+    if (!isCombatPhase(ctx?.state?.round?.phase) || !slotIds.length || !energyOnline) {
+      this._hideAll();
       this._isOn = false;
       this._cycleTimer = 0;
       return;
@@ -112,39 +143,45 @@ export class BeamLaserComponent extends Component {
     }
 
     if (!this._isOn) {
-      this._setVisible(false);
-      this._light.intensity = 0;
+      this._hideAll();
       return;
     }
+
+    energy?.spend(ENERGY.COST_BEAM_LASER_PER_SEC * dt);
 
     const stats = this.entity.get('PlayerStatsComponent');
     const t = this.entity.get('TransformComponent');
-    const visuals = this.entity.get('ShipVisualsComponent');
-    if (!stats || !t || !visuals) return;
+    if (!stats || !t) return;
 
     const target = resolveTarget(ctx.world, t.position, stats, ctx.state.round);
     if (!target) {
-      this._setVisible(false);
-      this._light.intensity = 0;
+      this._hideAll();
       return;
     }
-
-    const from = visuals.getTurretWorldPosition('beam');
-    const to = target.get('TransformComponent').position.clone();
-    this._orientBeam(from, to);
+    const to = target.get('TransformComponent').position;
 
     const flicker = 0.88 + Math.sin(this._time * 31) * 0.12;
-    this._core.material.opacity = flicker;
-    this._glow.material.opacity = 0.12 + Math.sin(this._time * 19) * 0.06;
-    this._light.intensity = (2.0 + Math.sin(this._time * 23) * 0.6) * flicker;
-    this._setVisible(true);
+    const glowOpacity = 0.12 + Math.sin(this._time * 19) * 0.06;
+    const lightIntensity = (2.0 + Math.sin(this._time * 23) * 0.6) * flicker;
+
+    for (const slotId of slotIds) {
+      const beam = this._beams.get(slotId);
+      if (!beam) continue;
+      const from = visuals.getTurretWorldPosition('beam', slotId);
+      this._orientBeam(beam, from, to);
+      beam.core.material.opacity = flicker;
+      beam.glow.material.opacity = glowOpacity;
+      beam.light.intensity = lightIntensity;
+      this._setBeamVisible(beam, true);
+    }
 
     this._damageTimer += dt;
     if (this._damageTimer >= BEAM_LASER.TICK_RATE) {
       this._damageTimer -= BEAM_LASER.TICK_RATE;
-      const dmg = Math.max(1, Math.ceil(stats.damage * BEAM_LASER.DAMAGE_RATIO));
+      const perBeam = Math.max(1, Math.ceil(stats.damage * BEAM_LASER.DAMAGE_RATIO));
+      const totalDmg = perBeam * slotIds.length;
       const health = target.get('HealthComponent');
-      if (health) health.takeDamage(dmg);
+      if (health) health.takeDamage(totalDmg);
     }
   }
 }

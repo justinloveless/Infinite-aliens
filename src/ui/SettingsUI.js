@@ -163,6 +163,22 @@ export class SettingsUI {
     voiceRow.appendChild(this._voiceBtn);
     el.appendChild(voiceRow);
 
+    // Subtitles toggle row
+    const subRow = document.createElement('div');
+    subRow.className = 'settings-row';
+    const subLabel = document.createElement('span');
+    subLabel.className = 'settings-label';
+    subLabel.textContent = 'SUBTITLES';
+    this._subtitlesBtn = document.createElement('button');
+    this._subtitlesBtn.className = 'neon-btn small';
+    this._subtitlesBtn.onclick = () => {
+      this._settings.setSubtitlesEnabled(!this._settings.subtitlesEnabled);
+      this._syncSubtitlesBtn();
+    };
+    subRow.appendChild(subLabel);
+    subRow.appendChild(this._subtitlesBtn);
+    el.appendChild(subRow);
+
     // Mute toggle row
     const muteRow = document.createElement('div');
     muteRow.className = 'settings-row';
@@ -241,6 +257,21 @@ export class SettingsUI {
     fpsRow.appendChild(fpsLabel);
     fpsRow.appendChild(this._fpsBtn);
     el.appendChild(fpsRow);
+
+    const tiltRow = document.createElement('div');
+    tiltRow.className = 'settings-row';
+    const tiltLabel = document.createElement('span');
+    tiltLabel.className = 'settings-label';
+    tiltLabel.textContent = 'CAMERA TILT';
+    this._cameraTiltBtn = document.createElement('button');
+    this._cameraTiltBtn.className = 'neon-btn small';
+    this._cameraTiltBtn.onclick = () => {
+      this._settings.setCameraTiltEnabled(!this._settings.cameraTiltEnabled);
+      this._syncCameraTiltBtn();
+    };
+    tiltRow.appendChild(tiltLabel);
+    tiltRow.appendChild(this._cameraTiltBtn);
+    el.appendChild(tiltRow);
 
     const qRow = document.createElement('div');
     qRow.className = 'settings-row';
@@ -339,8 +370,10 @@ export class SettingsUI {
     this._syncSliders();
     this._syncMuteBtn();
     this._syncVoiceBtn();
+    this._syncSubtitlesBtn();
     this._syncKeybinds();
     this._syncShowFpsBtn();
+    this._syncCameraTiltBtn();
     this._syncQualityBtns();
   }
 
@@ -352,12 +385,28 @@ export class SettingsUI {
     this._voiceBtn.style.color       = on ? 'var(--green)' : 'var(--pink)';
   }
 
+  _syncSubtitlesBtn() {
+    if (!this._subtitlesBtn) return;
+    const on = this._settings.subtitlesEnabled;
+    this._subtitlesBtn.textContent = on ? 'ON' : 'OFF';
+    this._subtitlesBtn.style.borderColor = on ? 'var(--green)' : 'var(--pink)';
+    this._subtitlesBtn.style.color       = on ? 'var(--green)' : 'var(--pink)';
+  }
+
   _syncShowFpsBtn() {
     if (!this._fpsBtn) return;
     const on = this._settings.showFps;
     this._fpsBtn.textContent = on ? 'ON' : 'OFF';
     this._fpsBtn.style.borderColor = on ? 'var(--green)' : '';
     this._fpsBtn.style.color       = on ? 'var(--green)' : '';
+  }
+
+  _syncCameraTiltBtn() {
+    if (!this._cameraTiltBtn) return;
+    const on = this._settings.cameraTiltEnabled;
+    this._cameraTiltBtn.textContent = on ? 'ON' : 'OFF';
+    this._cameraTiltBtn.style.borderColor = on ? 'var(--green)' : 'var(--pink)';
+    this._cameraTiltBtn.style.color       = on ? 'var(--green)' : 'var(--pink)';
   }
 
   _syncQualityBtns() {

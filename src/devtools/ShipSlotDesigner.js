@@ -12,6 +12,9 @@
 
 import * as THREE from 'three';
 import { buildShipHull, buildSlotIndicator } from '../scene/ShipMeshFactory.js';
+import { applySlotGroupTransform } from '../scene/slotGroupUtils.js';
+import { createItemMesh } from '../scene/itemMeshes/index.js';
+import { getItem } from '../hangar/HangarSystem.js';
 import { getAllShipDefs } from '../components/ships/ShipRegistry.js';
 import { applySlotPanelLayout, PANEL_ANCHORS, pixelToFreePanel } from '../ui/shipSlotPanelLayout.js';
 
@@ -494,7 +497,7 @@ export class ShipSlotDesigner {
 
     // Move the slot mesh live without rebuilding.
     const entry = this._slotMeshes.get(d.slotId);
-    if (entry) entry.group.position.fromArray(slot.position);
+    if (entry) applySlotGroupTransform(entry.group, slot);
   }
 
   _buildShipMesh() {
@@ -520,6 +523,7 @@ export class ShipSlotDesigner {
   _rebuildSlotMeshes() {
     const t = this._three;
     if (!t.slotNode) return;
+    for (const e of this._slotMeshes.values()) e.itemMesh?.dispose();
     while (t.slotNode.children.length) {
       const c = t.slotNode.children[0];
       t.slotNode.remove(c);
@@ -532,15 +536,26 @@ export class ShipSlotDesigner {
     }
     this._slotMeshes.clear();
 
-    for (const slot of this._working().slots) {
+    const data = this._working();
+    for (const slot of data.slots) {
       const group = new THREE.Group();
-      const pos = Array.isArray(slot.position) ? slot.position : [0, 0, 0];
-      group.position.set(pos[0] || 0, pos[1] || 0, pos[2] || 0);
+      applySlotGroupTransform(group, slot);
 
       const selected = slot.id === this._selectedSlotId;
       const color = selected ? 0x39ff14 : ({ weapon: 0xff4466, defense: 0x4488ff, utility: 0xffcc44 }[slot.type] || 0xaaaaaa);
       const indicator = buildSlotIndicator(slot, { color, opacity: selected ? 1.0 : 0.75 });
       group.add(indicator);
+
+      let itemMesh = null;
+      const previewId = data.defaultLoadout?.[slot.id];
+      if (typeof previewId === 'string' && previewId) {
+        const pItem = getItem(previewId);
+        if (pItem) {
+          itemMesh = createItemMesh(pItem, slot, { phase: 'hangar' });
+          itemMesh.phase = 'hangar';
+          group.add(itemMesh.root);
+        }
+      }
 
       // Invisible hitbox for reliable raycasting regardless of zoom/angle.
       const hitSize = Math.max(0.35, (slot.size ?? 0.35) * 1.3);
@@ -551,7 +566,7 @@ export class ShipSlotDesigner {
       group.add(hitbox);
 
       t.slotNode.add(group);
-      this._slotMeshes.set(slot.id, { group, indicator, hitbox });
+      this._slotMeshes.set(slot.id, { group, indicator, hitbox, itemMesh });
     }
   }
 
@@ -632,8 +647,12 @@ export class ShipSlotDesigner {
   }
 
   _startLoop() {
+    let last = performance.now();
     const tick = () => {
       this._raf = requestAnimationFrame(tick);
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
       const t = this._three;
       if (!t) return;
       t.pivot.rotation.x = this._viewPitch;
@@ -641,6 +660,7 @@ export class ShipSlotDesigner {
       const curZ = t.camera.position.z;
       t.camera.position.z = curZ + (this._zoom - curZ) * 0.15;
       t.camera.lookAt(0, 0, 0);
+      for (const e of this._slotMeshes.values()) e.itemMesh?.update(dt, { phase: 'hangar' });
       t.renderer.render(t.scene, t.camera);
     };
     tick();
@@ -704,6 +724,7 @@ export class ShipSlotDesigner {
       shape: 'box',
       size: 0.35,
       position: [0, 0, 0],
+      rotation: [0, 0, 0],
       unlockCost: { credits: 100 },
       label: 'NEW',
       description: '',
@@ -823,7 +844,25 @@ export class ShipSlotDesigner {
         slot.position = arr;
         this._markDirty();
         const entry = this._slotMeshes.get(slot.id);
-        if (entry) entry.group.position.fromArray(slot.position);
+        if (entry) applySlotGroupTransform(entry.group, slot);
+      }, { step: 0.05 });
+    });
+
+    const rotTitle = document.createElement('div');
+    rotTitle.textContent = 'ROTATION (radians, XYZ)';
+    rotTitle.style.cssText = CSS.secTitle;
+    el.appendChild(rotTitle);
+
+    const rot = Array.isArray(slot.rotation) && slot.rotation.length >= 3
+      ? slot.rotation : [0, 0, 0];
+    ['X', 'Y', 'Z'].forEach((axis, i) => {
+      this._insRow(el, `R${axis}`, 'number', rot[i] ?? 0, (v) => {
+        const arr = [...(Array.isArray(slot.rotation) && slot.rotation.length >= 3 ? slot.rotation : [0, 0, 0])];
+        arr[i] = parseFloat(v);
+        slot.rotation = arr;
+        this._markDirty();
+        const entry = this._slotMeshes.get(slot.id);
+        if (entry) applySlotGroupTransform(entry.group, slot);
       }, { step: 0.05 });
     });
 

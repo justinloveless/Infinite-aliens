@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
 import { isCombatPhase } from '../../core/phaseUtil.js';
+import { ENERGY } from '../../constants.js';
 import { resolveTarget } from './CombatTargeting.js';
 import { createProjectile } from '../../prefabs/createProjectile.js';
 
@@ -28,7 +29,11 @@ export class AutoFireWeaponComponent extends Component {
 
     const target = resolveTarget(ctx.world, t.position, stats, ctx.state.round);
     if (!target) return;
+
+    const energy = this.entity.get('EnergyComponent');
+    if (energy && !energy.systemsOnline) { this._timer = 0; return; }
     this._timer = 0;
+    energy?.spend(ENERGY.COST_AUTO_FIRE);
 
     const { projectileVisuals } = stats;
     const type = stats.projectileType;
@@ -37,10 +42,10 @@ export class AutoFireWeaponComponent extends Component {
     const count = stats.projectileCount;
 
     const tgtT = target.get('TransformComponent');
-    const baseDir = new THREE.Vector3().subVectors(tgtT.position, t.position).normalize();
     const spawnBase = visuals
       ? visuals.getPrimaryWeaponMuzzleWorldPosition()
       : t.position.clone().add(new THREE.Vector3(0, 0, -0.5));
+    const baseDir = new THREE.Vector3().subVectors(tgtT.position, spawnBase).normalize();
 
     const killsThisRun = ctx.state.round.killsThisRun || 0;
     const resonance = ctx.playerEntity?.get('ResonanceFieldComponent')?.level ?? 0;

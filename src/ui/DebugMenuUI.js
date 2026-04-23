@@ -2,9 +2,9 @@ import { CURRENCIES, CAMPAIGN } from '../constants.js';
 import { reticleDebug } from '../components/enemy/EnemyVisualsComponent.js';
 import { DEBUG_ENEMY_SPAWN_TYPES } from '../components/enemy/EnemyDefs.js';
 import {
-  getAllItems, listActiveSlots, installItem, getResearchCatalog,
-  getResearchLevel, hasItemInstalled, getRequiredItem,
+  getAllItems, listActiveSlots, installItem, hasItemInstalled, getInventoryInstances,
 } from '../hangar/HangarSystem.js';
+import { createItemInstance } from '../core/GameState.js';
 import { eventBus, EVENTS } from '../core/EventBus.js';
 
 const CURRENCY_KEYS = Object.keys(CURRENCIES);
@@ -409,6 +409,23 @@ export class DebugMenuUI {
       row.appendChild(btn);
     }
     sec.appendChild(row);
+
+    const gateRow = document.createElement('div');
+    gateRow.className = 'debug-menu-actions';
+    gateRow.style.borderTop = 'none';
+    gateRow.style.paddingTop = '8px';
+    const skipGateBtn = document.createElement('button');
+    skipGateBtn.type = 'button';
+    skipGateBtn.className = 'neon-btn small';
+    skipGateBtn.textContent = 'SKIP TO FLY-THROUGH GATE';
+    skipGateBtn.title =
+      'During an active boss arena (after warp-in ends): close alien gates, finish your gate build, show leave prompt. You still fly through the gate to test warp-out and next sector.';
+    skipGateBtn.addEventListener('click', () => {
+      this._game._debugSkipArenaToFlyThroughReady();
+    });
+    gateRow.appendChild(skipGateBtn);
+    sec.appendChild(gateRow);
+
     wrap.appendChild(sec);
   }
 
@@ -763,11 +780,12 @@ export class DebugMenuUI {
       btn.title = `Grant ${item.id} and auto-install into first empty ${item.slotType} slot.`;
       btn.addEventListener('click', () => {
         const s = this._game.state;
-        if (!s.ship) return;
-        if (!s.ship.ownedItems.includes(item.id)) s.ship.ownedItems.push(item.id);
+        if (!s.ship || !s.inventory) return;
+        const inst = createItemInstance(item.id);
+        s.inventory.ownedItems.push(inst);
         for (const slot of listActiveSlots(s)) {
-          if (slot.type === item.slotType && !s.ship.slots[slot.id]?.installedItemId) {
-            installItem(s, slot.id, item.id);
+          if (slot.type === item.slotType && !s.ship.slots[slot.id]?.installedInstanceId) {
+            installItem(s, slot.id, inst.instanceId);
             break;
           }
         }
@@ -776,58 +794,6 @@ export class DebugMenuUI {
       itemsRow.appendChild(btn);
     }
     sec.appendChild(itemsRow);
-
-    // Research: +1 to every research node whose item is installed (or has no item gate)
-    const researchRow = document.createElement('div');
-    researchRow.className = 'debug-menu-actions';
-    researchRow.style.borderTop = 'none';
-    researchRow.style.paddingTop = '4px';
-
-    const plusAll = document.createElement('button');
-    plusAll.type = 'button';
-    plusAll.className = 'neon-btn small';
-    plusAll.textContent = '+1 ALL RESEARCH';
-    plusAll.title = 'Increments every eligible research node by one level.';
-    plusAll.addEventListener('click', () => {
-      const s = this._game.state;
-      if (!s.ship) return;
-      s.ship.research ||= {};
-      let bumped = 0;
-      for (const node of getResearchCatalog()) {
-        const cur = getResearchLevel(s, node.id);
-        const max = node.maxLevel ?? 1;
-        if (cur >= max) continue;
-        s.ship.research[node.id] = cur + 1;
-        bumped++;
-      }
-      eventBus.emit(EVENTS.UPGRADE_PURCHASED, { source: 'debug-research', count: bumped });
-    });
-    researchRow.appendChild(plusAll);
-
-    const plusItemGated = document.createElement('button');
-    plusItemGated.type = 'button';
-    plusItemGated.className = 'neon-btn small';
-    plusItemGated.textContent = '+1 INSTALLED-ONLY';
-    plusItemGated.title = 'Like "+1 ALL RESEARCH" but skips nodes whose gating item is not currently installed.';
-    plusItemGated.addEventListener('click', () => {
-      const s = this._game.state;
-      if (!s.ship) return;
-      s.ship.research ||= {};
-      let bumped = 0;
-      for (const node of getResearchCatalog()) {
-        const cur = getResearchLevel(s, node.id);
-        const max = node.maxLevel ?? 1;
-        if (cur >= max) continue;
-        const req = getRequiredItem(node);
-        if (req && !hasItemInstalled(s, req)) continue;
-        s.ship.research[node.id] = cur + 1;
-        bumped++;
-      }
-      eventBus.emit(EVENTS.UPGRADE_PURCHASED, { source: 'debug-research', count: bumped });
-    });
-    researchRow.appendChild(plusItemGated);
-
-    sec.appendChild(researchRow);
 
     wrap.appendChild(sec);
   }
