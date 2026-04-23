@@ -3,9 +3,9 @@ import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
 
 const SIZE_CONFIG = {
-  large:  { radius: 1.5, speedMin: 1.5, speedMax: 3.0, fragmentType: 'medium', fragmentCount: 3, damage: 18, hp: 1 },
-  medium: { radius: 0.8, speedMin: 2.0, speedMax: 4.0, fragmentType: 'small',  fragmentCount: 2, damage: 10, hp: 1 },
-  small:  { radius: 0.4, speedMin: 2.5, speedMax: 5.0, fragmentType: null,     fragmentCount: 0, damage: 5,  hp: 1 },
+  large:  { radius: 1.5, speedMin: 1.5, speedMax: 3.0, fragmentType: 'medium', fragmentCount: 3, damage: 18, hp: 30 },
+  medium: { radius: 0.8, speedMin: 2.0, speedMax: 4.0, fragmentType: 'small',  fragmentCount: 2, damage: 10, hp: 15 },
+  small:  { radius: 0.4, speedMin: 2.5, speedMax: 5.0, fragmentType: null,     fragmentCount: 0, damage: 5,  hp: 6  },
 };
 
 const TRAIL_VERTEX_CAP = 48;
@@ -100,9 +100,20 @@ export class AsteroidComponent extends Component {
     const t = this.entity.get('TransformComponent');
     if (t) t.position.copy(this._group.position);
 
-    this.listen(EVENTS.ENEMY_DAMAGED, () => {}); // placeholder so events load
-    this.entity.get('ColliderComponent').onHit = (other, entity) => {
-      if (other.hasTag('projectile_player')) this._break(ctx);
+    this.entity.get('ColliderComponent').onHit = (other) => {
+      if (other.hasTag('player')) {
+        eventBus.emit(EVENTS.PLAYER_DAMAGED, { amount: this.damage, source: 'asteroid' });
+        const h = this.entity.get('HealthComponent');
+        if (h) h.takeDamage(this.damage, { ignoreArmor: true });
+        if (h?.dead) this._break(ctx);
+      } else if (other.hasTag('enemy')) {
+        other.get('HealthComponent')?.takeDamage(this.damage, { source: 'asteroid' });
+        const h = this.entity.get('HealthComponent');
+        if (h) h.takeDamage(this.damage, { ignoreArmor: true });
+        if (h?.dead) this._break(ctx);
+      }
+      // playerProjectile: ProjectileDamageComponent applies damage via HealthComponent;
+      // break is detected in update() once health.dead becomes true.
     };
   }
 
@@ -145,6 +156,9 @@ export class AsteroidComponent extends Component {
   }
 
   update(dt, ctx) {
+    const health = this.entity.get('HealthComponent');
+    if (health?.dead) { this._break(ctx); return; }
+
     const speedScale = ctx?.state?.round?.speedScale ?? 1;
     const s = Math.max(0, speedScale);
     this._group.position.addScaledVector(this.velocity, dt * s);

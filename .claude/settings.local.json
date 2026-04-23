@@ -14,7 +14,8 @@
       "Bash(node --check vite.config.js)",
       "Bash(node -e \"const d=require\\('./src/data/upgrades.json'\\); const starters=d.nodes.filter\\(n=>!n.prereqs||!n.prereqs.length\\); console.log\\('Ring-0 nodes:', starters.map\\(n=>n.id+' ['+n.category+']'\\).join\\(', '\\)\\)\")",
       "Bash(grep -E \"\\\\.\\(js|json\\)$\")",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(xargs grep *)"
     ]
   }
 }
