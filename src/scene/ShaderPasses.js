@@ -32,7 +32,7 @@ export const ScanlineShader = {
   uniforms: {
     tDiffuse: { value: null },
     time: { value: 0 },
-    intensity: { value: 0.043 },
+    intensity: { value: 0.018 },
     lineFrequency: { value: 800.0 },
   },
   vertexShader: `
@@ -112,7 +112,7 @@ export const FilmGrainShader = {
   uniforms: {
     tDiffuse: { value: null },
     time: { value: 0 },
-    intensity: { value: 0.04 },
+    intensity: { value: 0.018 },
   },
   vertexShader: `
     varying vec2 vUv;

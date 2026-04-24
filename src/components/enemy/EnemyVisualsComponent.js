@@ -30,8 +30,8 @@ export class EnemyVisualsComponent extends Component {
     this.group.scale.setScalar(def.scale || 1);
     if (ghostMode && this._bodyMesh?.material) {
       this._bodyMesh.material.transparent = true;
-      this._bodyMesh.material.opacity = 0.05;
-      if (this._bodyMesh.material.emissive) this._bodyMesh.material.emissiveIntensity = 0.05;
+      this._bodyMesh.material.opacity = 0.22;
+      if (this._bodyMesh.material.emissive) this._bodyMesh.material.emissiveIntensity = 0.30;
     }
   }
 
@@ -39,7 +39,7 @@ export class EnemyVisualsComponent extends Component {
     const def = this.def;
     const mat = new THREE.MeshStandardMaterial({
       color: def.color,
-      emissive: new THREE.Color(def.color).multiplyScalar(0.25),
+      emissive: new THREE.Color(def.color).multiplyScalar(0.5),
       metalness: 0.5,
       roughness: 0.4,
     });
@@ -141,7 +141,7 @@ export class EnemyVisualsComponent extends Component {
     if (this._flashTimer > 0) {
       this._flashTimer -= dt;
       if (this._flashTimer <= 0) {
-        const base = new THREE.Color(this._bodyMesh.material.color).multiplyScalar(0.25);
+        const base = new THREE.Color(this._bodyMesh.material.color).multiplyScalar(0.5);
         this._bodyMesh.material.emissive.copy(base);
       }
     }

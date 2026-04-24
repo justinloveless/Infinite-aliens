@@ -10,8 +10,8 @@
   --purple: #9b30ff;
   --green: #39ff14;
   --gold: #ffd700;
-  --panel: rgba(10, 0, 32, 0.88);
-  --border: rgba(0, 245, 255, 0.4);
+  --panel: rgba(18, 0, 55, 0.92);
+  --border: rgba(0, 245, 255, 0.6);
   --glow-cyan: 0 0 8px #00f5ff, 0 0 20px rgba(0, 245, 255, 0.3);
   --glow-pink: 0 0 8px #ff2d78, 0 0 20px rgba(255, 45, 120, 0.3);
   --glow-purple: 0 0 8px #9b30ff, 0 0 20px rgba(155, 48, 255, 0.3);
