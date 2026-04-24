@@ -16,6 +16,7 @@ export class EmpAbilityComponent extends AbilityComponent {
     const enemies = ctx.world.query('enemy');
     for (const e of enemies) {
       if (!e.active) continue;
+      if (e.enemyType === 'emp_reflector') continue;
       e.get('StatusEffectsComponent')?.apply('slow', { mult: 0.02, duration: this.duration });
       if (this.damage > 0) e.get('HealthComponent')?.takeDamage(this.damage);
     }

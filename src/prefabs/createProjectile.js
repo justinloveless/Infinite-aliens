@@ -27,6 +27,8 @@ const TYPE_SPEEDS = {
  *   heatRatio?: number,
  *   onKillHealAmount?: number,
  *   onKill?: (enemy, ctx) => void,
+ *   damageType?: string,
+ *   stripShieldsOnPlayerHit?: boolean,
  * }} opts
  */
 export function createProjectile(opts) {
@@ -36,12 +38,15 @@ export function createProjectile(opts) {
     target = null, visualOverride = null,
     pierces = 0, heatRatio = 0,
     onKillHealAmount = null, onKill = null,
+    damageType = type,
+    stripShieldsOnPlayerHit = false,
   } = opts;
 
   const layer = isPlayer ? 'playerProjectile' : 'enemyProjectile';
   const mask = isPlayer ? ['enemy', 'asteroid'] : ['player'];
 
   const entity = new Entity([layer]);
+  entity.projectileKind = type;
   entity.add(new TransformComponent({ position }));
   entity.add(new ProjectileVisualComponent({ type, heatRatio, visualOverride }));
   entity.add(new ProjectileMotionComponent({
@@ -52,6 +57,8 @@ export function createProjectile(opts) {
   entity.add(new ProjectileDamageComponent({
     damage, isCrit, isPlayerProjectile: isPlayer, pierces,
     onKillHealAmount, onKill,
+    damageType,
+    stripShieldsOnPlayerHit,
   }));
   // Use arena bounds (with a small margin) so projectiles fired during the
   // boss arena don't despawn the frame after leaving the combat corridor.

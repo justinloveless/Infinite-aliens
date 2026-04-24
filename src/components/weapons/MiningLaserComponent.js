@@ -19,7 +19,8 @@ export class MiningLaserComponent extends Component {
     const t = this.entity.get('TransformComponent');
     if (!t) return;
     const asteroids = ctx.world.query('asteroid') || [];
-    if (!asteroids.length) return;
+    const gateCrystals = ctx.world.query('gate_crystal') || [];
+    if (!asteroids.length && !gateCrystals.length) return;
     const r2 = this.range * this.range;
     const inRange = [];
     for (const a of asteroids) {
@@ -27,6 +28,12 @@ export class MiningLaserComponent extends Component {
       const at = a.get('TransformComponent'); if (!at) continue;
       const d2 = at.position.distanceToSquared(t.position);
       if (d2 <= r2) inRange.push({ entity: a, d2 });
+    }
+    for (const c of gateCrystals) {
+      if (!c.active) continue;
+      const ct = c.get('TransformComponent'); if (!ct) continue;
+      const d2 = ct.position.distanceToSquared(t.position);
+      if (d2 <= r2) inRange.push({ entity: c, d2 });
     }
     inRange.sort((a, b) => a.d2 - b.d2);
     const dmg = this.dps * dt;

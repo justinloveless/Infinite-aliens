@@ -39,11 +39,44 @@ export class PlayerStatsComponent extends Component {
     this.activeBoosts = init.activeBoosts || [];
     /** Filled by UpgradeApplier: fire key → slot id (`primary`, `laser`, …). */
     this.weaponSlotByFireType = init.weaponSlotByFireType || { primary: 'weapon_mid', manualSlots: [] };
+
+    /** Per-frame aura fields (reset at start of World.update). */
+    this.regenJammedMult = 1;
+    this.projectileDampenMult = 1;
+    this.jammerSlowMult = 1;
+    this.warpDisruptorNearby = false;
+    /** Corrosion stacks: { remain: seconds } each worth 5 armor bypass vs hull. */
+    this.corrosionStacks = [];
+    /** Runtime weapon lockout (seconds), e.g. EMP reflect. */
+    this.weaponsDisabledTimer = 0;
+    /** Seconds of bio-lab passive inversion (Viral Agent). */
+    this.bioLabInvertTimer = 0;
+    /** Eclipser shadow zone suppresses solar cell energy regen. */
+    this.solarCellsSuppressed = false;
+    /** Multiplier on energy regen while inside Eclipser (1 = normal, 0 = none). */
+    this.eclipseRegenMult = 1;
   }
 
-  /** Effective damage factoring boosts + resonance stacks (kills this run). */
-  calcDamage({ killsThisRun = 0, resonanceFieldLevel = 0 } = {}) {
-    let dmg = this.damage;
+  /**
+   * Effective damage factoring boosts + resonance stacks (kills this run) +
+   * per-weapon mults. Weapon mults apply to pre-crit damage; crit chance and
+   * crit mult are further scaled per weapon.
+   * @param {{
+   *   killsThisRun?: number,
+   *   resonanceFieldLevel?: number,
+   *   damageMult?: number,
+   *   critChanceMult?: number,
+   *   critMultiplierMult?: number,
+   * }} [opts]
+   */
+  calcDamage({
+    killsThisRun = 0,
+    resonanceFieldLevel = 0,
+    damageMult = 1,
+    critChanceMult = 1,
+    critMultiplierMult = 1,
+  } = {}) {
+    let dmg = this.damage * damageMult;
     if (resonanceFieldLevel > 0) {
       const stacks = Math.floor(killsThisRun / 10);
       dmg *= 1 + Math.min(0.5, stacks * 0.05 * resonanceFieldLevel);
@@ -51,8 +84,10 @@ export class PlayerStatsComponent extends Component {
     for (const boost of this.activeBoosts) {
       if (boost.stat === 'damage') dmg *= boost.multiplier;
     }
-    const isCrit = Math.random() < this.critChance;
-    return { damage: Math.ceil(dmg * (isCrit ? this.critMultiplier : 1)), isCrit };
+    const critP = Math.min(0.95, this.critChance * critChanceMult);
+    const isCrit = Math.random() < critP;
+    const mult = isCrit ? (this.critMultiplier * critMultiplierMult) : 1;
+    return { damage: Math.ceil(dmg * mult), isCrit };
   }
 
   /** Effective fire-rate (seconds between shots) factoring attack-speed boosts. */
@@ -70,5 +105,16 @@ export class PlayerStatsComponent extends Component {
       this.activeBoosts[i].remaining -= dt;
       if (this.activeBoosts[i].remaining <= 0) this.activeBoosts.splice(i, 1);
     }
+    if (this.weaponsDisabledTimer > 0) this.weaponsDisabledTimer -= dt;
+    if (this.bioLabInvertTimer > 0) this.bioLabInvertTimer -= dt;
+    for (let i = this.corrosionStacks.length - 1; i >= 0; i--) {
+      this.corrosionStacks[i].remain -= dt;
+      if (this.corrosionStacks[i].remain <= 0) this.corrosionStacks.splice(i, 1);
+    }
+  }
+
+  /** Effective armor ignored on hull (corrosion from Corroder). Capped at 50. */
+  get corrosionArmorBypass() {
+    return Math.min(50, this.corrosionStacks.length * 5);
   }
 }

@@ -5,6 +5,7 @@ import { isCombatPhase } from '../../core/phaseUtil.js';
 import { ENERGY } from '../../constants.js';
 import { resolveTarget } from './CombatTargeting.js';
 import { createProjectile } from '../../prefabs/createProjectile.js';
+import { getWeaponCombatMods } from '../../data/weaponCombatMods.js';
 
 /**
  * Base class for secondary turret weapons (laser / missile / plasma).
@@ -34,6 +35,7 @@ export class TurretWeaponComponent extends Component {
     const t = this.entity.get('TransformComponent');
     const visuals = this.entity.get('ShipVisualsComponent');
     if (!stats || !t || !visuals) return;
+    if ((stats.weaponsDisabledTimer ?? 0) > 0) { this._timer = 0; return; }
 
     const slotIds = visuals.getTurretSlotsFor(this.projectileType);
     if (!slotIds.length) { this._timer = 0; return; }
@@ -55,13 +57,16 @@ export class TurretWeaponComponent extends Component {
     const resonance = this.entity.get('ResonanceFieldComponent')?.level ?? 0;
     const visualOverride = stats.projectileVisuals.get(this.projectileType)
       || stats.projectileVisuals.get('all') || null;
+    const w = getWeaponCombatMods(this.projectileType);
 
     // Fire one projectile from every slot hosting this weapon type. Installing
     // two of the same turret therefore doubles effective DPS (and looks it).
     for (const slotId of slotIds) {
       const spawnPos = visuals.getTurretMuzzleForFire(this.projectileType, slotId);
       const dir = new THREE.Vector3().subVectors(tgtT.position, spawnPos).normalize();
-      const { damage, isCrit } = stats.calcDamage({ killsThisRun, resonanceFieldLevel: resonance });
+      const { damage, isCrit } = stats.calcDamage({
+        killsThisRun, resonanceFieldLevel: resonance, ...w,
+      });
 
       ctx.world.spawn(createProjectile({
         position: spawnPos,

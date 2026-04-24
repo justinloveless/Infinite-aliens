@@ -1,5 +1,7 @@
+import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
+import { createProjectile } from '../../prefabs/createProjectile.js';
 
 /**
  * Wires ColliderComponent.onHit → damage path → destroy/pierce/etc.
@@ -13,6 +15,8 @@ export class ProjectileDamageComponent extends Component {
     pierces = 0,
     onKillHealAmount = null,
     onKill = null,
+    damageType = 'kinetic',
+    stripShieldsOnPlayerHit = false,
   } = {}) {
     super();
     this.damage = damage;
@@ -22,6 +26,9 @@ export class ProjectileDamageComponent extends Component {
     this._hitEntities = new Set();
     this._onKillHeal = onKillHealAmount;
     this._onKill = onKill;
+    /** @type {'kinetic'|'laser'|'plasma'|'missile'} */
+    this.damageType = damageType;
+    this.stripShieldsOnPlayerHit = stripShieldsOnPlayerHit;
   }
 
   onAttach() {
@@ -35,7 +42,37 @@ export class ProjectileDamageComponent extends Component {
       if (!health || health.dead) return;
 
       if (this.isPlayerProjectile) {
-        const dealt = health.takeDamage(this.damage, { isCrit: this.isCrit, source: this.entity });
+        let dmg = this.damage;
+        const ps = ctx.playerEntity?.get('PlayerStatsComponent');
+        if (ps) dmg *= (ps.projectileDampenMult ?? 1);
+
+        if (other.enemyType === 'mirror_drone' && this.damageType === 'laser') {
+          const through = Math.max(1, Math.ceil(dmg * 0.2));
+          const bounce = Math.max(1, dmg - through);
+          health.takeDamage(through, { isCrit: this.isCrit, source: this.entity, damageType: this.damageType });
+          const pt = ctx.playerEntity?.get('TransformComponent');
+          const ot = other.get('TransformComponent');
+          if (pt && ot && bounce > 0) {
+            const dir = new THREE.Vector3().subVectors(pt.position, ot.position).setY(0).normalize();
+            ctx.world.spawn(createProjectile({
+              position: ot.position.clone().add(new THREE.Vector3(0, 0.2, 0)),
+              direction: dir,
+              type: 'laser',
+              damage: bounce,
+              isCrit: false,
+              isPlayer: false,
+              damageType: 'laser',
+            }));
+          }
+          this._hitEntities.add(other.id);
+          if (this.piercesLeft > 0) this.piercesLeft--;
+          else this.entity.destroy();
+          return;
+        }
+
+        const dealt = health.takeDamage(dmg, {
+          isCrit: this.isCrit, source: this.entity, damageType: this.damageType,
+        });
         if (ctx?.audio) {
           if (health.dead) ctx.audio.play('explosion');
           else ctx.audio.play(this.isCrit ? 'crit' : 'hit');
@@ -54,6 +91,10 @@ export class ProjectileDamageComponent extends Component {
       } else {
         // Enemy projectile hitting player
         if (!other.hasTag('player')) return;
+        if (this.stripShieldsOnPlayerHit) {
+          const sh = other.get('ShieldComponent');
+          if (sh && sh.maxHp > 0) sh.hp = 0;
+        }
         const shield = other.get('ShieldComponent');
         const remaining = shield ? shield.absorb(this.damage) : this.damage;
         if (remaining > 0) health.takeDamage(remaining, { source: 'enemyProjectile' });

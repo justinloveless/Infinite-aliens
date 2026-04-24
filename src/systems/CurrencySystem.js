@@ -81,12 +81,21 @@ export class CurrencySystem {
   }
 
   /** Passive generation driven from PlayerStatsComponent (ECS). */
-  updatePassiveFromStats(delta, stats) {
+  updatePassiveFromStats(delta, stats, powerSiphonCount = 0) {
     if (!stats) return;
-    if (stats.stellarDustRate > 0) this.add('stellarDust', stats.stellarDustRate * delta);
+    const siphonN = powerSiphonCount ?? 0;
+    const stellarMult = siphonN > 0 ? Math.pow(0.72, siphonN) : 1;
+    if (stats.stellarDustRate > 0) this.add('stellarDust', stats.stellarDustRate * delta * stellarMult);
     if (stats.passiveRates) {
+      const bioInvert = (stats.bioLabInvertTimer ?? 0) > 0;
       for (const [type, rate] of Object.entries(stats.passiveRates)) {
-        if (rate > 0) this.add(type, rate * delta);
+        if (rate <= 0) continue;
+        if (type === 'bioEssence' && bioInvert) {
+          const dmg = Math.max(1, Math.ceil(rate * delta * 0.4));
+          eventBus.emit(EVENTS.PLAYER_DAMAGED, { amount: dmg, source: 'viral' });
+        } else {
+          this.add(type, rate * delta);
+        }
       }
     }
   }

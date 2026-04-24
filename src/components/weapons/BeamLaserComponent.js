@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { BEAM_LASER, ENERGY } from '../../constants.js';
+import { getWeaponCombatMods } from '../../data/weaponCombatMods.js';
 import { isCombatPhase } from '../../core/phaseUtil.js';
 import { resolveTarget } from './CombatTargeting.js';
 
@@ -128,6 +129,12 @@ export class BeamLaserComponent extends Component {
       return;
     }
 
+    const stats = this.entity.get('PlayerStatsComponent');
+    if ((stats?.weaponsDisabledTimer ?? 0) > 0) {
+      this._hideAll();
+      return;
+    }
+
     this._cycleTimer += dt;
     if (this._isOn) {
       if (this._cycleTimer >= BEAM_LASER.ON_DURATION) {
@@ -149,7 +156,6 @@ export class BeamLaserComponent extends Component {
 
     energy?.spend(ENERGY.COST_BEAM_LASER_PER_SEC * dt);
 
-    const stats = this.entity.get('PlayerStatsComponent');
     const t = this.entity.get('TransformComponent');
     if (!stats || !t) return;
 
@@ -178,10 +184,26 @@ export class BeamLaserComponent extends Component {
     this._damageTimer += dt;
     if (this._damageTimer >= BEAM_LASER.TICK_RATE) {
       this._damageTimer -= BEAM_LASER.TICK_RATE;
-      const perBeam = Math.max(1, Math.ceil(stats.damage * BEAM_LASER.DAMAGE_RATIO));
-      const totalDmg = perBeam * slotIds.length;
+      const w = getWeaponCombatMods('beam');
+      const killsThisRun = ctx.state.round.killsThisRun || 0;
+      const resonance = this.entity.get('ResonanceFieldComponent')?.level ?? 0;
+      const { damage: tickDmg, isCrit } = stats.calcDamage({
+        killsThisRun,
+        resonanceFieldLevel: resonance,
+        damageMult: w.damageMult * BEAM_LASER.DAMAGE_RATIO,
+        critChanceMult: w.critChanceMult,
+        critMultiplierMult: w.critMultiplierMult,
+      });
+      const totalDmg = Math.max(1, tickDmg) * slotIds.length;
       const health = target.get('HealthComponent');
-      if (health) health.takeDamage(totalDmg);
+      if (health) {
+        if (target.enemyType === 'prism_shard') {
+          const through = Math.max(1, Math.ceil(totalDmg * 0.3));
+          health.takeDamage(through, { damageType: 'laser', isCrit });
+        } else {
+          health.takeDamage(totalDmg, { damageType: 'laser', isCrit });
+        }
+      }
     }
   }
 }

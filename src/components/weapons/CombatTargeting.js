@@ -19,6 +19,7 @@ export function resolveTarget(world, playerPos, stats, round) {
   if (manualId) {
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
+      if (e.hasTag?.('scanner_hidden')) continue;
       if (e.id === manualId) return e;
     }
     if (round) round.manualFocusEnemyId = null;
@@ -28,6 +29,7 @@ export function resolveTarget(world, playerPos, stats, round) {
   let minD2 = Infinity;
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
+    if (e.hasTag?.('scanner_hidden')) continue;
     const t = e.get('TransformComponent');
     if (!t) continue;
     const dx = t.position.x - playerPos.x;

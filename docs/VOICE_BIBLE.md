@@ -380,6 +380,74 @@ These are the primary vehicle for the horror undertone.
 
 ---
 
+### 3.11 Campaign scan & return journey
+
+#### `boss_scan_ready` — fires on BOSS_SCAN_READY (galaxies 0–8)
+
+PIP treats the enemy's scan as a complimentary corporate service. Plays immediately as the ScanUI overlay opens.
+Priority: CRITICAL. Cooldown: 0.
+Delivery: `[warm, smiling]`
+
+- `pip_boss_scan_ready_01.mp3` — "Good news, pilot: the local opposition has kindly scanned your loadout. This is a complimentary service. There is no opt-out."
+- `pip_boss_scan_ready_02.mp3` — "Your equipment has been catalogued by the enemy. Think of it as a wellness check — initiated by the entity trying to destroy you."
+- `pip_boss_scan_ready_03.mp3` — "Alien scan in progress. ApotheCorp values your data. So, it turns out, do they."
+
+#### `scan_complete` — fires when player clicks Continue on ScanUI
+
+PIP acknowledges the new counter enemy type as a scheduling update.
+Priority: HIGH. Cooldown: 0.
+Delivery: `[warm, smiling]`
+
+- `pip_scan_complete_01.mp3` — "New adaptive threat variant has been added to your itinerary. Complimentary, of course. As always."
+- `pip_scan_complete_02.mp3` — "Personalized opposition confirmed. We appreciate their attention to your build. Truly. Fly safe."
+- `pip_scan_complete_03.mp3` — "Your welcome package has been updated. The update is hostile. Please continue forward."
+
+#### `ship_replicated` — fires on BOSS_GALAXY9_COMPLETE
+
+The peak horror moment: the aliens have fully copied the ship. Galaxy-9 arc tone.
+Priority: CRITICAL. Cooldown: 0.
+Delivery: `[doting, confidential]`
+
+- `pip_ship_replicated_01.mp3` — "Pilot — they have made a copy of your ship. We consider this the highest form of flattery. We are not worried. [splice] — we are not worried."
+- `pip_ship_replicated_02.mp3` — "Full replication confirmed. Everything you are is now also out there. Please chase it home. The contract does specify chase."
+- `pip_ship_replicated_03.mp3` — "Pilot, we are so proud of how far you've come. That out there is not you. [splice] — probably not you."
+
+#### `return_journey_start` — fires on RETURN_JOURNEY_STARTED
+
+PIP frames the return chase as a voluntary escort mission.
+Priority: CRITICAL. Cooldown: 0.
+Delivery: `[brisk, PSA]`
+
+- `pip_return_journey_start_01.mp3` — "Return sequence initiated. Your duplicates are heading home. Please escort them. By escort, we mean destroy them. Please destroy them."
+- `pip_return_journey_start_02.mp3` — "Engaging return flight. Destination: Earth. Threat level: yourself, but wrong. Recommended response: aim."
+
+#### `return_journey_complete` — fires on RETURN_JOURNEY_COMPLETE
+
+Campaign closure. All clones eliminated.
+Priority: CRITICAL. Cooldown: 0.
+Delivery: `[doting, confidential]`
+
+- `pip_return_journey_complete_01.mp3` — "Return sequence complete. All duplicates neutralized. Earth is safe. Your contract has been — satisfied. You may rest."
+- `pip_return_journey_complete_02.mp3` — "Mission concluded, pilot. That was the last of them. You are the only you now. Statistically."
+
+#### `run_start_return` — generic return-journey sector start
+
+Plays instead of `run_start` when `returnJourney.active` is true. Falls back from `run_start_return_galaxy_N`.
+Priority: HIGH. Cooldown: 0.
+Delivery: `[brisk, PSA]`
+
+- `pip_run_start_return_01.mp3` — "Return sector initiated. The opposition today is a tribute act. A very accurate tribute act."
+- `pip_run_start_return_02.mp3` — "Re-entering familiar territory. With less familiar occupants."
+- `pip_run_start_return_03.mp3` — "They were here. Let's make sure they don't get any further."
+
+#### `run_start_return_galaxy_0` — final return leg (Milky Way)
+
+Delivery: `[doting, confidential]`
+
+- `pip_run_start_return_galaxy_0_01.mp3` — "Welcome home, pilot. The Milky Way. Last stop. Please collect your belongings and eliminate any remaining copies of yourself."
+
+---
+
 ## 4. Recording checklist
 
 - Record the 60-second clone sample and generate the PIP voice in ElevenLabs

@@ -14,15 +14,17 @@ import {
 } from '../hangar/HangarSystem.js';
 import { getActiveShipDef, getShipBasePlayerValues } from '../data/ships.js';
 import { PLAYER } from '../constants.js';
+import { getHotkeyDigitForAbilityItem } from './abilityHotkeys.js';
 
 export class HangarUI {
-  constructor({ state, currency, upgradeApplier, onLaunch, onOpenStore, onClose }) {
+  constructor({ state, currency, upgradeApplier, onLaunch, onOpenStore, onClose, onGalaxyMap }) {
     this.state = state;
     this.currency = currency;
     this.upgradeApplier = upgradeApplier;
     this.onLaunch = onLaunch;
     this.onOpenStore = onOpenStore;
     this.onClose = onClose;
+    this.onGalaxyMap = onGalaxyMap;
 
     this._isOpen = false;
     this._raf = 0;
@@ -310,6 +312,7 @@ export class HangarUI {
     document.getElementById('hangar-close-btn')?.addEventListener('click', () => this.close());
     document.getElementById('hangar-store-btn')?.addEventListener('click', () => this.onOpenStore?.());
     document.getElementById('hangar-launch-btn')?.addEventListener('click', () => this.onLaunch?.());
+    document.getElementById('hangar-map-btn')?.addEventListener('click', () => this.onGalaxyMap?.());
   }
 
   // ─── Rebuild logic ─────────────────────────────────────────────────────
@@ -438,9 +441,12 @@ export class HangarUI {
     const track = document.createElement('div');
     track.className = 'slot-carousel-track';
 
+    const mode = this._installMode;
+    const previewStats = this.upgradeApplier?.preview?.(this.state.ship) ?? null;
+
     if (n > 1) {
       const prevIdx = (this._carouselIndex - 1 + n) % n;
-      track.appendChild(this._createSlotPeekEl(allSlots[prevIdx], prevIdx));
+      track.appendChild(this._createSlotPeekEl(allSlots[prevIdx], prevIdx, previewStats));
     } else {
       const ph = document.createElement('div');
       ph.className = 'slot-carousel-peek-spacer';
@@ -448,14 +454,13 @@ export class HangarUI {
       track.appendChild(ph);
     }
 
-    const mode = this._installMode;
     let panelClass = `hangar-slot-panel slot-${slot.type}${unlocked ? '' : ' slot-locked'}`;
     if (mode?.source === 'item' && unlocked && mode.slotType === slot.type) panelClass += ' install-mode-target';
     else if (mode?.source === 'slot' && mode.slotId === slot.id) panelClass += ' install-mode-active';
     const panel = document.createElement('div');
     panel.className = panelClass;
     panel.dataset.slotId = slot.id;
-    panel.innerHTML = this._slotPanelHtml(slot, item, unlocked);
+    panel.innerHTML = this._slotPanelHtml(slot, item, unlocked, previewStats);
     this._wirePanelEvents(panel, slot, unlocked);
 
     const centerCol = document.createElement('div');
@@ -464,7 +469,7 @@ export class HangarUI {
     track.appendChild(centerCol);
     if (n > 1) {
       const nextIdx = (this._carouselIndex + 1) % n;
-      track.appendChild(this._createSlotPeekEl(allSlots[nextIdx], nextIdx));
+      track.appendChild(this._createSlotPeekEl(allSlots[nextIdx], nextIdx, previewStats));
     } else {
       const ph = document.createElement('div');
       ph.className = 'slot-carousel-peek-spacer';
@@ -491,17 +496,20 @@ export class HangarUI {
     }
   }
 
-  _createSlotPeekEl(slot, index) {
+  _createSlotPeekEl(slot, index, previewStats) {
     const unlocked = isSlotUnlocked(this.state, slot.id);
     const inst = unlocked ? getInstalledInstance(this.state, slot.id) : null;
     const item = inst ? getItem(inst.itemId) : null;
     const typeLabel = { weapon: 'WEAPON', defense: 'DEFENSE', utility: 'UTILITY', passive: 'PASSIVE', ability: 'ABILITY' }[slot.type] || slot.type.toUpperCase();
+    const hk = slot.type === 'ability' && item && unlocked && previewStats
+      ? getHotkeyDigitForAbilityItem(item, previewStats) : null;
+    const hkHtml = hk != null ? `<span class="slot-peek-hotkey">${hk}</span>` : '';
 
     let statusHtml;
     if (!unlocked) statusHtml = '<span class="slot-peek-status locked">LOCKED</span>';
     else if (!item) statusHtml = '<span class="slot-peek-status empty">EMPTY</span>';
     else {
-      statusHtml = `<span class="slot-peek-item"><span class="slot-peek-icon" style="color:${item.color || '#aaa'}">${item.icon || '◈'}</span><span class="slot-peek-name">${item.name}</span></span>`;
+      statusHtml = `<span class="slot-peek-item"><span class="slot-peek-icon" style="color:${item.color || '#aaa'}">${item.icon || '◈'}</span><span class="slot-peek-name">${item.name}</span>${hkHtml}</span>`;
     }
 
     const btn = document.createElement('button');
@@ -519,9 +527,14 @@ export class HangarUI {
     return btn;
   }
 
-  _slotPanelHtml(slot, item, unlocked) {
+  _slotPanelHtml(slot, item, unlocked, previewStats) {
     const typeLabel = { weapon: 'WEAPON', defense: 'DEFENSE', utility: 'UTILITY', passive: 'PASSIVE', ability: 'ABILITY' }[slot.type] || slot.type.toUpperCase();
     const mode = this._installMode;
+    const abilityHotkey = slot.type === 'ability' && item && unlocked && previewStats
+      ? getHotkeyDigitForAbilityItem(item, previewStats) : null;
+    const hotkeyHtml = abilityHotkey != null
+      ? `<span class="slot-ability-hotkey" title="Combat hotkey (loadout order)">${abilityHotkey}</span>`
+      : '';
 
     // ── Install-from-item mode: this slot is a valid target ──────────────
     if (mode?.source === 'item' && unlocked && mode.slotType === slot.type) {
@@ -530,7 +543,7 @@ export class HangarUI {
         : `<div class="slot-panel-empty">Empty slot</div>`;
       return `
         <div class="slot-panel-head">
-          <span class="slot-panel-label">${slot.label || typeLabel}</span>
+          <span class="slot-panel-label">${slot.label || typeLabel}${hotkeyHtml}</span>
           <span class="slot-panel-type install-label">${item ? 'REPLACE' : 'INSTALL HERE'}</span>
         </div>
         <div class="slot-panel-body">${replaceHint}</div>
@@ -545,7 +558,7 @@ export class HangarUI {
     if (mode?.source === 'slot' && mode.slotId === slot.id) {
       return `
         <div class="slot-panel-head">
-          <span class="slot-panel-label">${slot.label || typeLabel}</span>
+          <span class="slot-panel-label">${slot.label || typeLabel}${hotkeyHtml}</span>
           <span class="slot-panel-type install-label">SELECTING ITEM</span>
         </div>
         <div class="slot-panel-body">
@@ -567,7 +580,7 @@ export class HangarUI {
       }).join('');
       return `
         <div class="slot-panel-head">
-          <span class="slot-panel-label">${slot.label || typeLabel}</span>
+          <span class="slot-panel-label">${slot.label || typeLabel}${hotkeyHtml}</span>
           <span class="slot-panel-type">${typeLabel} · LOCKED</span>
         </div>
         <div class="slot-panel-body">
@@ -584,7 +597,7 @@ export class HangarUI {
     if (!item) {
       return `
         <div class="slot-panel-head">
-          <span class="slot-panel-label">${slot.label || typeLabel}</span>
+          <span class="slot-panel-label">${slot.label || typeLabel}${hotkeyHtml}</span>
           <span class="slot-panel-type">${typeLabel} · EMPTY</span>
         </div>
         <div class="slot-panel-body slot-panel-empty">No module installed</div>
@@ -606,7 +619,7 @@ export class HangarUI {
       : 'slot-panel-energy slot-panel-energy-cost';
     return `
       <div class="slot-panel-head">
-        <span class="slot-panel-label">${slot.label || typeLabel}</span>
+        <span class="slot-panel-label">${slot.label || typeLabel}${hotkeyHtml}</span>
         <span class="slot-panel-type">${typeLabel}</span>
       </div>
       <div class="slot-panel-body">

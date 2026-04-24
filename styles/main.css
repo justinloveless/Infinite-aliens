@@ -1365,52 +1365,228 @@ html, body {
   justify-content: center;
 }
 
-/* ===== WARP GATE SCREEN ===== */
-#warp-gate-content { text-align: center; max-width: 480px; }
-#warp-gate-title {
+/* ===== GALAXY MAP SCREEN ===== */
+#warp-gate-screen { align-items: stretch; padding: 0; }
+#galaxy-map-ui {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 24px 28px 20px;
+  box-sizing: border-box;
+  gap: 14px;
+}
+#galaxy-map-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  flex-shrink: 0;
+  position: relative;
+  gap: 8px 12px;
+}
+.galaxy-map-header-spacer { min-height: 1px; }
+#galaxy-map-header-center { text-align: center; max-width: min(42rem, 100%); justify-self: center; }
+.galaxy-map-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: start;
+  min-width: 0;
+}
+#galaxy-map-close-btn { flex-shrink: 0; }
+#galaxy-map-title {
   font-family: var(--font-main);
-  font-size: clamp(1.3rem, 4vw, 2rem);
+  font-size: clamp(1.1rem, 3vw, 1.7rem);
   font-weight: 900;
   color: var(--cyan);
   text-shadow: var(--glow-cyan);
-  letter-spacing: 0.15em;
-  margin-bottom: 10px;
+  letter-spacing: 0.18em;
+  margin-bottom: 4px;
 }
-#warp-gate-subtitle {
-  color: rgba(255,255,255,0.55);
-  font-size: 0.8rem;
+#galaxy-map-subtitle {
+  color: rgba(255,255,255,0.45);
+  font-size: 0.78rem;
   letter-spacing: 0.04em;
-  margin-bottom: 28px;
 }
-#warp-gate-list {
+#galaxy-map-body {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+#galaxy-map-container {
+  flex: 1;
+  position: relative;
+  border: 1px solid rgba(0,245,255,0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(0,245,255,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 50%, rgba(155,48,255,0.04) 0%, transparent 60%),
+    radial-gradient(1px 1px at 15% 22%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 42% 8%,  rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 67% 31%, rgba(255,255,255,0.55) 0%, transparent 100%),
+    radial-gradient(1px 1px at 88% 15%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 5%  77%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 31% 85%, rgba(255,255,255,0.45) 0%, transparent 100%),
+    radial-gradient(1px 1px at 55% 68%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 75% 82%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 93% 61%, rgba(255,255,255,0.55) 0%, transparent 100%),
+    radial-gradient(1px 1px at 22% 48%, rgba(255,255,255,0.35) 0%, transparent 100%),
+    radial-gradient(1px 1px at 48% 53%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 79% 44%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 35% 18%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 60% 90%, rgba(255,255,255,0.25) 0%, transparent 100%),
+    #060016;
+}
+
+/* Galaxy nodes */
+.galaxy-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  cursor: pointer;
+  z-index: 1;
+}
+.galaxy-node-img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(0,245,255,0.35);
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  margin: 0 auto;
+}
+.galaxy-node-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
+}
+.galaxy-node-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.05em;
+  margin-top: 5px;
+  white-space: nowrap;
+  text-shadow: 0 0 6px rgba(0,0,0,0.8);
+  transition: color 0.18s;
+}
+.galaxy-node:hover .galaxy-node-img {
+  transform: scale(1.14);
+  box-shadow: 0 0 14px rgba(0,245,255,0.6), 0 0 28px rgba(0,245,255,0.2);
+  border-color: var(--cyan);
+}
+.galaxy-node:hover .galaxy-node-label { color: rgba(255,255,255,0.9); }
+.galaxy-node.selected .galaxy-node-img {
+  border-color: var(--cyan);
+  box-shadow: 0 0 16px var(--cyan), 0 0 36px rgba(0,245,255,0.35);
+  animation: galaxy-pulse 1.8s ease-in-out infinite;
+}
+.galaxy-node.selected .galaxy-node-label { color: var(--cyan); }
+.galaxy-locked { cursor: default; }
+.galaxy-locked .galaxy-node-img {
+  filter: grayscale(1) brightness(0.28);
+  border-color: rgba(255,255,255,0.1);
+}
+.galaxy-locked .galaxy-node-label { color: rgba(255,255,255,0.2); }
+.galaxy-locked:hover .galaxy-node-img {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(255,255,255,0.1);
+}
+.galaxy-locked:hover .galaxy-node-label { color: rgba(255,255,255,0.2); }
+
+@keyframes galaxy-pulse {
+  0%, 100% { box-shadow: 0 0 16px var(--cyan), 0 0 36px rgba(0,245,255,0.35); }
+  50%       { box-shadow: 0 0 24px var(--cyan), 0 0 52px rgba(0,245,255,0.5); }
+}
+
+/* Warp lines (SVG overlay in galaxy-map-container) */
+.warp-line { fill: none; vector-effect: non-scaling-stroke; }
+.warp-line-active {
+  stroke: var(--cyan);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+  animation: warp-flow 1s linear infinite;
+}
+.warp-line-frontier {
+  stroke: rgba(0,245,255,0.3);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  opacity: 0.55;
+  animation: warp-flow 2.5s linear infinite;
+}
+.warp-line-locked {
+  stroke: rgba(255,255,255,0.09);
+  stroke-width: 0.8;
+  stroke-dasharray: 1.5 6;
+}
+@keyframes warp-flow {
+  from { stroke-dashoffset: 9; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Info panel */
+#galaxy-info-panel {
+  width: 220px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 10px;
-  align-items: center;
+  padding: 16px 14px;
+  border: 1px solid rgba(0,245,255,0.15);
+  border-radius: 8px;
+  background: rgba(6,0,22,0.7);
 }
-.warp-gate-btn {
-  width: 100%;
-  max-width: 360px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px !important;
-  text-align: left !important;
+#galaxy-info-img {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05) radial-gradient(circle, #111 0%, #000 100%);
+  background-size: cover;
+  background-position: center;
+  border: 2px solid rgba(0,245,255,0.2);
+  flex-shrink: 0;
+  transition: background-image 0.3s;
 }
-.warp-gate-btn:hover .warp-gate-sector { color: #fff; }
-.warp-gate-sector {
-  font-size: 1rem;
+#galaxy-info-name {
+  font-family: var(--font-main);
+  font-size: 0.85rem;
   font-weight: 700;
   color: var(--cyan);
+  letter-spacing: 0.1em;
+  text-align: center;
 }
-.warp-gate-label {
+#galaxy-info-tier {
+  font-family: var(--font-mono);
   font-size: 0.72rem;
-  color: rgba(255,255,255,0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.6);
+  text-align: center;
 }
-.warp-gate-btn.gate-standard .warp-gate-sector { color: rgba(255,255,255,0.7); }
-.warp-gate-btn.gate-standard { border-color: rgba(255,255,255,0.25); box-shadow: none; }
+#galaxy-info-status {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.38);
+  text-align: center;
+  line-height: 1.4;
+  flex: 1;
+}
+#galaxy-launch-btn {
+  width: 100%;
+  margin-top: auto;
+  font-size: 0.8rem !important;
+}
+#galaxy-launch-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
 
 /* ===== GALAXY LABEL (HUD) ===== */
 .hud-galaxy {
@@ -2097,28 +2273,58 @@ html, body {
   box-shadow: var(--glow-pink);
 }
 
-/* ===== Ability Slots ===== */
-#ability-slots {
+/* ===== Ability action bar (in-game) ===== */
+#ability-bar {
   position: fixed;
   bottom: 80px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 100;
+  pointer-events: none;
+}
+
+#ability-bar.hidden {
+  display: none !important;
+}
+
+.ability-bar-inner {
+  position: relative;
+  display: inline-block;
+}
+
+#ability-meshes-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 6px;
+}
+
+#ability-slots {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 8px;
-  z-index: 100;
 }
 
 .ability-slot {
   position: relative;
   width: 52px;
   height: 52px;
-  background: rgba(0, 0, 0, 0.7);
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.42);
   border: 1px solid rgba(0, 245, 255, 0.35);
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+.ability-slot.hidden,
+.ability-slot-empty {
+  display: none !important;
 }
 
 .ability-slot.ready {
@@ -2131,14 +2337,11 @@ html, body {
   top: 2px;
   left: 4px;
   font-family: var(--font-main);
-  font-size: 0.5rem;
-  color: rgba(0, 245, 255, 0.6);
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: rgba(0, 245, 255, 0.85);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
   z-index: 2;
-}
-
-.ability-icon {
-  font-size: 1.3rem;
-  z-index: 1;
 }
 
 .ability-cooldown-overlay {
@@ -2148,9 +2351,40 @@ html, body {
   width: 100%;
   background: rgba(0, 0, 0, 0.65);
   height: 100%;
-  transform-origin: bottom;
-  transition: transform 0.1s linear;
+  transform: scaleY(0);
+  transform-origin: bottom center;
+  transition: transform 0.08s linear;
   z-index: 3;
+}
+
+/* Hangar: in-combat hotkey for ability modules */
+.slot-ability-hotkey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  padding: 0.08rem 0.28rem;
+  margin-left: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(0, 245, 255, 0.95);
+  border: 1px solid rgba(0, 245, 255, 0.45);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  vertical-align: middle;
+}
+
+.slot-peek-hotkey {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0.05rem 0.22rem;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: rgba(0, 245, 255, 0.9);
+  border: 1px solid rgba(0, 245, 255, 0.35);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* ===== Perf Overlay ===== */
@@ -2214,3 +2448,82 @@ html, body {
   padding: 4px 0;
   letter-spacing: 0.03em;
 }
+
+/* Alien scan overlay (post–galaxy boss) */
+.scan-ui-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 0, 16, 0.92);
+  backdrop-filter: blur(4px);
+}
+.scan-ui-overlay.hidden { display: none; }
+.scan-ui-inner {
+  max-width: 420px;
+  padding: 28px 32px;
+  border: 1px solid var(--border);
+  box-shadow: var(--glow-cyan);
+  text-align: center;
+  font-family: var(--font-main);
+}
+.scan-ui-title {
+  font-size: 1.1rem;
+  letter-spacing: 0.2em;
+  color: var(--pink);
+  text-shadow: var(--glow-pink);
+  margin-bottom: 16px;
+}
+.scan-ui-beam {
+  height: 4px;
+  margin: 12px 0 20px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  animation: scan-beam-sweep 2s ease-in-out infinite;
+}
+@keyframes scan-beam-sweep {
+  0%, 100% { opacity: 0.35; transform: scaleX(0.4); }
+  50% { opacity: 1; transform: scaleX(1); }
+}
+.scan-ui-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  color: rgba(0, 245, 255, 0.75);
+  margin-bottom: 8px;
+}
+.scan-ui-item-row, .scan-ui-threat-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 0.95rem;
+}
+.scan-ui-icon { font-size: 1.4rem; }
+.scan-ui-chip {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.scan-ui-threat-desc {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.35;
+}
+.scan-ui-section.hidden { display: none; }
+.scan-ui-continue {
+  margin-top: 22px;
+  padding: 10px 28px;
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  color: var(--bg);
+  background: linear-gradient(180deg, var(--cyan), #0088aa);
+  border: none;
+  border-radius: 2px;
+}
+.scan-ui-continue.hidden { display: none; }

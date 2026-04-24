@@ -4,7 +4,8 @@ import { eventBus, EVENTS } from '../../core/EventBus.js';
 import { BOSS_ARENA } from '../../constants.js';
 import { createEnemy } from '../../prefabs/createEnemy.js';
 import { createGateCrystal } from '../../prefabs/createGateCrystal.js';
-import { getAvailableTypes, weightedPick } from '../enemy/EnemyDefs.js';
+import { weightedPick } from '../enemy/EnemyDefs.js';
+import { getSpawnableEnemyTypes } from '../../coordinators/counterSpawn.js';
 
 /**
  * Visual + spawn driver for an alien warp gate. The gate becomes "closed"
@@ -121,7 +122,9 @@ export class AlienWarpGateComponent extends Component {
     this._spawnTimer = 0;
 
     const tier = ctx.state.round?.current || 1;
-    const types = getAvailableTypes(tier).filter(d => d.type !== 'boss');
+    const types = getSpawnableEnemyTypes(tier, ctx.state).filter(
+      t => t !== 'boss' && !String(t).endsWith('_boss')
+    );
     if (!types.length) return;
     const def = weightedPick(types);
     const count = def.spawnCount || 1;

@@ -105,6 +105,8 @@ export class AudioManager {
       manualOverheat: { freq: 280, type: 'sawtooth', duration: 1.0, decay: 0.9, vol: 0.28, sweep: -0.75, noise: true },
       warning: { freq: 520, type: 'square', duration: 0.6, decay: 0.5, vol: 0.22, sweep: -0.2 },
       warp: { freq: 180, type: 'sawtooth', duration: 2.4, decay: 2.0, vol: 0.3, sweep: 1.4, noise: true },
+      railgunCharge: { freq: 80, type: 'sawtooth', duration: 2.5, decay: 2.4, vol: 0.28, sweep: 6.0 },
+      railgunFire: { freq: 200, type: 'sawtooth', duration: 0.35, decay: 0.28, vol: 0.38, sweep: -0.85, noise: true },
     };
 
     const def = defs[name];

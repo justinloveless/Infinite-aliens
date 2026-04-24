@@ -52,7 +52,7 @@ export class PlayerInputComponent extends Component {
     if (!t) return;
 
     const player = this.entity.get('PlayerStatsComponent');
-    let speed = player?.speed ?? 3;
+    let speed = (player?.speed ?? 3) * (player?.jammerSlowMult ?? 1);
     // Apply active speed boost from ability
     const boost = this.entity.get('SpeedBoostAbilityComponent');
     if (boost?.isActive()) speed *= boost.boostMult;

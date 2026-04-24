@@ -67,6 +67,11 @@ export const MUSIC_SPECS = {
     prompt:
       'Dark violet synthwave arena battle music, brooding low analog bass, haunting minor-key leads, glitchy pulse textures, mysterious menace with forward drive, Centaurus A AGN showdown, 120 BPM, seamless loop, cozy sinister, no vocals',
   },
+  'return-journey': {
+    file: 'return-journey.mp3',
+    prompt:
+      'Urgent but cozy synthwave pursuit music, familiar melodic motifs played in minor key, reversed-feel analog arpeggio patterns, driving pulse with homeward momentum, 122 BPM, seamless loop, retro-futuristic, no vocals',
+  },
   'arena-9': {
     file: 'arena-cartwheel.mp3',
     prompt:
@@ -175,6 +180,31 @@ export const SFX_SPECS = {
     file: 'sfx-manual-overheat.mp3',
     prompt:
       'Short mechanical overheat steam vent sound effect, warm hissing white noise with a descending metallic buzzing tone, 1.5 seconds, retro-futuristic sci-fi weapon cooling down, cozy but with a sense of urgency, analog synth steam release',
+  },
+  scanBeam: {
+    file: 'sfx-scan-beam.mp3',
+    prompt:
+      'Smooth ascending-then-descending electronic scanner sweep sound effect, warm analog sine glide through two octaves, subtle digital processing texture, 1.8 seconds, retro-futuristic sensor scan, cozy but clinical, not harsh',
+  },
+  scanReveal: {
+    file: 'sfx-scan-reveal.mp3',
+    prompt:
+      'Short sharp data-lock chime sound effect, warm analog synth with a brief digital stutter and click, 0.5 seconds, revelation/discovery moment, retro sci-fi alert tone, satisfying resolution with slight tension',
+  },
+  replication: {
+    file: 'sfx-ship-replication.mp3',
+    prompt:
+      'Medium unsettling duplication/replication sound effect, deep resonant analog synth pulse with layered digital artifacting, warm-but-wrong timbre, 2 seconds, sci-fi object copying, retro-futuristic uncanny valley feeling, no vocals',
+  },
+  railgunCharge: {
+    file: 'sfx-railgun-charge.mp3',
+    prompt:
+      'Rising electromagnetic charge-up whine sound effect, starts as a low hum and sweeps upward through 2.5 seconds to a high-pitched tension plateau, warm analog synth with slight harmonic distortion, retro-futuristic railgun powering up, cozy sci-fi weapon charging, ends at peak with sustained high tone',
+  },
+  railgunFire: {
+    file: 'sfx-railgun-fire.mp3',
+    prompt:
+      'Sharp instantaneous railgun discharge crack sound effect, deep magnetic thud with a fast high-frequency electrical snap, 0.4 seconds, massive kinetic impact followed by brief ionized air hiss tail, retro-futuristic cozy sci-fi, satisfying and weighty but not harsh',
   },
 };
 

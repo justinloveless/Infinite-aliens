@@ -4,7 +4,8 @@ import { createEnemy } from '../prefabs/createEnemy.js';
 import { createLootDrop } from '../prefabs/createLootDrop.js';
 import { createExplosion } from '../prefabs/createExplosion.js';
 import { createAsteroid } from '../prefabs/createAsteroid.js';
-import { ENEMY_DEFS, getAvailableTypes, weightedPick } from '../components/enemy/EnemyDefs.js';
+import { ENEMY_DEFS, weightedPick } from '../components/enemy/EnemyDefs.js';
+import { getSpawnableEnemyTypes } from './counterSpawn.js';
 
 /**
  * Orchestrates round progression: tier from distance traveled, enemy spawn
@@ -106,7 +107,9 @@ export class SpawnDirector {
 
   _hasLiveBoss() {
     for (const e of this.world.query('enemy')) {
-      if (e.active && e.enemyType === 'boss') return true;
+      if (!e.active) continue;
+      const t = e.enemyType;
+      if (t === 'boss' || (typeof t === 'string' && t.endsWith('_boss'))) return true;
     }
     return false;
   }
@@ -115,6 +118,9 @@ export class SpawnDirector {
     const state = this.state;
     if (state.round.phase !== 'combat' && state.round.phase !== 'boss_arena') return;
     if (!enemy) return;
+    // Gate crystals use HealthComponent + GateCrystalComponent; never destroy here
+    // or GATE_CRYSTAL_DESTROYED never fires and the gate cannot close.
+    if (enemy.hasTag?.('gate_crystal')) return;
     // Arena director owns its own kill handling
     if (state.round.phase === 'boss_arena') {
       enemy.destroy();
@@ -194,7 +200,11 @@ export class SpawnDirector {
       }
     }
 
-    if (stats) this.currency?.updatePassiveFromStats?.(dt, stats);
+    let siphon = 0;
+    for (const e of this.world.query('enemy')) {
+      if (e.active && e.enemyType === 'power_siphon') siphon++;
+    }
+    if (stats) this.currency?.updatePassiveFromStats?.(dt, stats, siphon);
 
     this._asteroidTimer += dt;
     if (this._asteroidTimer >= ASTEROID.SPAWN_INTERVAL) {
@@ -210,7 +220,9 @@ export class SpawnDirector {
   }
 
   _spawnRandom(tier, stats) {
-    const types = getAvailableTypes(tier);
+    const types = getSpawnableEnemyTypes(tier, this.state).filter(
+      t => t !== 'boss' && !String(t).endsWith('_boss')
+    );
     const def = weightedPick(types);
     const count = def.spawnCount || 1;
     for (let i = 0; i < count; i++) {

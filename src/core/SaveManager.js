@@ -239,6 +239,16 @@ export class SaveManager {
           data.player.energyRegen = PLAYER.BASE_ENERGY_REGEN;
         }
       }
+      if (data.version === 21) {
+        data.version = 22;
+        data.campaign ??= {};
+        data.campaign.scannedItems ??= [];
+        data.campaign.returnJourney ??= {
+          active: false,
+          currentGalaxy: 9,
+          totalSectorsCleared: 0,
+        };
+      }
       if (data.version !== GAME.VERSION) return null;
 
       // Post-load: rehydrate transients + aliases that serializeState stripped.

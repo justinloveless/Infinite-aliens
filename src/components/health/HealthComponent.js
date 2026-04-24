@@ -28,8 +28,13 @@ export class HealthComponent extends Component {
   }
 
   /** Raw, pre-armor damage. Returns effective damage dealt. */
-  takeDamage(raw, { isCrit = false, source = null, ignoreArmor = false } = {}) {
+  takeDamage(raw, { isCrit = false, source = null, ignoreArmor = false, damageType = 'kinetic' } = {}) {
     if (this.dead || !this.entity?.active) return 0;
+    if (this.entity.hasTag('enemy') && this.entity.enemyType === 'plasma_eater' && damageType === 'plasma') {
+      const healed = this.heal(Math.max(1, Math.ceil(raw)));
+      void healed;
+      return 0;
+    }
     const armor = ignoreArmor ? 0 : (this.armor || 0);
     const dmg = Math.max(1, Math.ceil((raw - armor) * this.damageReceivedMult));
     this.hp = Math.max(0, this.hp - dmg);

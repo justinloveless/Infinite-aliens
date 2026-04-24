@@ -15,7 +15,28 @@
       "Bash(node -e \"const d=require\\('./src/data/upgrades.json'\\); const starters=d.nodes.filter\\(n=>!n.prereqs||!n.prereqs.length\\); console.log\\('Ring-0 nodes:', starters.map\\(n=>n.id+' ['+n.category+']'\\).join\\(', '\\)\\)\")",
       "Bash(grep -E \"\\\\.\\(js|json\\)$\")",
       "Bash(xargs ls *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "WebSearch",
+      "WebFetch(domain:commons.wikimedia.org)",
+      "Bash(curl -L -o milky-way.jpg \"https://upload.wikimedia.org/wikipedia/commons/6/60/ESO_-_Milky_Way.jpg\")",
+      "Bash(curl -L -o andromeda.jpg \"https://upload.wikimedia.org/wikipedia/commons/9/98/Andromeda_Galaxy_%28with_h-alpha%29.jpg\")",
+      "Bash(curl -L -o triangulum.jpg \"https://upload.wikimedia.org/wikipedia/commons/6/60/Infrared_Triangulum_Galaxy_%28M33%29.jpg\")",
+      "Bash(curl -L -o small-magellanic-cloud.jpg \"https://upload.wikimedia.org/wikipedia/commons/7/7a/Small_Magellanic_Cloud_%28Digitized_Sky_Survey_2%29.jpg\")",
+      "Bash(curl -L -o whirlpool.jpg \"https://upload.wikimedia.org/wikipedia/commons/d/db/Messier51_sRGB.jpg\")",
+      "Bash(curl -L -o sombrero.jpg \"https://upload.wikimedia.org/wikipedia/commons/5/5e/M104_ngc4594_sombrero_galaxy_hi-res.jpg\")",
+      "Bash(curl -L -o cartwheel.jpg \"https://upload.wikimedia.org/wikipedia/commons/2/26/Cartwheel_Galaxy.jpg\")",
+      "Bash(curl -L -o milky-way.jpg \"https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/ESO_-_Milky_Way.jpg/500px-ESO_-_Milky_Way.jpg\")",
+      "Bash(curl -L -o andromeda.jpg \"https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Andromeda_Galaxy_%28with_h-alpha%29.jpg/500px-Andromeda_Galaxy_%28with_h-alpha%29.jpg\")",
+      "Bash(curl -L -o triangulum.jpg \"https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Infrared_Triangulum_Galaxy_%28M33%29.jpg/500px-Infrared_Triangulum_Galaxy_%28M33%29.jpg\")",
+      "Bash(curl -L -o large-magellanic-cloud.jpg \"https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Large_Magellanic_Cloud.jpg/500px-Large_Magellanic_Cloud.jpg\")",
+      "Bash(curl -L -o small-magellanic-cloud.jpg \"https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Small_Magellanic_Cloud_%28Digitized_Sky_Survey_2%29.jpg/500px-Small_Magellanic_Cloud_%28Digitized_Sky_Survey_2%29.jpg\")",
+      "Bash(curl -L -o whirlpool.jpg \"https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Messier51_sRGB.jpg/500px-Messier51_sRGB.jpg\")",
+      "Bash(curl -L -o sombrero.jpg \"https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/M104_ngc4594_sombrero_galaxy_hi-res.jpg/500px-M104_ngc4594_sombrero_galaxy_hi-res.jpg\")",
+      "Bash(curl -L -o cartwheel.jpg \"https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Cartwheel_Galaxy.jpg/500px-Cartwheel_Galaxy.jpg\")",
+      "Bash(curl -L -o centaurus-a.jpg \"https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Centaurus_A_%28NGC_5128%29.jpg/500px-Centaurus_A_%28NGC_5128%29.jpg\")",
+      "Bash(python3.exe -c \"1\")",
+      "Bash(python -c \"1\")",
+      "Bash(node -e ' *)"
     ]
   }
 }

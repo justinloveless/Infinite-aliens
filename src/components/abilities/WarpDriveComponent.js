@@ -8,6 +8,8 @@ export class WarpDriveComponent extends AbilityComponent {
   }
 
   activate() {
+    const stats = this.entity.get('PlayerStatsComponent');
+    if (stats?.warpDisruptorNearby) return;
     const t = this.entity.get('TransformComponent');
     if (t) t.position.z -= this.distance;
   }

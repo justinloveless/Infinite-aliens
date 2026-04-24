@@ -1,7 +1,7 @@
 // ===== GAME CONSTANTS =====
 
 export const GAME = {
-  VERSION: 21,
+  VERSION: 22,
   AUTO_SAVE_INTERVAL: 30000,  // ms
   OFFLINE_CAP: 8 * 3600,     // seconds
   OFFLINE_EFFICIENCY: 0.5,
@@ -225,6 +225,13 @@ export const CAMPAIGN = {
     'Large Magellanic Cloud', 'Small Magellanic Cloud',
     'Whirlpool', 'Sombrero', 'Pinwheel', 'Centaurus A', 'Cartwheel',
   ],
+};
+
+/** Post-galaxy-boss alien scan UI timing (seconds). */
+export const SCAN = {
+  BEAM_PHASE: 2,
+  ITEM_REVEAL: 1,
+  THREAT_REVEAL: 1,
 };
 
 /** Boss arena phase: a 600×600-unit open map with free flight + 3 sequential objectives. */

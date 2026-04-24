@@ -20,6 +20,7 @@ import { PerfOverlay } from './ui/PerfOverlay.js';
 import { World } from './ecs/World.js';
 import { createPlayer } from './prefabs/createPlayer.js';
 import { createAsteroid } from './prefabs/createAsteroid.js';
+import { createEnemy } from './prefabs/createEnemy.js';
 
 import { CollisionCoordinator } from './coordinators/CollisionCoordinator.js';
 import { SpawnDirector } from './coordinators/SpawnDirector.js';
@@ -33,8 +34,13 @@ import { ArenaHUD } from './ui/ArenaHUD.js';
 import { RoundTransition } from './ui/RoundTransition.js';
 import { DamageNumbers } from './ui/DamageNumbers.js';
 import { HangarUI } from './ui/HangarUI.js';
+import { AbilityActionBar } from './ui/AbilityActionBar.js';
+import { ABILITY_COMPONENT_NAMES } from './ui/abilityHotkeys.js';
 import { StoreUI } from './ui/StoreUI.js';
 import { ArenaDirector } from './coordinators/ArenaDirector.js';
+import { ScanUI } from './ui/ScanUI.js';
+import { listInstalledItems, getItem } from './hangar/HangarSystem.js';
+import { getCounterTypeForItem, COUNTER_ENEMY_DEFS } from './data/counterEnemies.js';
 import { BLOOM, PLAYER, RUN, SCENE, WARP, CAMPAIGN, BOSS_ARENA } from './constants.js';
 import { getPreset } from './scene/EnvironmentPresets.js';
 import * as THREE from 'three';
@@ -57,6 +63,7 @@ class Game {
       getContext: () => ({
         playerEntity: this.playerEntity,
         galaxyIndex: this.state?.campaign?.galaxyIndex ?? 0,
+        returnJourneyActive: this.state?.campaign?.returnJourney?.active ?? false,
       }),
     });
 
@@ -132,6 +139,9 @@ class Game {
     this._arenaInitSpeed = false;
     this._prevBossMusicActive = false;
     this._paused = false;
+    this._returnJourneyPending = false;
+    this.scanUI = new ScanUI(this.audio);
+    this.abilityActionBar = new AbilityActionBar();
     this.hangarUI = null;
     this.storeUI = null;
     this.upgradeEditor = null;
@@ -140,8 +150,7 @@ class Game {
     this._focusPickNdc = new THREE.Vector2();
 
     this._setupEventListeners();
-    this._setupClickHandling();
-    this._setupManualGunInput();
+    this._setupPrimaryFireInput();
     this._setupAbilityKeys();
     this._setupArenaInput();
     this._setupSettingsButton();
@@ -266,6 +275,8 @@ class Game {
     eventBus.on(EVENTS.UPGRADE_PURCHASED, () => { this._rebuildComputed(); this._saveNow(); });
     eventBus.on(EVENTS.UPGRADE_SOLD, () => { this._rebuildComputed(); this._saveNow(); });
     eventBus.on(EVENTS.GALAXY_BOSS_PENDING, ({ galaxyIndex }) => this._enterBossArena(galaxyIndex));
+    eventBus.on(EVENTS.BOSS_SCAN_READY, ({ galaxyIndex }) => this._onBossScanReady(galaxyIndex));
+    eventBus.on(EVENTS.BOSS_GALAXY9_COMPLETE, () => this._onBossGalaxy9Complete());
     eventBus.on(EVENTS.ARENA_WARNING, () => this.audio?.play('warning'));
     eventBus.on(EVENTS.ARENA_TRANSITION_STARTED, () => {
       this.audio?.play('warp');
@@ -332,14 +343,6 @@ class Game {
     if (!this.state.warpGates) this.state.warpGates = { maxTierReached: 0 };
     if (r.current > this.state.warpGates.maxTierReached) {
       this.state.warpGates.maxTierReached = r.current;
-    }
-
-    // Update campaign progress: track highest galaxy reached
-    if (this.state.campaign) {
-      const galaxyReached = Math.floor((r.current - 1) / CAMPAIGN.SECTORS_PER_GALAXY);
-      if (galaxyReached > this.state.campaign.galaxyIndex) {
-        this.state.campaign.galaxyIndex = Math.min(galaxyReached, CAMPAIGN.GALAXIES - 1);
-      }
     }
 
     r.phase = 'dead';
@@ -570,20 +573,44 @@ class Game {
     this.ui.showDeath(null, () => this._showWarpGateAndLaunch(), () => this._openHangar());
   }
 
-  _setupClickHandling() {
+  _getPrimaryManualWeapon() {
+    if (!this.playerEntity) return null;
+    for (const comp of this.playerEntity.components.values()) {
+      if (typeof comp.onPrimaryFirePress === 'function') return comp;
+    }
+    return null;
+  }
+
+  _setupPrimaryFireInput() {
     const canvas = document.getElementById('game-canvas');
-    canvas.addEventListener('click', (ev) => {
-      if (this._paused) return;
+
+    canvas.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || this._paused) return;
+      if (this._isTypingTarget(e.target)) return;
       const phase = this.state?.round?.phase;
       if (phase !== 'combat' && phase !== 'boss_arena' && phase !== 'arena_transition') return;
-      if (phase === 'combat' && this._tryPriorityFocusClick(ev)) return;
-      const rail = this.playerEntity?.get('RailgunComponent');
-      if (rail) rail.beginCharge();
+      if (phase === 'combat' && this._tryPriorityFocusClick(e)) return;
+      const weapon = this._getPrimaryManualWeapon();
+      if (!weapon) return;
+      e.preventDefault();
+      weapon.onPrimaryFirePress();
     });
 
-    canvas.addEventListener('mouseup', (ev) => {
-      if (ev.button !== 0) return;
-      this.playerEntity?.get('RailgunComponent')?.releaseCharge();
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'Space' || e.repeat || this._paused || this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      this._getPrimaryManualWeapon()?.onPrimaryFirePress();
+    });
+
+    window.addEventListener('keyup', e => {
+      if (e.code !== 'Space' || this._paused || this._isTypingTarget(e.target)) return;
+      e.preventDefault();
+      this._getPrimaryManualWeapon()?.onPrimaryFireRelease();
+    });
+
+    window.addEventListener('pointerup', e => {
+      if (e.button !== 0 || this._paused) return;
+      this._getPrimaryManualWeapon()?.onPrimaryFireRelease();
     });
   }
 
@@ -623,58 +650,20 @@ class Game {
     return false;
   }
 
-  _setupManualGunInput() {
-    const canvas = document.getElementById('game-canvas');
-    canvas.addEventListener('pointerdown', e => {
-      if (e.button !== 0) return;
-      if (this._paused) return;
-      if (this._isTypingTarget(e.target)) return;
-      const phase = this.state?.round?.phase;
-      if (phase !== 'combat' && phase !== 'boss_arena' && phase !== 'arena_transition') return;
-      if (phase === 'combat' && this._tryPriorityFocusClick(e)) return;
-      const manual = this.playerEntity?.get('ManualGunComponent');
-      if (!manual) return;
-      e.preventDefault();
-      manual.fire();
-    });
-
-    window.addEventListener('keydown', e => {
-      if (e.code !== 'Space') return;
-      if (this._paused) return;
-      if (this._isTypingTarget(e.target)) return;
-      e.preventDefault();
-      this.playerEntity?.get('ManualGunComponent')?.fire();
-    });
-    window.addEventListener('keyup', e => {
-      if (e.code !== 'Space') return;
-      if (this._paused) return;
-      if (this._isTypingTarget(e.target)) return;
-      e.preventDefault();
-      this.playerEntity?.get('ManualGunComponent')?.stopFiring();
-    });
-
-    window.addEventListener('pointerup', e => {
-      if (e.button !== 0) return;
-      if (this._paused) return;
-      if (this._isTypingTarget(e.target)) return;
-      e.preventDefault();
-      this.playerEntity?.get('ManualGunComponent')?.stopFiring();
-    });
-  }
-
   _setupAbilityKeys() {
-    const ABILITY_ORDER = [
-      'SpeedBoostComponent', 'EmpAbilityComponent', 'WarpDriveComponent',
-      'GravityBombComponent', 'DecoyAbilityComponent',
-    ];
     window.addEventListener('keydown', e => {
       if (this._paused) return;
       const phase = this.state?.round.phase;
       if (phase !== 'combat' && phase !== 'boss_arena' && phase !== 'arena_transition') return;
       if (this._isTypingTarget(e.target)) return;
-      const slot = parseInt(e.key, 10) - 1;
+      let slot = -1;
+      if (e.code >= 'Digit1' && e.code <= 'Digit4') slot = Number(e.code.slice(5)) - 1;
+      else {
+        const k = parseInt(e.key, 10);
+        if (k >= 1 && k <= 4) slot = k - 1;
+      }
       if (slot < 0 || slot > 3) return;
-      const active = ABILITY_ORDER
+      const active = ABILITY_COMPONENT_NAMES
         .map(name => this.playerEntity?.get(name))
         .filter(Boolean);
       active[slot]?.trigger(this.world.ctx);
@@ -938,6 +927,8 @@ class Game {
       playerEntity: this.playerEntity,
       spawnLoot: (pos, currency, amount) => this.spawnDirector?.spawnLootAt(pos, currency, amount),
       camera: this.camera,
+      spawnEnemyClone: (typeName, tier, playerStats, offset) =>
+        createEnemy(typeName, tier, playerStats, offset),
     });
     this.world.spawn(this.playerEntity);
 
@@ -972,6 +963,7 @@ class Game {
       onLaunch: () => { this._closeHangar(); this._showWarpGateAndLaunch(); },
       onOpenStore: (slotId) => this._openStore(slotId),
       onClose: () => this._onHangarClosed(),
+      onGalaxyMap: () => this._openGalaxyMapFromHangar(),
     });
     this.storeUI = new StoreUI({
       state: this.state,
@@ -1013,7 +1005,9 @@ class Game {
   _onStoreClosed() { this.ui.hide('store'); }
 
   _combatMusicKey() {
-    return this.state?.round?.bossIsActive ? 'boss' : 'combat';
+    if (this.state?.round?.bossIsActive) return 'boss';
+    if (this.state?.campaign?.returnJourney?.active) return 'return-journey';
+    return 'combat';
   }
 
   _rebuildComputed() {
@@ -1040,6 +1034,7 @@ class Game {
     }
 
     eventBus.emit(EVENTS.STATS_UPDATED, this.computed);
+    this.abilityActionBar?.sync(this.playerEntity);
   }
 
   _getUnlockedGalaxies() {
@@ -1061,7 +1056,21 @@ class Game {
     const galaxies = this._getUnlockedGalaxies();
     if (galaxies.length <= 1) { this._startNewRun(0); return; }
     this.ui.hide('death');
-    this.ui.showGalaxySelect(galaxies, (galaxyIndex) => this._startNewRun(galaxyIndex));
+    this.ui.showGalaxySelect(
+      galaxies,
+      (galaxyIndex) => this._startNewRun(galaxyIndex),
+      { onBack: () => { this.ui.show('death'); } },
+    );
+  }
+
+  _openGalaxyMapFromHangar() {
+    this.ui.hide('hangar');
+    const galaxies = this._getUnlockedGalaxies();
+    this.ui.showGalaxySelect(
+      galaxies,
+      (galaxyIndex) => { this.hangarUI?.close(); this._startNewRun(galaxyIndex); },
+      { onBack: () => { this.ui.show('hangar'); } },
+    );
   }
 
   _startNewRun(galaxyIndex = 0) {
@@ -1146,15 +1155,88 @@ class Game {
    * of the arena. Advances the campaign to the next galaxy and drops the
    * ship straight back into corridor combat — no death screen, no hangar.
    */
+  _onBossScanReady(galaxyIndex) {
+    this._performScan(galaxyIndex, () => {
+      this._saveNow();
+    });
+  }
+
+  _onBossGalaxy9Complete() {
+    this._returnJourneyPending = true;
+    this.scanUI.showShipReplication(() => {
+      this._saveNow();
+    });
+  }
+
+  _performScan(galaxyIndex, onDone) {
+    const c = this.state.campaign;
+    c.scannedItems ??= [];
+    let items = listInstalledItems(this.state);
+    if (!items.length) {
+      const fallback = getItem('main_cannon');
+      if (fallback) {
+        items = [{ slot: { id: 'weapon_mid', slotType: 'weapon' }, item: fallback, instance: null }];
+      }
+    }
+    const pick = items[Math.floor(Math.random() * items.length)];
+    const item = pick.item;
+    const counterType = getCounterTypeForItem(item);
+    const slotType = item.slotType ?? pick.slot?.slotType ?? 'unknown';
+    c.scannedItems.push({
+      galaxyIndex,
+      itemId: item.id,
+      itemName: item.name,
+      slotType,
+      counterType: counterType || 'zigzagger',
+    });
+    const def = COUNTER_ENEMY_DEFS[counterType || 'zigzagger'];
+    this.scanUI.show({
+      item,
+      counterType: counterType || 'zigzagger',
+      counterLabel: def?.label ?? counterType,
+      threatDescription: def?.description ?? '',
+      galaxyIndex,
+    }, () => {
+      this.voice?.play('scan_complete');
+      onDone();
+    });
+  }
+
   _finalizeBossArena() {
     const c = this.state.campaign;
     if (!c) return;
+
     c.totalSectorsCleared = (c.totalSectorsCleared || 0) + CAMPAIGN.SECTORS_PER_GALAXY;
-    c.galaxyIndex = Math.min(c.galaxyIndex + 1, CAMPAIGN.GALAXIES - 1);
-    if (c.galaxyIndex >= CAMPAIGN.GALAXIES - 1 && !c.infiniteMode) {
-      c.infiniteMode = true;
+
+    let nextGalaxy = c.galaxyIndex;
+
+    if (this._returnJourneyPending) {
+      this._returnJourneyPending = false;
+      c.returnJourney ??= { active: false, currentGalaxy: 9, totalSectorsCleared: 0 };
+      c.returnJourney.active = true;
+      c.returnJourney.currentGalaxy = 8;
+      c.galaxyIndex = 8;
+      nextGalaxy = 8;
+      eventBus.emit(EVENTS.RETURN_JOURNEY_STARTED, {});
+    } else if (c.returnJourney?.active) {
+      c.returnJourney.currentGalaxy = (c.returnJourney.currentGalaxy ?? 0) - 1;
+      c.galaxyIndex = Math.max(0, c.returnJourney.currentGalaxy);
+      nextGalaxy = c.galaxyIndex;
+      if (c.returnJourney.currentGalaxy < 0) {
+        c.returnJourney.active = false;
+        c.galaxyIndex = 0;
+        nextGalaxy = 0;
+        eventBus.emit(EVENTS.RETURN_JOURNEY_COMPLETE, {});
+        console.log('[campaign] Return journey victory (stub).');
+      }
+    } else {
+      c.galaxyIndex = Math.min(c.galaxyIndex + 1, CAMPAIGN.GALAXIES - 1);
+      if (c.galaxyIndex >= CAMPAIGN.GALAXIES - 1 && !c.infiniteMode) {
+        c.infiniteMode = true;
+      }
+      if (c.infiniteMode) c.infiniteSector = (c.infiniteSector || 0) + 1;
+      nextGalaxy = c.galaxyIndex;
     }
-    if (c.infiniteMode) c.infiniteSector = (c.infiniteSector || 0) + 1;
 
     eventBus.emit(EVENTS.CAMPAIGN_ADVANCED, { galaxyIndex: c.galaxyIndex, infiniteMode: c.infiniteMode });
 
@@ -1162,8 +1244,6 @@ class Game {
     this.arenaHUD.hide();
     this.ui.hide('arenaHud');
     this.arenaDirector?.exit();
-
-    const nextGalaxy = c.galaxyIndex;
     const startTier = nextGalaxy * CAMPAIGN.SECTORS_PER_GALAXY + 1;
     const startDist = nextGalaxy > 0 ? (startTier - 1) * RUN.DISTANCE_PER_TIER : 0;
 
@@ -1430,6 +1510,7 @@ class Game {
     if (phase === 'combat' || phase === 'boss_arena' || phase === 'arena_transition') {
       const manual = this.playerEntity.get('ManualGunComponent');
       this.hud.update(this.state, this.computed, manual?.getHeatState?.() ?? null);
+      this.abilityActionBar?.update(dt, this.playerEntity);
       mark('hud');
     }
 

@@ -30,8 +30,9 @@ import { EmpAbilityComponent } from '../components/abilities/EmpAbilityComponent
 import { WarpDriveComponent } from '../components/abilities/WarpDriveComponent.js';
 import { GravityBombComponent } from '../components/abilities/GravityBombComponent.js';
 import { DecoyAbilityComponent } from '../components/abilities/DecoyAbilityComponent.js';
+import { ENEMY_DEFS } from '../components/enemy/EnemyDefs.js';
 
-const ENEMY_TYPES = ['all', 'scout', 'tank', 'swarm', 'sniper', 'boss'];
+const ENEMY_TYPES = ['all', ...Object.keys(ENEMY_DEFS)];
 
 function clampOdd(n) {
   let x = Math.max(1, Math.floor(n));

@@ -24,7 +24,9 @@ export class EnergyComponent extends Component {
   }
 
   update(dt) {
-    const net = this.regen - this.drain;
+    const ps = this.entity.get('PlayerStatsComponent');
+    const regenMul = ps?.eclipseRegenMult ?? 1;
+    const net = this.regen * regenMul - this.drain;
     this.current = Math.max(0, Math.min(this.max, this.current + net * dt));
 
     if (this.systemsOnline && this.current <= ENERGY.OFFLINE_THRESHOLD) {

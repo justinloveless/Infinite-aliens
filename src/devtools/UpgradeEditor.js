@@ -5,6 +5,7 @@
  */
 
 import upgradesData from '../data/upgrades.json';
+import { ENEMY_DEFS } from '../components/enemy/EnemyDefs.js';
 
 const CURRENCY_LIST  = ['credits', 'scrapMetal', 'plasmaCrystals', 'bioEssence', 'darkMatter', 'stellarDust'];
 const CURRENCY_ICONS = { credits: '⬡', scrapMetal: '⚙', plasmaCrystals: '◆', bioEssence: '✦', darkMatter: '◉', stellarDust: '★' };
@@ -14,7 +15,7 @@ const RARITIES       = ['', 'common', 'uncommon', 'rare', 'epic', 'legendary'];
 const EFFECT_TYPES   = ['multiply', 'add', 'add_flat', 'add_weapon', 'special', 'set', 'toggle', 'min', 'max'];
 const TARGETS        = ['', 'enemy', 'currency', 'round'];
 const SCALE_MODES    = ['', 'exponential', 'linear', 'fixed', 'diminishing'];
-const ENEMY_TYPES    = ['all', 'scout', 'tank', 'swarm', 'sniper', 'boss'];
+const ENEMY_TYPES    = ['all', ...Object.keys(ENEMY_DEFS)];
 const ENEMY_FIELDS   = ['hpMult', 'damageMult', 'speedMult', 'damageReceivedMult'];
 
 const PLAYER_STATS = [

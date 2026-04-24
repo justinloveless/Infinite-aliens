@@ -8,11 +8,12 @@ import { PLAYER } from '../../constants.js';
  * contact damage pulses on a 1s cooldown.
  */
 export class ContactDamageComponent extends Component {
-  constructor({ damage = 1, meleeSuicide = true, cooldown = 1.0 } = {}) {
+  constructor({ damage = 1, meleeSuicide = true, cooldown = 1.0, ignorePlayerArmor = false } = {}) {
     super();
     this.damage = damage;
     this.meleeSuicide = meleeSuicide;
     this.cooldown = cooldown;
+    this.ignorePlayerArmor = ignorePlayerArmor;
     this._cooldownRemaining = 0;
   }
 
@@ -26,7 +27,11 @@ export class ContactDamageComponent extends Component {
     if (d2 > r * r) return;
 
     if (this._cooldownRemaining > 0) return;
-    eventBus.emit(EVENTS.PLAYER_DAMAGED, { amount: this.damage, source: 'contact' });
+    eventBus.emit(EVENTS.PLAYER_DAMAGED, {
+      amount: this.damage,
+      source: 'contact',
+      ignorePlayerArmor: this.ignorePlayerArmor,
+    });
     if (ctx.audio) ctx.audio.play('playerDamage');
 
     if (this.meleeSuicide) {

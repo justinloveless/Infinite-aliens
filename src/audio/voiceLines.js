@@ -54,6 +54,14 @@ export const VOICE_PRIORITY = {
 
   // Low (background flavor)
   idle_flavor:             VOICE_PRIORITY_LOW,
+
+  // Campaign scan & return journey
+  boss_scan_ready:         VOICE_PRIORITY_CRITICAL,
+  scan_complete:           VOICE_PRIORITY_HIGH,
+  ship_replicated:         VOICE_PRIORITY_CRITICAL,
+  return_journey_start:    VOICE_PRIORITY_CRITICAL,
+  return_journey_complete: VOICE_PRIORITY_CRITICAL,
+  run_start_return:        VOICE_PRIORITY_HIGH,
 };
 
 /**
@@ -90,6 +98,13 @@ export const VOICE_COOLDOWNS = {
   kill_milestone_25:    40_000,
   kill_milestone_100:   60_000,
   idle_flavor:          60_000,
+
+  boss_scan_ready:           0,
+  scan_complete:             0,
+  ship_replicated:           0,
+  return_journey_start:      0,
+  return_journey_complete:   0,
+  run_start_return:          0,
 };
 
 /**
@@ -369,6 +384,56 @@ export const VOICE_LINES = {
       text: "Century confirmed. You are now a 'valued combat liaison.' The plaque is in the mail. It is not." },
     { id: 'pip_kill_milestone_100_03', file: 'pip_kill_milestone_100_03.mp3',
       text: "One hundred enemies dispatched. Your therapist has been notified. We do not have therapists." },
+  ],
+
+  // ---- Campaign scan & return journey ----
+  boss_scan_ready: [
+    { id: 'pip_boss_scan_ready_01', file: 'pip_boss_scan_ready_01.mp3',
+      text: "Good news, pilot: the local opposition has kindly scanned your loadout. This is a complimentary service. There is no opt-out." },
+    { id: 'pip_boss_scan_ready_02', file: 'pip_boss_scan_ready_02.mp3',
+      text: "Your equipment has been catalogued by the enemy. Think of it as a wellness check — initiated by the entity trying to destroy you." },
+    { id: 'pip_boss_scan_ready_03', file: 'pip_boss_scan_ready_03.mp3',
+      text: "Alien scan in progress. ApotheCorp values your data. So, it turns out, do they." },
+  ],
+  scan_complete: [
+    { id: 'pip_scan_complete_01', file: 'pip_scan_complete_01.mp3',
+      text: "New adaptive threat variant has been added to your itinerary. Complimentary, of course. As always." },
+    { id: 'pip_scan_complete_02', file: 'pip_scan_complete_02.mp3',
+      text: "Personalized opposition confirmed. We appreciate their attention to your build. Truly. Fly safe." },
+    { id: 'pip_scan_complete_03', file: 'pip_scan_complete_03.mp3',
+      text: "Your welcome package has been updated. The update is hostile. Please continue forward." },
+  ],
+  ship_replicated: [
+    { id: 'pip_ship_replicated_01', file: 'pip_ship_replicated_01.mp3',
+      text: "Pilot — they have made a copy of your ship. We consider this the highest form of flattery. We are not worried. — we are not worried." },
+    { id: 'pip_ship_replicated_02', file: 'pip_ship_replicated_02.mp3',
+      text: "Full replication confirmed. Everything you are is now also out there. Please chase it home. The contract does specify chase." },
+    { id: 'pip_ship_replicated_03', file: 'pip_ship_replicated_03.mp3',
+      text: "Pilot, we are so proud of how far you've come. That out there is not you. — probably not you." },
+  ],
+  return_journey_start: [
+    { id: 'pip_return_journey_start_01', file: 'pip_return_journey_start_01.mp3',
+      text: "Return sequence initiated. Your duplicates are heading home. Please escort them. By escort, we mean destroy them. Please destroy them." },
+    { id: 'pip_return_journey_start_02', file: 'pip_return_journey_start_02.mp3',
+      text: "Engaging return flight. Destination: Earth. Threat level: yourself, but wrong. Recommended response: aim." },
+  ],
+  return_journey_complete: [
+    { id: 'pip_return_journey_complete_01', file: 'pip_return_journey_complete_01.mp3',
+      text: "Return sequence complete. All duplicates neutralized. Earth is safe. Your contract has been — satisfied. You may rest." },
+    { id: 'pip_return_journey_complete_02', file: 'pip_return_journey_complete_02.mp3',
+      text: "Mission concluded, pilot. That was the last of them. You are the only you now. Statistically." },
+  ],
+  run_start_return: [
+    { id: 'pip_run_start_return_01', file: 'pip_run_start_return_01.mp3',
+      text: "Return sector initiated. The opposition today is a tribute act. A very accurate tribute act." },
+    { id: 'pip_run_start_return_02', file: 'pip_run_start_return_02.mp3',
+      text: "Re-entering familiar territory. With less familiar occupants." },
+    { id: 'pip_run_start_return_03', file: 'pip_run_start_return_03.mp3',
+      text: "They were here. Let's make sure they don't get any further." },
+  ],
+  run_start_return_galaxy_0: [
+    { id: 'pip_run_start_return_galaxy_0_01', file: 'pip_run_start_return_galaxy_0_01.mp3',
+      text: "Welcome home, pilot. The Milky Way. Last stop. Please collect your belongings and eliminate any remaining copies of yourself." },
   ],
 
   // ---- Idle flavor (low priority, long cooldown, big pool) ----

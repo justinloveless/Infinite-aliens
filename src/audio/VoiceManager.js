@@ -178,12 +178,24 @@ export class VoiceManager {
     this._clearDelayedPlays();
     const ctx = this._getContext?.();
     const gi = ctx?.galaxyIndex ?? 0;
-    const galaxyKey = `run_start_galaxy_${gi}`;
-    if (VOICE_LINES[galaxyKey] && !this._playedGalaxyRunStart.has(gi)) {
-      this._playedGalaxyRunStart.add(gi);
-      this.play(galaxyKey);
+
+    if (ctx?.returnJourneyActive) {
+      const returnKey = `run_start_return_galaxy_${gi}`;
+      const returnCacheKey = `return_${gi}`;
+      if (VOICE_LINES[returnKey] && !this._playedGalaxyRunStart.has(returnCacheKey)) {
+        this._playedGalaxyRunStart.add(returnCacheKey);
+        this.play(returnKey);
+      } else {
+        this.play('run_start_return');
+      }
     } else {
-      this.play('run_start');
+      const galaxyKey = `run_start_galaxy_${gi}`;
+      if (VOICE_LINES[galaxyKey] && !this._playedGalaxyRunStart.has(gi)) {
+        this._playedGalaxyRunStart.add(gi);
+        this.play(galaxyKey);
+      } else {
+        this.play('run_start');
+      }
     }
   }
 
@@ -301,7 +313,8 @@ export class VoiceManager {
 
     sub(EVENTS.ROUND_STARTED, () => this.onRunStarted());
 
-    sub(EVENTS.ENEMY_KILLED, () => {
+    sub(EVENTS.ENEMY_KILLED, ({ entity } = {}) => {
+      if (entity?.hasTag?.('gate_crystal')) return;
       this._killCounter += 1;
       if (this._killCounter > 0 && this._killCounter % 100 === 0) {
         this.play('kill_milestone_100');
@@ -309,6 +322,12 @@ export class VoiceManager {
         this.play('kill_milestone_25');
       }
     });
+
+    // Campaign scan & return journey
+    sub(EVENTS.BOSS_SCAN_READY,        () => this.play('boss_scan_ready'));
+    sub(EVENTS.BOSS_GALAXY9_COMPLETE,  () => this.play('ship_replicated'));
+    sub(EVENTS.RETURN_JOURNEY_STARTED, () => this.play('return_journey_start'));
+    sub(EVENTS.RETURN_JOURNEY_COMPLETE,() => this.play('return_journey_complete'));
   }
 
   _pollPlayerStatus() {

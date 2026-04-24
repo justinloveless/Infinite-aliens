@@ -7,10 +7,12 @@ import { GateCrystalComponent } from '../components/arena/GateCrystalComponent.j
 import { BOSS_ARENA } from '../constants.js';
 
 /**
- * Gate crystal entity. Destructible by player projectiles but not auto-targeted
- * (no 'enemy' entity tag — see GateCrystalComponent).
+ * Gate crystal entity: tagged `enemy` so beams, turrets, railgun hitscan, AoE,
+ * and mining lasers treat it like other combat targets. Also tagged
+ * `gate_crystal` so kill handlers (e.g. SpawnDirector) defer lifecycle to
+ * GateCrystalComponent (GATE_CRYSTAL_DESTROYED, VFX).
  *
- * Collider layer is 'enemy' so player projectiles (mask ['enemy','asteroid'])
+ * Collider layer is `enemy` so player projectiles (mask ['enemy','asteroid'])
  * hit it naturally.
  *
  * @param {{
@@ -30,7 +32,7 @@ export function createGateCrystal(opts) {
     tier = 1,
   } = opts;
 
-  const entity = new Entity(['gate_crystal', 'destructible']);
+  const entity = new Entity(['enemy', 'gate_crystal', 'destructible']);
 
   // Keep crystals on the player's Y plane so projectiles (which fly at y=0)
   // reliably intersect them. Visual mesh lifts itself slightly for a clean

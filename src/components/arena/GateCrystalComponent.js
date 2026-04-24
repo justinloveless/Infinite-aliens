@@ -9,9 +9,10 @@ import { createExplosion } from '../../prefabs/createExplosion.js';
  * ColliderComponent, and self-destruct when HP reaches 0. On destruction
  * emits GATE_CRYSTAL_DESTROYED so the gate can count them down.
  *
- * Crystals deliberately do NOT carry the 'enemy' entity tag, so auto-fire
- * weapons (which pick from world.getFrameEnemies()) skip them. The collider
- * still uses layer: 'enemy' so player projectiles hit them.
+ * Crystals carry the `enemy` tag (plus `gate_crystal`) so all player weapons
+ * that resolve targets via getFrameEnemies() can damage them. SpawnDirector
+ * ignores gate crystal kills so this component still owns teardown and
+ * GATE_CRYSTAL_DESTROYED.
  */
 export class GateCrystalComponent extends Component {
   constructor({ gateId, gatePosition, orbitAngle = 0, orbitRadius = 4, orbitSpeed = 0.6, y = 0 }) {

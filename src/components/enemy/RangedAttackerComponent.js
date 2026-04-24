@@ -9,12 +9,13 @@ import { createProjectile } from '../../prefabs/createProjectile.js';
  * behavior).
  */
 export class RangedAttackerComponent extends Component {
-  constructor({ attackSpeed = 0.5, damage = 5, keepDist = 12, outerBand = 4 } = {}) {
+  constructor({ attackSpeed = 0.5, damage = 5, keepDist = 12, outerBand = 4, stripShieldsOnPlayerHit = false } = {}) {
     super();
     this.attackSpeed = attackSpeed;
     this.damage = damage;
     this.keepDist = keepDist;
     this.outerBand = outerBand;
+    this.stripShieldsOnPlayerHit = stripShieldsOnPlayerHit;
     this._timer = attackSpeed > 0 ? Math.random() / attackSpeed : 0;
   }
 
@@ -42,6 +43,8 @@ export class RangedAttackerComponent extends Component {
     ctx.world.spawn(createProjectile({
       position: spawn, direction: dir, type: 'enemy',
       damage: this.damage, isPlayer: false,
+      damageType: 'kinetic',
+      stripShieldsOnPlayerHit: this.stripShieldsOnPlayerHit,
     }));
     if (ctx.audio) ctx.audio.play('plasma');
   }

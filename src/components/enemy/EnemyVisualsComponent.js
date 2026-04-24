@@ -13,9 +13,10 @@ export const reticleDebug = {
  * HP billboard. Synced to the entity's TransformComponent each frame.
  */
 export class EnemyVisualsComponent extends Component {
-  constructor({ def }) {
+  constructor({ def, ghostMode = false }) {
     super();
     this.def = def;
+    this.ghostMode = ghostMode;
     this._time = 0;
     this._reticleAngle = 0;
     this._flashTimer = 0;
@@ -27,6 +28,11 @@ export class EnemyVisualsComponent extends Component {
     this._buildHpBar();
     this._buildReticle();
     this.group.scale.setScalar(def.scale || 1);
+    if (ghostMode && this._bodyMesh?.material) {
+      this._bodyMesh.material.transparent = true;
+      this._bodyMesh.material.opacity = 0.05;
+      if (this._bodyMesh.material.emissive) this._bodyMesh.material.emissiveIntensity = 0.05;
+    }
   }
 
   _buildBody() {

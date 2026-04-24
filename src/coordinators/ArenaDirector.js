@@ -6,7 +6,9 @@ import { createEnemy } from '../prefabs/createEnemy.js';
 import { createExplosion } from '../prefabs/createExplosion.js';
 import { createAlienWarpGate } from '../prefabs/createAlienWarpGate.js';
 import { createPlayerWarpGate } from '../prefabs/createPlayerWarpGate.js';
-import { getAvailableTypes, weightedPick } from '../components/enemy/EnemyDefs.js';
+import { weightedPick } from '../components/enemy/EnemyDefs.js';
+import { getSpawnableEnemyTypes } from './counterSpawn.js';
+import { COUNTER_ENEMY_DEFS } from '../data/counterEnemies.js';
 
 /**
  * Fixed positions for the 3 alien warp gates inside the arena. Spread across
@@ -64,6 +66,24 @@ export class ArenaDirector {
     this._transitionOverlay = null;
     this._bossSpawned = false;
     this._bossTargetScale = 1;
+    /** One scan/replication sequence per arena visit (during player gate build, not on boss kill). */
+    this._scanEmittedThisArena = false;
+  }
+
+  _getBossTypeForGalaxy(galaxyIndex) {
+    const c = this.state?.campaign;
+    if (galaxyIndex === 0) return 'boss';
+    if (galaxyIndex === 9 || c?.returnJourney?.active) return 'ship_clone_boss';
+    const scan = c?.scannedItems?.[galaxyIndex - 1];
+    if (!scan?.counterType) return 'boss';
+    return COUNTER_ENEMY_DEFS[scan.counterType]?.mothershipType ?? 'boss';
+  }
+
+  _getMinionTypeForBoss(galaxyIndex) {
+    const c = this.state?.campaign;
+    if (galaxyIndex === 0) return 'scout';
+    if (galaxyIndex === 9 || c?.returnJourney?.active) return 'ship_clone';
+    return c?.scannedItems?.[galaxyIndex - 1]?.counterType ?? 'scout';
   }
 
   /**
@@ -82,6 +102,7 @@ export class ArenaDirector {
     this._completionTimer = 0;
     this._bossSpawnTimer = 0;
     this._bossLiveSpawns.clear();
+    this._scanEmittedThisArena = false;
 
     this.state.round.phase = 'arena_transition';
     this.state.bossArena = {
@@ -151,7 +172,8 @@ export class ArenaDirector {
 
     const tier = this.state.round.current;
     const stats = this.world.ctx.playerEntity?.get('PlayerStatsComponent');
-    this._bossEntity = createEnemy('boss', tier, stats, BOSS_SPAWN);
+    const bossType = this._getBossTypeForGalaxy(this._transitionGalaxyIndex);
+    this._bossEntity = createEnemy(bossType, tier, stats, BOSS_SPAWN);
     const health = this._bossEntity.get('HealthComponent');
     if (health) { health.hp *= 2; health.maxHp *= 2; }
     const behavior = this._bossEntity.components.get('BossBehaviorComponent');
@@ -185,7 +207,7 @@ export class ArenaDirector {
         this._onBossDefeated();
       }
       const t = entity?.get?.('TransformComponent');
-      if (t) {
+      if (t && !entity?.hasTag?.('gate_crystal')) {
         const isBoss = entity.hasTag?.('arena_boss');
         this.world.spawn(createExplosion(t.position, {
           color: isBoss ? 0xaa00ff : 0xff6600,
@@ -224,6 +246,18 @@ export class ArenaDirector {
     this.state.round.bossesDefeated = (this.state.round.bossesDefeated || 0) + 1;
   }
 
+  /** Campaign scan / galaxy-9 replication — fired when player gate starts building (boss optional). */
+  _emitCampaignScanIfNeeded() {
+    if (this._scanEmittedThisArena) return;
+    this._scanEmittedThisArena = true;
+    const galaxyIndex = this._transitionGalaxyIndex;
+    if (galaxyIndex < 9) {
+      eventBus.emit(EVENTS.BOSS_SCAN_READY, { galaxyIndex });
+    } else {
+      eventBus.emit(EVENTS.BOSS_GALAXY9_COMPLETE, { galaxyIndex });
+    }
+  }
+
   _onGateClosed() {
     const arena = this.state.bossArena;
     if (!arena?.active) return;
@@ -236,6 +270,7 @@ export class ArenaDirector {
   _advanceSubPhase(subPhase) {
     this.state.bossArena.subPhase = subPhase;
     eventBus.emit(EVENTS.ARENA_PHASE_CHANGED, { subPhase });
+    if (subPhase === 'building_gate') this._emitCampaignScanIfNeeded();
   }
 
   get isTransitioning() {
@@ -406,7 +441,11 @@ export class ArenaDirector {
     this._bossSpawnTimer = 0;
 
     const tier = this.state.round?.current || 1;
-    const types = getAvailableTypes(tier).filter(d => d.type !== 'boss');
+    const minionType = this._getMinionTypeForBoss(this._transitionGalaxyIndex);
+    const types = getSpawnableEnemyTypes(tier, this.state).filter(
+      t => t !== 'boss' && !String(t).endsWith('_boss')
+    );
+    if (minionType && !types.includes(minionType)) types.push(minionType);
     if (!types.length) return;
     const def = weightedPick(types);
     const count = def.spawnCount || 1;
@@ -468,6 +507,7 @@ export class ArenaDirector {
     arena.buildProgress = 1;
     const pgComp = this._playerGateEntity?.get('PlayerWarpGateComponent');
     if (pgComp) pgComp.setProgress(1);
+    this._emitCampaignScanIfNeeded();
     this._advanceSubPhase('complete');
     eventBus.emit(EVENTS.ARENA_COMPLETE, { bossAlive: this._isBossAlive() });
     return { ok: true };

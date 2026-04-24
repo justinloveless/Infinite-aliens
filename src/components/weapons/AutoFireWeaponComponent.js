@@ -5,6 +5,7 @@ import { isCombatPhase } from '../../core/phaseUtil.js';
 import { ENERGY } from '../../constants.js';
 import { resolveTarget } from './CombatTargeting.js';
 import { createProjectile } from '../../prefabs/createProjectile.js';
+import { getWeaponCombatMods } from '../../data/weaponCombatMods.js';
 
 /**
  * Primary nose auto-fire. Picks nearest enemy, fires `projectileCount` shots
@@ -22,6 +23,7 @@ export class AutoFireWeaponComponent extends Component {
     const t = this.entity.get('TransformComponent');
     const visuals = this.entity.get('ShipVisualsComponent');
     if (!stats || !t) return;
+    if ((stats.weaponsDisabledTimer ?? 0) > 0) { this._timer = 0; return; }
 
     this._timer += dt;
     const interval = stats.calcFireInterval();
@@ -50,9 +52,12 @@ export class AutoFireWeaponComponent extends Component {
     const killsThisRun = ctx.state.round.killsThisRun || 0;
     const resonance = ctx.playerEntity?.get('ResonanceFieldComponent')?.level ?? 0;
     const vampire = stats.vampireHealRatio ?? 0;
+    const w = getWeaponCombatMods('auto');
 
     for (let i = 0; i < count; i++) {
-      const { damage, isCrit } = stats.calcDamage({ killsThisRun, resonanceFieldLevel: resonance });
+      const { damage, isCrit } = stats.calcDamage({
+        killsThisRun, resonanceFieldLevel: resonance, ...w,
+      });
       const dir = baseDir.clone();
       if (count > 1) {
         const spread = (i / (count - 1) - 0.5) * 0.4;

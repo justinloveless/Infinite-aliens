@@ -15,12 +15,12 @@ export class SalvagingBeamComponent extends Component {
 
   onAttach(ctx) {
     this._ctx = ctx;
-    this.listen(EVENTS.ENEMY_KILLED, ({ damage }) => this._onKill(damage || 0));
+    this.listen(EVENTS.ENEMY_KILLED, ({ damage, entity }) => this._onKill(damage || 0, entity));
   }
 
-  _onKill(killingDamage) {
+  _onKill(killingDamage, entity) {
     const ctx = this._ctx;
-    if (!ctx) return;
+    if (!ctx || entity?.hasTag?.('wreck_zombie')) return;
     const energy = this.entity.get('EnergyComponent');
     if (!energy || energy.current <= 0) return;
     const heal = Math.max(1, Math.ceil(killingDamage * this.healRatio * this.count));

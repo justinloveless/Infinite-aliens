@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
-import { MANUAL_GUN, PLAYER, ENERGY } from '../../constants.js';
+import { MANUAL_GUN, ENERGY } from '../../constants.js';
+import { getWeaponCombatMods } from '../../data/weaponCombatMods.js';
 import { isCombatPhase } from '../../core/phaseUtil.js';
 import { createProjectile } from '../../prefabs/createProjectile.js';
 
@@ -33,6 +34,8 @@ export class ManualGunComponent extends Component {
     const ctx = this._ctx;
     if (!ctx || !isCombatPhase(ctx.state?.round?.phase)) return;
     if (this._overheated || this._fireCooldown > 0) return;
+    const stats = this.entity.get('PlayerStatsComponent');
+    if (!stats || (stats.weaponsDisabledTimer ?? 0) > 0) return;
 
     const energy = this.entity.get('EnergyComponent');
     if (energy && !energy.systemsOnline) return;
@@ -52,7 +55,6 @@ export class ManualGunComponent extends Component {
     }
 
     const t = this.entity.get('TransformComponent');
-    const stats = this.entity.get('PlayerStatsComponent');
     const visuals = this.entity.get('ShipVisualsComponent');
     // Spawn one projectile per installed main cannon. Extra cannons fire
     // parallel to the primary along the ship's yaw (not converging).
@@ -63,13 +65,18 @@ export class ManualGunComponent extends Component {
     // ship's nose is (essential for arena flight controls).
     const yaw = t?.rotation?.y ?? 0;
     const baseDir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-    const damage = stats?.damage ?? PLAYER.BASE_DAMAGE;
     const pierces = stats?.projectilePierces ?? 0;
+    const killsThisRun = ctx.state.round.killsThisRun || 0;
+    const resonance = this.entity.get('ResonanceFieldComponent')?.level ?? 0;
+    const w = getWeaponCombatMods('manual');
+    const { damage, isCrit } = stats.calcDamage({
+      killsThisRun, resonanceFieldLevel: resonance, ...w,
+    });
 
     for (const pos of positions) {
       ctx.world.spawn(createProjectile({
         position: pos, direction: baseDir.clone(),
-        type: 'manual', damage, isCrit: false, isPlayer: true,
+        type: 'manual', damage, isCrit, isPlayer: true,
         pierces, heatRatio: ratio,
       }));
     }
@@ -80,6 +87,9 @@ export class ManualGunComponent extends Component {
   stopFiring() {
     this._firing = false;
   }
+
+  onPrimaryFirePress() { this.fire(); }
+  onPrimaryFireRelease() { this.stopFiring(); }
 
   update(dt) {
     if (this._firing) {

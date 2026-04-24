@@ -91,6 +91,15 @@ export class World {
 
   update(dt) {
     this._frameEnemiesDirty = true;
+    const psc = this.ctx.playerEntity?.get('PlayerStatsComponent');
+    if (psc) {
+      psc.regenJammedMult = 1;
+      psc.projectileDampenMult = 1;
+      psc.jammerSlowMult = 1;
+      psc.warpDisruptorNearby = false;
+      psc.solarCellsSuppressed = false;
+      psc.eclipseRegenMult = 1;
+    }
     for (const e of this._entities) {
       if (e.active) e.update(dt, this.ctx);
     }

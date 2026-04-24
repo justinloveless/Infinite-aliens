@@ -67,6 +67,13 @@ export const EVENTS = {
   ARENA_LEAVE_REQUESTED:     'arena:leave_requested',     // {} — fired when player flies through their built warp gate
   GATE_CRYSTAL_DESTROYED:    'arena:gate_crystal_destroyed', // { gateId }
   CAMPAIGN_ADVANCED:         'campaign:advanced',         // { galaxyIndex, infiniteMode }
+  BOSS_SCAN_READY:           'campaign:boss_scan_ready',  // { galaxyIndex } — alien gates closed, player gate building (galaxies 0–8)
+  BOSS_GALAXY9_COMPLETE:     'campaign:boss_galaxy9',     // { galaxyIndex } — same moment, galaxy 9 (replication UI)
+  RETURN_JOURNEY_STARTED:    'campaign:return_started', // {}
+  RETURN_JOURNEY_COMPLETE:   'campaign:return_complete', // {}
+  GRAVITY_BOMB_EXPLODED:     'ability:gravity_bomb_end', // { origin: Vector3, radius: number }
+  EMP_SHIELD_ZERO:           'player:emp_shield_zero',  // {} — nullifier-style full shield strip
+  WEAPONS_FORCE_DISABLED:    'player:weapons_disabled', // { seconds: number } — EMP reflect / similar
   // Infinite mastery
   MASTERY_PURCHASED:   'mastery:purchased',   // { nodeId, masteryLevel }
   // Energy system

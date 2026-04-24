@@ -7,16 +7,18 @@ import { eventBus, EVENTS } from '../../core/EventBus.js';
  */
 export class PlayerDamageHandlerComponent extends Component {
   onAttach(ctx) {
-    this.listen(EVENTS.PLAYER_DAMAGED, ({ amount, source }) => this._onDamage(amount, source, ctx));
+    this.listen(EVENTS.PLAYER_DAMAGED, (payload) => this._onDamage(payload, ctx));
     this.listen(EVENTS.PLAYER_HEALED, ({ amount }) => this._onHeal(amount));
   }
 
-  _onDamage(amount, source, ctx) {
+  _onDamage(payload, ctx) {
+    const { amount, source, ignorePlayerArmor = false } = payload || {};
     // Skip processing re-emitted PLAYER_DAMAGED from takeDamage to avoid loops.
     if (source === '_internal') return;
 
     const shield = this.entity.get('ShieldComponent');
     const health = this.entity.get('HealthComponent');
+    const stats = this.entity.get('PlayerStatsComponent');
     const visuals = this.entity.get('ShipVisualsComponent');
     const audio = ctx?.audio;
 
@@ -32,11 +34,15 @@ export class PlayerDamageHandlerComponent extends Component {
         }
       }
     }
+    const armor = ignorePlayerArmor ? 0 : Math.max(0, (health?.armor ?? 0) - (stats?.corrosionArmorBypass ?? 0));
+    const hullFrom = (dmg) => Math.max(1, dmg - armor);
+
     if (!shield || shield.hp <= 0 || remaining === amount) {
       // Shield absent or broken — full damage flashes red.
       if (remaining > 0) {
         if (health) {
-          health.hp = Math.max(0, health.hp - remaining);
+          const hullDmg = hullFrom(remaining);
+          health.hp = Math.max(0, health.hp - hullDmg);
           if (health.hp <= 0 && !health.dead) {
             health.dead = true;
             eventBus.emit(EVENTS.PLAYER_DIED);
@@ -49,7 +55,8 @@ export class PlayerDamageHandlerComponent extends Component {
       }
     } else if (remaining > 0) {
       if (health) {
-        health.hp = Math.max(0, health.hp - remaining);
+        const hullDmg = hullFrom(remaining);
+        health.hp = Math.max(0, health.hp - hullDmg);
         if (health.hp <= 0 && !health.dead) {
           health.dead = true;
           eventBus.emit(EVENTS.PLAYER_DIED);

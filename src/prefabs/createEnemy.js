@@ -11,6 +11,23 @@ import { LootTableComponent } from '../components/enemy/LootTableComponent.js';
 import { EnemySeparationComponent } from '../components/enemy/EnemySeparationComponent.js';
 import { BEHAVIOR_COMPONENTS } from '../components/enemy/behaviors.js';
 import { ENEMY_DEFS } from '../components/enemy/EnemyDefs.js';
+import {
+  ScatterAuraComponent,
+  RegenJammerAuraComponent,
+  DampenAuraComponent,
+  WarpDisruptorAuraComponent,
+  EnemyGravityPullComponent,
+  CorroderContactComponent,
+  CrystalLeechContactComponent,
+  OverloaderContactComponent,
+  EMPReflectorComponent,
+  FlareLauncherComponent,
+  ViralContactComponent,
+  EclipserAuraComponent,
+  AnchorMineDropperComponent,
+  DenseCoreEnrageComponent,
+} from '../components/enemy/CounterEnemyModules.js';
+import { WreckAnimatorComponent } from '../components/enemy/WreckAnimatorComponent.js';
 
 /**
  * Assemble an enemy entity at the given tier. Applies stat scaling and upgrade
@@ -42,6 +59,10 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
   const finalHp = Math.max(1, Math.ceil(rawHp * hpMult));
   const finalDmg = Math.max(1, Math.ceil(rawDmg * dmgMult));
   const finalSpd = rawSpd * spdMult;
+  const baseArmor = def.baseArmor ?? 0;
+  const finalArmor = baseArmor > 0
+    ? Math.max(0, Math.floor(baseArmor * (1 + (tier - 1) * 0.035)))
+    : 0;
 
   const entity = new Entity(['enemy', `enemy_${def.type}`]);
 
@@ -50,10 +71,13 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
   entity.add(new TransformComponent({ position: new THREE.Vector3(x, 0, z) }));
 
   entity.add(new HealthComponent({
-    hp: finalHp, maxHp: finalHp, armor: 0,
+    hp: finalHp, maxHp: finalHp, armor: finalArmor,
     damageReceivedMult: drMult, flashOnHit: true,
   }));
-  entity.add(new EnemyVisualsComponent({ def }));
+  entity.add(new EnemyVisualsComponent({
+    def,
+    ghostMode: def.type === 'ghost_ship',
+  }));
   entity.add(new StatusEffectsComponent());
   entity.add(new ColliderComponent({
     radius: def.collisionRadius, layer: 'enemy',
@@ -66,17 +90,20 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
     keepDist: def.keepRangeDist,
   }));
 
-  const meleeSuicide = def.type !== 'boss';
+  const isBossShape = def.behavior === 'boss' || String(def.type).endsWith('_boss');
+  const meleeSuicide = !isBossShape;
   if ((def.attackSpeed || 0) > 0) {
     entity.add(new RangedAttackerComponent({
       attackSpeed: def.attackSpeed,
       damage: finalDmg,
       keepDist: def.keepRangeDist || 12,
+      stripShieldsOnPlayerHit: !!def.stripPlayerShield,
     }));
   } else {
     entity.add(new ContactDamageComponent({
       damage: finalDmg,
       meleeSuicide,
+      ignorePlayerArmor: def.type === 'titan',
     }));
   }
 
@@ -84,6 +111,60 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
   entity.add(new EnemySeparationComponent());
   entity.enemyType = def.type;
   entity.collisionRadius = def.collisionRadius;
+
+  if (def.type === 'ghost_ship') entity.addTag('scanner_hidden');
+  if (def.type === 'dense_core') entity.addTag('gravity_immune');
+  if (def.type === 'target_analyzer') entity.addTag('decoy_immune');
+
+  switch (def.type) {
+    case 'scatter_drone':
+      entity.add(new ScatterAuraComponent());
+      break;
+    case 'repair_jammer':
+      entity.add(new RegenJammerAuraComponent());
+      break;
+    case 'dampener':
+      entity.add(new DampenAuraComponent());
+      break;
+    case 'warp_disruptor':
+      entity.add(new WarpDisruptorAuraComponent());
+      break;
+    case 'gravity_anchor':
+      entity.add(new EnemyGravityPullComponent());
+      break;
+    case 'corroder':
+      entity.add(new CorroderContactComponent());
+      break;
+    case 'crystal_leech':
+      entity.add(new CrystalLeechContactComponent());
+      break;
+    case 'overloader':
+      entity.add(new OverloaderContactComponent());
+      break;
+    case 'emp_reflector':
+      entity.add(new EMPReflectorComponent());
+      break;
+    case 'flare_ship':
+      entity.add(new FlareLauncherComponent());
+      break;
+    case 'viral_agent':
+      entity.add(new ViralContactComponent());
+      break;
+    case 'eclipser':
+      entity.add(new EclipserAuraComponent());
+      break;
+    case 'anchor_mine':
+      entity.add(new AnchorMineDropperComponent());
+      break;
+    case 'dense_core':
+      entity.add(new DenseCoreEnrageComponent());
+      break;
+    case 'wreck_animator':
+      entity.add(new WreckAnimatorComponent());
+      break;
+    default:
+      break;
+  }
 
   return entity;
 }
