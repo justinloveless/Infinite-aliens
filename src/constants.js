@@ -109,18 +109,18 @@ export const TECH_TREE = {
 };
 
 export const SCENE = {
-  FOG_NEAR: 40, FOG_FAR: 85,
+  FOG_NEAR: 40, FOG_FAR: 110,
   FOG_COLOR: 0x3e2f6f,
-  AMBIENT_COLOR: 0x2f4f6f,
-  AMBIENT_INTENSITY: 0.7,
+  AMBIENT_COLOR: 0x4a6f8f,
+  AMBIENT_INTENSITY: 1.0,
   DIR_COLOR: 0xffffff,
   DIR_INTENSITY: 2.13,
 };
 
 export const BLOOM = {
-  STRENGTH: 0.45,
+  STRENGTH: 0.60,
   RADIUS: 0.74,
-  THRESHOLD: 0.65,
+  THRESHOLD: 0.48,
 };
 
 // ===== UPGRADE GRAMMAR ENUMS =====
