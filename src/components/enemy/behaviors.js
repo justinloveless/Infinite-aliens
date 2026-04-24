@@ -33,7 +33,8 @@ export class ChargeBehaviorComponent extends EnemyBehaviorComponent {
     if (d < 0.1) return;
     const spd = this.speed * this.speedScale * this._slow(this.entity);
     t.position.x += (dx / d) * spd * dt;
-    t.position.z += (dz / d) * spd * dt;
+    const zDelta = (dz / d) * spd * dt;
+    t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
   }
 }
 
@@ -54,7 +55,8 @@ export class ZigzagFastBehaviorComponent extends EnemyBehaviorComponent {
     const perpX = -dz / d;
     const perpZ = dx / d;
     t.position.x += ((dx / d) * spd + perpX * lateral) * dt;
-    t.position.z += ((dz / d) * spd + perpZ * lateral) * dt;
+    const zDelta = ((dz / d) * spd + perpZ * lateral) * dt;
+    t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
   }
 }
 
@@ -71,7 +73,8 @@ export class ZigzagBehaviorComponent extends EnemyBehaviorComponent {
     if (d < 0.1) return;
     const spd = this.speed * this.speedScale * this._slow(this.entity);
     t.position.x += ((dx / d) * spd + this._dir * spd * 0.8) * dt;
-    t.position.z += (dz / d) * spd * dt;
+    const zDelta = (dz / d) * spd * dt;
+    t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
   }
 }
 
@@ -87,10 +90,12 @@ export class KeepRangeBehaviorComponent extends EnemyBehaviorComponent {
     const spd = this.speed * this.speedScale * this._slow(this.entity);
     if (d < this.keepDist) {
       t.position.x -= (dx / d) * spd * dt * 0.5;
-      t.position.z -= (dz / d) * spd * dt * 0.5;
+      const zDelta = -(dz / d) * spd * dt * 0.5;
+      t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
     } else if (d > this.keepDist + 4) {
       t.position.x += (dx / d) * spd * dt;
-      t.position.z += (dz / d) * spd * dt;
+      const zDelta = (dz / d) * spd * dt;
+      t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
     }
   }
 }
@@ -109,7 +114,8 @@ export class SpeedMatchBehaviorComponent extends EnemyBehaviorComponent {
     if (d < 0.1) return;
     const spd = this.speed * this.speedScale * this._slow(this.entity);
     t.position.x += (dx / d) * spd * dt;
-    t.position.z += (dz / d) * spd * dt;
+    const zDelta = (dz / d) * spd * dt;
+    t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
   }
 }
 

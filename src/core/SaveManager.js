@@ -249,6 +249,10 @@ export class SaveManager {
           totalSectorsCleared: 0,
         };
       }
+      if (data.version === 22) {
+        data.version = 23;
+        if (data.campaign) data.campaign.returnJourneyUnlocked ??= false;
+      }
       if (data.version !== GAME.VERSION) return null;
 
       // Post-load: rehydrate transients + aliases that serializeState stripped.

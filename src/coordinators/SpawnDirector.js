@@ -200,6 +200,13 @@ export class SpawnDirector {
       }
     }
 
+    // Silently cull enemies that drifted off the back of the corridor.
+    // No ENEMY_KILLED event → no loot, no kill credit.
+    for (const e of this.world.getFrameEnemies()) {
+      const t = e.get('TransformComponent');
+      if (t && t.position.z > 30) e.destroy();
+    }
+
     let siphon = 0;
     for (const e of this.world.query('enemy')) {
       if (e.active && e.enemyType === 'power_siphon') siphon++;

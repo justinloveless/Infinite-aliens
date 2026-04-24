@@ -1039,41 +1039,62 @@ class Game {
 
   _getUnlockedGalaxies() {
     const c = this.state.campaign;
-    if (!c) return [{ galaxyIndex: 0, name: CAMPAIGN.GALAXY_NAMES[0], startTier: 1 }];
+    if (!c) return {
+      outbound: [{ galaxyIndex: 0, name: CAMPAIGN.GALAXY_NAMES[0], startTier: 1 }],
+      returnJourneys: [],
+      infiniteAvailable: false,
+    };
     const maxUnlocked = Math.min(c.galaxyIndex, CAMPAIGN.GALAXIES - 1);
-    const galaxies = [];
+    const outbound = [];
     for (let i = 0; i <= maxUnlocked; i++) {
-      galaxies.push({
+      outbound.push({
         galaxyIndex: i,
         name: CAMPAIGN.GALAXY_NAMES[i] || `Galaxy ${i + 1}`,
         startTier: i * CAMPAIGN.SECTORS_PER_GALAXY + 1,
       });
     }
-    return galaxies;
+    const returnJourneys = [];
+    if (c.returnJourneyUnlocked) {
+      for (let i = 0; i <= 8; i++) {
+        returnJourneys.push({
+          galaxyIndex: i,
+          name: CAMPAIGN.GALAXY_NAMES[i] || `Galaxy ${i + 1}`,
+          startTier: i * CAMPAIGN.SECTORS_PER_GALAXY + 1,
+        });
+      }
+    }
+    return {
+      outbound,
+      returnJourneys,
+      infiniteAvailable: !!c.infiniteMode,
+    };
   }
 
   _showWarpGateAndLaunch() {
-    const galaxies = this._getUnlockedGalaxies();
-    if (galaxies.length <= 1) { this._startNewRun(0); return; }
+    const options = this._getUnlockedGalaxies();
+    if (options.outbound.length <= 1 && !options.returnJourneys.length && !options.infiniteAvailable) {
+      this._startNewRun(0);
+      return;
+    }
     this.ui.hide('death');
     this.ui.showGalaxySelect(
-      galaxies,
-      (galaxyIndex) => this._startNewRun(galaxyIndex),
+      options,
+      ({ galaxyIndex, mode }) => this._startNewRun(galaxyIndex, mode),
       { onBack: () => { this.ui.show('death'); } },
     );
   }
 
   _openGalaxyMapFromHangar() {
     this.ui.hide('hangar');
-    const galaxies = this._getUnlockedGalaxies();
+    const options = this._getUnlockedGalaxies();
     this.ui.showGalaxySelect(
-      galaxies,
-      (galaxyIndex) => { this.hangarUI?.close(); this._startNewRun(galaxyIndex); },
+      options,
+      ({ galaxyIndex, mode }) => { this.hangarUI?.close(); this._startNewRun(galaxyIndex, mode); },
       { onBack: () => { this.ui.show('hangar'); } },
     );
   }
 
-  _startNewRun(galaxyIndex = 0) {
+  _startNewRun(galaxyIndex = 0, mode = 'outbound') {
     this.ui.hide('death');
     this.ui.hide('warpGate');
     this.ui.show('hud');
@@ -1085,20 +1106,30 @@ class Game {
       if (interest > 0) this.currency.add('scrapMetal', interest);
     }
 
-    const clampedGalaxy = Math.max(0, Math.min(CAMPAIGN.GALAXIES - 1, galaxyIndex));
+    const clampedGalaxy = mode === 'infinite'
+      ? CAMPAIGN.GALAXIES - 1
+      : Math.max(0, Math.min(CAMPAIGN.GALAXIES - 1, galaxyIndex));
     const startTier = clampedGalaxy * CAMPAIGN.SECTORS_PER_GALAXY + 1;
     const startDist = clampedGalaxy > 0 ? (startTier - 1) * RUN.DISTANCE_PER_TIER : 0;
     r.distanceTraveled = startDist;
     r.current = startTier;
     r.enemiesDefeated = 0;
-    r.bossesDefeated = clampedGalaxy;
+    r.bossesDefeated = mode === 'return' ? 0 : clampedGalaxy;
     r.bossIsActive = false;
     r.killsThisRun = 0;
     this.state.roundLoot = {};
 
-    // Sync campaign galaxy index to match chosen start point
     if (!this.state.campaign) this.state.campaign = { galaxyIndex: 0, totalSectorsCleared: 0, infiniteMode: false, infiniteSector: 0 };
-    this.state.campaign.galaxyIndex = clampedGalaxy;
+    const c = this.state.campaign;
+    c.galaxyIndex = clampedGalaxy;
+    if (mode === 'return') {
+      c.returnJourney ??= { active: false, currentGalaxy: 9, totalSectorsCleared: 0 };
+      c.returnJourney.active = true;
+      c.returnJourney.currentGalaxy = clampedGalaxy;
+    } else {
+      if (c.returnJourney) c.returnJourney.active = false;
+      if (mode === 'infinite') c.infiniteMode = true;
+    }
 
     // Apply galaxy environment
     this.scene.applyEnvironment(getPreset(clampedGalaxy), true);
@@ -1163,6 +1194,7 @@ class Game {
 
   _onBossGalaxy9Complete() {
     this._returnJourneyPending = true;
+    if (this.state.campaign) this.state.campaign.returnJourneyUnlocked = true;
     this.scanUI.showShipReplication(() => {
       this._saveNow();
     });

@@ -1,7 +1,7 @@
 // ===== GAME CONSTANTS =====
 
 export const GAME = {
-  VERSION: 22,
+  VERSION: 23,
   AUTO_SAVE_INTERVAL: 30000,  // ms
   OFFLINE_CAP: 8 * 3600,     // seconds
   OFFLINE_EFFICIENCY: 0.5,

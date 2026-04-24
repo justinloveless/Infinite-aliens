@@ -1504,6 +1504,131 @@ html, body {
   0%, 100% { box-shadow: 0 0 16px var(--cyan), 0 0 36px rgba(0,245,255,0.35); }
   50%       { box-shadow: 0 0 24px var(--cyan), 0 0 52px rgba(0,245,255,0.5); }
 }
+@keyframes galaxy-pulse-return {
+  0%, 100% { box-shadow: 0 0 16px var(--pink), 0 0 36px rgba(255,45,120,0.35); }
+  50%       { box-shadow: 0 0 24px var(--pink), 0 0 52px rgba(255,45,120,0.5); }
+}
+@keyframes galaxy-pulse-infinite {
+  0%, 100% { box-shadow: 0 0 16px var(--purple), 0 0 36px rgba(155,48,255,0.35); }
+  50%       { box-shadow: 0 0 24px var(--purple), 0 0 52px rgba(155,48,255,0.5); }
+}
+
+/* Map mode tabs */
+#galaxy-map-tab-bar {
+  display: flex;
+  gap: 8px;
+  padding: 0 0 10px 0;
+  border-bottom: 1px solid rgba(0,245,255,0.12);
+  flex-shrink: 0;
+}
+.galaxy-tab-btn {
+  font-family: var(--font-main);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.35);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s;
+}
+.galaxy-tab-btn:hover {
+  color: rgba(255,255,255,0.7);
+  border-color: rgba(255,255,255,0.3);
+}
+.galaxy-tab-btn.active {
+  color: var(--cyan);
+  border-color: var(--cyan);
+  text-shadow: var(--glow-cyan);
+}
+
+/* Return journey galaxy node overrides */
+.galaxy-node.galaxy-return .galaxy-node-img {
+  border-color: rgba(255,45,120,0.45);
+  filter: hue-rotate(310deg) saturate(1.4) brightness(0.85);
+}
+.galaxy-node.galaxy-return .galaxy-node-label {
+  color: rgba(255,160,160,0.55);
+}
+.galaxy-node.galaxy-return:not(.galaxy-locked):hover .galaxy-node-img {
+  box-shadow: 0 0 14px rgba(255,45,120,0.6), 0 0 28px rgba(255,45,120,0.2);
+  border-color: var(--pink);
+  filter: hue-rotate(310deg) saturate(1.5) brightness(1.05);
+}
+.galaxy-node.galaxy-return:not(.galaxy-locked):hover .galaxy-node-label { color: rgba(255,180,180,0.9); }
+.galaxy-node.galaxy-return.selected .galaxy-node-img {
+  border-color: var(--pink);
+  box-shadow: 0 0 16px var(--pink), 0 0 36px rgba(255,45,120,0.35);
+  animation: galaxy-pulse-return 1.8s ease-in-out infinite;
+}
+.galaxy-node.galaxy-return.selected .galaxy-node-label { color: var(--pink); }
+
+/* Return journey warp lines */
+.warp-line-return-active {
+  stroke: var(--pink);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  opacity: 0.65;
+  animation: warp-flow 1s linear infinite reverse;
+}
+.warp-line-return-frontier {
+  stroke: rgba(255,45,120,0.3);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  opacity: 0.5;
+  animation: warp-flow 2.5s linear infinite reverse;
+}
+.warp-line-return-locked {
+  stroke: rgba(255,255,255,0.09);
+  stroke-width: 0.8;
+  stroke-dasharray: 1.5 6;
+}
+
+/* Infinite mode panel */
+.galaxy-infinite-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 24px;
+  text-align: center;
+  padding: 40px;
+}
+.galaxy-infinite-title {
+  font-family: var(--font-main);
+  font-size: clamp(1.3rem, 3.5vw, 2rem);
+  color: var(--purple);
+  text-shadow: 0 0 20px var(--purple), 0 0 40px rgba(155,48,255,0.4);
+  letter-spacing: 0.12em;
+}
+.galaxy-infinite-desc {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.9;
+}
+
+/* Return / infinite launch button variants */
+#galaxy-launch-btn.return-launch {
+  color: var(--pink);
+  border-color: var(--pink);
+  text-shadow: var(--glow-pink);
+}
+#galaxy-launch-btn.return-launch:not(:disabled):hover {
+  background: rgba(255,45,120,0.12);
+  box-shadow: 0 0 14px rgba(255,45,120,0.3);
+}
+#galaxy-launch-btn.infinite-launch {
+  color: var(--purple);
+  border-color: var(--purple);
+  text-shadow: var(--glow-purple);
+}
+#galaxy-launch-btn.infinite-launch:not(:disabled):hover {
+  background: rgba(155,48,255,0.12);
+  box-shadow: 0 0 14px rgba(155,48,255,0.3);
+}
 
 /* Warp lines (SVG overlay in galaxy-map-container) */
 .warp-line { fill: none; vector-effect: non-scaling-stroke; }

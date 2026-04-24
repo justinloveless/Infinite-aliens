@@ -118,6 +118,7 @@ export function createInitialState() {
       infiniteSector: 0,        // increments per boss after all 10 galaxies cleared
       /** @type {{ galaxyIndex: number, itemId: string, itemName: string, slotType: string, counterType: string }[]} */
       scannedItems: [],
+      returnJourneyUnlocked: false,
       returnJourney: {
         active: false,
         currentGalaxy: 9,

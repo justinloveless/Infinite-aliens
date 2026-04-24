@@ -57,8 +57,11 @@ export class PlayerInputComponent extends Component {
     const boost = this.entity.get('SpeedBoostAbilityComponent');
     if (boost?.isActive()) speed *= boost.boostMult;
 
-    const inputX = (this._isDown('moveRight') ? 1 : 0) - (this._isDown('moveLeft') ? 1 : 0);
-    const inputZ = (this._isDown('moveDown')  ? 1 : 0) - (this._isDown('moveUp')   ? 1 : 0);
+    const rawX = (this._isDown('moveRight') ? 1 : 0) - (this._isDown('moveLeft') ? 1 : 0);
+    const rawZ = (this._isDown('moveDown')  ? 1 : 0) - (this._isDown('moveUp')   ? 1 : 0);
+    const inputLen = Math.hypot(rawX, rawZ);
+    const inputX = inputLen > 0 ? rawX / inputLen : 0;
+    const inputZ = inputLen > 0 ? rawZ / inputLen : 0;
 
     // Arena phases use the dedicated flight controller in main.js; don't
     // touch position/rotation here or the PLAY_AREA clamp will drag the ship
