@@ -78,12 +78,12 @@ export const ENEMY_DEFS = {
   },
   boss: {
     type: 'boss',
-    geometry: new THREE.IcosahedronGeometry(1.4, 1),
+    geometry: new THREE.TorusKnotGeometry(5, 1.8, 100, 16),
     color: 0xaa00ff,
     baseHp: 300,
     baseDamage: 20,
     baseSpeed: 1.2,
-    collisionRadius: 1.8,
+    collisionRadius: 9,
     behavior: 'boss',
     scale: 1,
     loot: [
@@ -327,13 +327,12 @@ export const ENEMY_DEFS = {
   },
 };
 
-function mothershipDef(counterType, color, labelHue = 0xaa00ff) {
+function mothershipDef(counterType, color, geometry) {
   const b = ENEMY_DEFS.boss;
   return {
     type: `${counterType}_boss`,
-    geometry: b.geometry.clone(),
+    geometry: geometry ?? b.geometry.clone(),
     color,
-    emissiveHint: labelHue,
     baseHp: b.baseHp,
     baseDamage: b.baseDamage,
     baseSpeed: b.baseSpeed,
@@ -346,34 +345,34 @@ function mothershipDef(counterType, color, labelHue = 0xaa00ff) {
   };
 }
 
-ENEMY_DEFS.zigzagger_boss = mothershipDef('zigzagger', 0xff6600);
-ENEMY_DEFS.mirror_drone_boss = mothershipDef('mirror_drone', 0x88eeff);
-ENEMY_DEFS.flare_ship_boss = mothershipDef('flare_ship', 0xffaa44);
-ENEMY_DEFS.plasma_eater_boss = mothershipDef('plasma_eater', 0xff00cc);
-ENEMY_DEFS.prism_shard_boss = mothershipDef('prism_shard', 0xff1133);
-ENEMY_DEFS.fortress_boss = mothershipDef('fortress', 0x556677);
-ENEMY_DEFS.titan_boss = mothershipDef('titan', 0x6688aa);
-ENEMY_DEFS.corroder_boss = mothershipDef('corroder', 0x88aa44);
-ENEMY_DEFS.nullifier_boss = mothershipDef('nullifier', 0x00ccff);
-ENEMY_DEFS.scatter_drone_boss = mothershipDef('scatter_drone', 0xffcc00);
-ENEMY_DEFS.anchor_mine_boss = mothershipDef('anchor_mine', 0x886644);
-ENEMY_DEFS.repair_jammer_boss = mothershipDef('repair_jammer', 0x44ff66);
-ENEMY_DEFS.gravity_anchor_boss = mothershipDef('gravity_anchor', 0x6633ff);
-ENEMY_DEFS.ghost_ship_boss = mothershipDef('ghost_ship', 0x888899);
-ENEMY_DEFS.wreck_animator_boss = mothershipDef('wreck_animator', 0x88ff44);
-ENEMY_DEFS.rock_slinger_boss = mothershipDef('rock_slinger', 0xccaa66);
-ENEMY_DEFS.power_siphon_boss = mothershipDef('power_siphon', 0xffd700);
-ENEMY_DEFS.overloader_boss = mothershipDef('overloader', 0xff6600);
-ENEMY_DEFS.eclipser_boss = mothershipDef('eclipser', 0x222233);
-ENEMY_DEFS.viral_agent_boss = mothershipDef('viral_agent', 0x39ff14);
-ENEMY_DEFS.crystal_leech_boss = mothershipDef('crystal_leech', 0x00f5ff);
-ENEMY_DEFS.dampener_boss = mothershipDef('dampener', 0x9b30ff);
-ENEMY_DEFS.emp_reflector_boss = mothershipDef('emp_reflector', 0xffff66);
-ENEMY_DEFS.warp_disruptor_boss = mothershipDef('warp_disruptor', 0xaa44ff);
-ENEMY_DEFS.dense_core_boss = mothershipDef('dense_core', 0x440088);
-ENEMY_DEFS.target_analyzer_boss = mothershipDef('target_analyzer', 0x00ccff);
-ENEMY_DEFS.speed_matcher_boss = mothershipDef('speed_matcher', 0xeeeeff);
-ENEMY_DEFS.ship_clone_boss = mothershipDef('ship_clone', 0xffffff);
+ENEMY_DEFS.zigzagger_boss     = mothershipDef('zigzagger',      0xff6600, new THREE.ConeGeometry(5, 12, 4));
+ENEMY_DEFS.mirror_drone_boss  = mothershipDef('mirror_drone',   0x88eeff, new THREE.OctahedronGeometry(7, 2));
+ENEMY_DEFS.flare_ship_boss    = mothershipDef('flare_ship',     0xffaa44, new THREE.ConeGeometry(4, 14, 6));
+ENEMY_DEFS.plasma_eater_boss  = mothershipDef('plasma_eater',   0xff00cc, new THREE.DodecahedronGeometry(7, 1));
+ENEMY_DEFS.prism_shard_boss   = mothershipDef('prism_shard',    0xff1133, new THREE.TetrahedronGeometry(8));
+ENEMY_DEFS.fortress_boss      = mothershipDef('fortress',       0x556677, new THREE.BoxGeometry(12, 10, 14));
+ENEMY_DEFS.titan_boss         = mothershipDef('titan',          0x6688aa, new THREE.BoxGeometry(10, 14, 9));
+ENEMY_DEFS.corroder_boss      = mothershipDef('corroder',       0x88aa44, new THREE.IcosahedronGeometry(7, 2));
+ENEMY_DEFS.nullifier_boss     = mothershipDef('nullifier',      0x00ccff, new THREE.CylinderGeometry(3, 6, 14, 12));
+ENEMY_DEFS.scatter_drone_boss = mothershipDef('scatter_drone',  0xffcc00, new THREE.TorusGeometry(7, 3, 8, 24));
+ENEMY_DEFS.anchor_mine_boss   = mothershipDef('anchor_mine',    0x886644, new THREE.OctahedronGeometry(8, 0));
+ENEMY_DEFS.repair_jammer_boss = mothershipDef('repair_jammer',  0x44ff66, new THREE.CylinderGeometry(2.5, 2.5, 14, 8));
+ENEMY_DEFS.gravity_anchor_boss= mothershipDef('gravity_anchor', 0x6633ff, new THREE.SphereGeometry(7, 20, 20));
+ENEMY_DEFS.ghost_ship_boss    = mothershipDef('ghost_ship',     0x888899, new THREE.ConeGeometry(5, 16, 6));
+ENEMY_DEFS.wreck_animator_boss= mothershipDef('wreck_animator', 0x88ff44, new THREE.BoxGeometry(14, 7, 10));
+ENEMY_DEFS.rock_slinger_boss  = mothershipDef('rock_slinger',   0xccaa66, new THREE.DodecahedronGeometry(7));
+ENEMY_DEFS.power_siphon_boss  = mothershipDef('power_siphon',   0xffd700, new THREE.TetrahedronGeometry(7));
+ENEMY_DEFS.overloader_boss    = mothershipDef('overloader',     0xff6600, new THREE.BoxGeometry(10, 7, 12));
+ENEMY_DEFS.eclipser_boss      = mothershipDef('eclipser',       0x222233, new THREE.TorusGeometry(8, 3.5, 12, 32));
+ENEMY_DEFS.viral_agent_boss   = mothershipDef('viral_agent',    0x39ff14, new THREE.IcosahedronGeometry(6, 2));
+ENEMY_DEFS.crystal_leech_boss = mothershipDef('crystal_leech',  0x00f5ff, new THREE.OctahedronGeometry(7, 1));
+ENEMY_DEFS.dampener_boss      = mothershipDef('dampener',       0x9b30ff, new THREE.CylinderGeometry(5, 6, 12, 16));
+ENEMY_DEFS.emp_reflector_boss = mothershipDef('emp_reflector',  0xffff66, new THREE.BoxGeometry(12, 8, 12));
+ENEMY_DEFS.warp_disruptor_boss= mothershipDef('warp_disruptor', 0xaa44ff, new THREE.ConeGeometry(5, 16, 8));
+ENEMY_DEFS.dense_core_boss    = mothershipDef('dense_core',     0x440088, new THREE.DodecahedronGeometry(8, 1));
+ENEMY_DEFS.target_analyzer_boss=mothershipDef('target_analyzer',0x00ccff, new THREE.ConeGeometry(4, 14, 7));
+ENEMY_DEFS.speed_matcher_boss = mothershipDef('speed_matcher',  0xeeeeff, new THREE.TetrahedronGeometry(7, 1));
+ENEMY_DEFS.ship_clone_boss    = mothershipDef('ship_clone',     0xffffff, new THREE.ConeGeometry(6, 18, 5));
 
 export const DEBUG_ENEMY_SPAWN_TYPES = [
   'scout', 'tank', 'swarm', 'sniper', 'boss',

@@ -47,7 +47,7 @@ export class EnemyVisualsComponent extends Component {
     this._spinGroup.add(mesh);
     this._bodyMesh = mesh;
 
-    if (def.type !== 'boss') {
+    if (def.behavior !== 'boss') {
       const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6);
       const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       [-0.15, 0.15].forEach(x => {
@@ -59,14 +59,16 @@ export class EnemyVisualsComponent extends Component {
   }
 
   _buildHpBar() {
+    const def = this.def;
     const trackGeo = new THREE.PlaneGeometry(1.2, 0.12);
     const trackMat = new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.7 });
     this._hpTrack = new THREE.Mesh(trackGeo, trackMat);
-    this._hpTrack.position.set(0, 1.5, 0);
+    const hpY = def.behavior === 'boss' ? 10 : 1.5;
+    this._hpTrack.position.set(0, hpY, 0);
     const barGeo = new THREE.PlaneGeometry(1.1, 0.08);
     const barMat = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
     this._hpBar = new THREE.Mesh(barGeo, barMat);
-    this._hpBar.position.set(0, 1.5, 0.01);
+    this._hpBar.position.set(0, hpY, 0.01);
     this._hpBarMat = barMat;
     this.group.add(this._hpTrack);
     this.group.add(this._hpBar);
@@ -169,7 +171,7 @@ export class EnemyVisualsComponent extends Component {
       this.group.visible = d2 <= visionRange * visionRange;
     }
 
-    if (this.def.type !== 'boss') this._spinGroup.rotation.y += dt * 0.6;
+    if (this.def.behavior !== 'boss') this._spinGroup.rotation.y += dt * 0.6;
   }
 
   get spinGroup() { return this._spinGroup; }

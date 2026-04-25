@@ -181,6 +181,18 @@ export class ArenaDirector {
     this._bossEntity.addTag('arena_boss');
 
     const vis = this._bossEntity.get('EnemyVisualsComponent');
+
+    if (bossType === 'ship_clone_boss') {
+      const playerVisuals = this.world.ctx.playerEntity?.get('ShipVisualsComponent');
+      const shipClone = playerVisuals?.cloneShipMesh?.();
+      if (shipClone && vis?.spinGroup) {
+        while (vis.spinGroup.children.length) vis.spinGroup.remove(vis.spinGroup.children[0]);
+        shipClone.scale.setScalar(5);
+        shipClone.rotation.y = Math.PI;
+        vis.spinGroup.add(shipClone);
+      }
+    }
+
     if (vis?.group) {
       this._bossTargetScale = vis.group.scale.x || 1;
       vis.group.scale.setScalar(0.001);

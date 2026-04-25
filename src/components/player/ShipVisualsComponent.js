@@ -433,6 +433,17 @@ export class ShipVisualsComponent extends Component {
     });
   }
 
+  /** Returns a deep clone of the ship's visual group (hull + turrets).
+   *  Lights are stripped so the clone doesn't affect scene lighting. */
+  cloneShipMesh() {
+    const clone = this._group.clone(true);
+    clone.position.set(0, 0, 0);
+    const toRemove = [];
+    clone.traverse(obj => { if (obj.isLight) toRemove.push(obj); });
+    toRemove.forEach(obj => obj.removeFromParent());
+    return clone;
+  }
+
   /**
    * Drive the thrust visuals (plume size/brightness + thruster light).
    * @param {number} level  0..1. 1 = full forward thrust, 0 = retro/cutoff,
