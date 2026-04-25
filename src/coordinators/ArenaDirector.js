@@ -20,7 +20,7 @@ const GATE_POSITIONS = [
   { x:   10, z: -220 },
 ];
 
-const BOSS_SPAWN = { x: 0, z: -80 };
+const BOSS_SPAWN = { x: 0, z: -25 };
 
 /**
  * Owns the boss_arena phase from entry to completion.
@@ -176,8 +176,9 @@ export class ArenaDirector {
     this._bossEntity = createEnemy(bossType, tier, stats, BOSS_SPAWN);
     const health = this._bossEntity.get('HealthComponent');
     if (health) { health.hp *= 2; health.maxHp *= 2; }
-    const behavior = this._bossEntity.components.get('BossBehaviorComponent');
-    if (behavior) behavior._speed = (behavior._speed || 1.2) * BOSS_ARENA.BOSS_MOVE_SPEED_MULT;
+    const _bossNames = ['BossBehaviorComponent', 'BossRusherBehaviorComponent', 'BossOrbiterBehaviorComponent', 'BossSniperBehaviorComponent', 'BossAggressorBehaviorComponent'];
+    const behavior = _bossNames.reduce((found, n) => found ?? this._bossEntity.components.get(n), null);
+    if (behavior) behavior.speed = (behavior.speed || 1.2) * BOSS_ARENA.BOSS_MOVE_SPEED_MULT;
     this._bossEntity.addTag('arena_boss');
 
     const vis = this._bossEntity.get('EnemyVisualsComponent');
