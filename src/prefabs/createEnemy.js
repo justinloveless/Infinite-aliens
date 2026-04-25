@@ -7,6 +7,7 @@ import { EnemyVisualsComponent } from '../components/enemy/EnemyVisualsComponent
 import { StatusEffectsComponent } from '../components/enemy/StatusEffectsComponent.js';
 import { ContactDamageComponent } from '../components/enemy/ContactDamageComponent.js';
 import { RangedAttackerComponent } from '../components/enemy/RangedAttackerComponent.js';
+import { BossAttackerComponent } from '../components/enemy/BossAttackerComponent.js';
 import { LootTableComponent } from '../components/enemy/LootTableComponent.js';
 import { EnemySeparationComponent } from '../components/enemy/EnemySeparationComponent.js';
 import { BEHAVIOR_COMPONENTS } from '../components/enemy/behaviors.js';
@@ -90,9 +91,17 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
     keepDist: def.keepRangeDist,
   }));
 
-  const isBossShape = def.behavior === 'boss' || String(def.type).endsWith('_boss');
+  const isBossShape = (def.behavior?.startsWith('boss')) || String(def.type).endsWith('_boss');
   const meleeSuicide = !isBossShape;
-  if ((def.attackSpeed || 0) > 0) {
+  if (def.attackPattern) {
+    // Boss with distinct attack pattern — gets ranged boss attacker + melee contact
+    entity.add(new BossAttackerComponent({
+      attackSpeed: def.attackSpeed || 0.4,
+      damage: finalDmg,
+      pattern: def.attackPattern,
+    }));
+    entity.add(new ContactDamageComponent({ damage: finalDmg, meleeSuicide: false }));
+  } else if ((def.attackSpeed || 0) > 0) {
     entity.add(new RangedAttackerComponent({
       attackSpeed: def.attackSpeed,
       damage: finalDmg,

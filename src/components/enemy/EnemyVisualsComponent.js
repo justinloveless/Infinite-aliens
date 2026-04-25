@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BOSS_ARENA } from '../../constants.js';
 import { Component } from '../../ecs/Component.js';
 
 export const reticleDebug = {
@@ -28,24 +29,39 @@ export class EnemyVisualsComponent extends Component {
     this._buildHpBar();
     this._buildReticle();
     this.group.scale.setScalar(def.scale || 1);
-    if (ghostMode && this._bodyMesh?.material) {
-      this._bodyMesh.material.transparent = true;
-      this._bodyMesh.material.opacity = 0.22;
-      if (this._bodyMesh.material.emissive) this._bodyMesh.material.emissiveIntensity = 0.30;
+    if (ghostMode) {
+      for (const m of this._bodyMeshes) {
+        if (!m.material) continue;
+        m.material.transparent = true;
+        m.material.opacity = 0.22;
+        if (m.material.emissive) m.material.emissiveIntensity = 0.30;
+      }
     }
   }
 
   _buildBody() {
     const def = this.def;
-    const mat = new THREE.MeshStandardMaterial({
-      color: def.color,
-      emissive: new THREE.Color(def.color).multiplyScalar(0.5),
-      metalness: 0.5,
-      roughness: 0.4,
-    });
-    const mesh = new THREE.Mesh(def.geometry.clone(), mat);
-    this._spinGroup.add(mesh);
-    this._bodyMesh = mesh;
+    this._bodyMeshes = [];
+
+    if (def.buildGroup) {
+      const grp = def.buildGroup();
+      this._spinGroup.add(grp);
+      grp.traverse(obj => {
+        if (obj.isMesh) this._bodyMeshes.push(obj);
+      });
+      this._bodyMesh = this._bodyMeshes[0] ?? null;
+    } else {
+      const mat = new THREE.MeshStandardMaterial({
+        color: def.color,
+        emissive: new THREE.Color(def.color).multiplyScalar(0.5),
+        metalness: 0.5,
+        roughness: 0.4,
+      });
+      const mesh = new THREE.Mesh(def.geometry.clone(), mat);
+      this._spinGroup.add(mesh);
+      this._bodyMesh = mesh;
+      this._bodyMeshes.push(mesh);
+    }
 
     if (def.behavior !== 'boss') {
       const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6);
@@ -116,8 +132,8 @@ export class EnemyVisualsComponent extends Component {
   setTargeted(v) { if (this._reticle) this._reticle.visible = !!v; }
 
   flash() {
-    if (!this._bodyMesh) return;
-    this._bodyMesh.material.emissive.setHex(0xffffff);
+    if (!this._bodyMeshes?.length) return;
+    for (const m of this._bodyMeshes) m.material.emissive?.setHex(0xffffff);
     this._flashTimer = 0.08;
   }
 
@@ -143,8 +159,9 @@ export class EnemyVisualsComponent extends Component {
     if (this._flashTimer > 0) {
       this._flashTimer -= dt;
       if (this._flashTimer <= 0) {
-        const base = new THREE.Color(this._bodyMesh.material.color).multiplyScalar(0.5);
-        this._bodyMesh.material.emissive.copy(base);
+        for (const m of this._bodyMeshes) {
+          if (m.material.emissive) m.material.emissive.copy(new THREE.Color(m.material.color).multiplyScalar(0.5));
+        }
       }
     }
 
@@ -164,14 +181,21 @@ export class EnemyVisualsComponent extends Component {
     const playerEnt = ctx?.playerEntity;
     const playerT = playerEnt?.get('TransformComponent');
     if (playerT) {
-      const visionRange = playerEnt.get('PlayerStatsComponent')?.visionRange ?? Infinity;
+      const phase = ctx?.state?.round?.phase;
+      const arenaPhase = phase === 'boss_arena' || phase === 'arena_transition';
+      const arenaVision = Math.hypot(
+        BOSS_ARENA.X_MAX - BOSS_ARENA.X_MIN,
+        BOSS_ARENA.Z_MAX - BOSS_ARENA.Z_MIN,
+      );
+      const visionRange = arenaPhase
+        ? arenaVision
+        : (playerEnt.get('PlayerStatsComponent')?.visionRange ?? Infinity);
       const dx = this.group.position.x - playerT.position.x;
       const dz = this.group.position.z - playerT.position.z;
       const d2 = dx * dx + dz * dz;
       this.group.visible = d2 <= visionRange * visionRange;
+      if (d2 > 0.01) this._spinGroup.rotation.y = Math.atan2(dx, dz);
     }
-
-    if (this.def.behavior !== 'boss') this._spinGroup.rotation.y += dt * 0.6;
   }
 
   get spinGroup() { return this._spinGroup; }

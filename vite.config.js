@@ -14,6 +14,9 @@ function devUpgradesPlugin() {
         if (req.url === '/dev/shipslotdesigner') {
           req.url = '/dev/shipslotdesigner.html';
         }
+        if (req.url === '/dev/meshpreview') {
+          req.url = '/dev/meshpreview.html';
+        }
 
         if (req.method === 'POST' && req.url === '/dev/save-upgrades') {
           let body = '';
@@ -89,6 +92,7 @@ export default defineConfig({
       input: {
         main: resolve('./index.html'),
         shipSlotDesigner: resolve('./dev/shipslotdesigner.html'),
+        meshPreview: resolve('./dev/meshpreview.html'),
       },
     },
   },
