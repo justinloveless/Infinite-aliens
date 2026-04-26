@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { eventBus, EVENTS } from '../core/EventBus.js';
-import { BOSS_ARENA } from '../constants.js';
+import { BOSS_ARENA, PLAYER } from '../constants.js';
 import { getPreset } from '../scene/EnvironmentPresets.js';
 import { createEnemy } from '../prefabs/createEnemy.js';
 import { createExplosion } from '../prefabs/createExplosion.js';
@@ -173,7 +173,13 @@ export class ArenaDirector {
     const tier = this.state.round.current;
     const stats = this.world.ctx.playerEntity?.get('PlayerStatsComponent');
     const bossType = this._getBossTypeForGalaxy(this._transitionGalaxyIndex);
-    this._bossEntity = createEnemy(bossType, tier, stats, BOSS_SPAWN);
+    this._bossEntity = createEnemy(
+      bossType,
+      tier,
+      stats,
+      BOSS_SPAWN,
+      { baseSpeedOverride: PLAYER.BASE_SPEED }
+    );
     const health = this._bossEntity.get('HealthComponent');
     if (health) { health.hp *= 2; health.maxHp *= 2; }
     const _bossNames = ['BossBehaviorComponent', 'BossRusherBehaviorComponent', 'BossOrbiterBehaviorComponent', 'BossSniperBehaviorComponent', 'BossAggressorBehaviorComponent'];
@@ -472,7 +478,13 @@ export class ArenaDirector {
         x: bossT.position.x + Math.cos(jitterAngle) * jitterR,
         z: bossT.position.z + Math.sin(jitterAngle) * jitterR,
       };
-      const ent = createEnemy(def.type, tier, stats, offset);
+      const ent = createEnemy(
+        def.type,
+        tier,
+        stats,
+        offset,
+        { baseSpeedOverride: PLAYER.BASE_SPEED }
+      );
       this.world.spawn(ent);
       this._bossLiveSpawns.add(ent);
       eventBus.emit(EVENTS.ENEMY_SPAWNED, { entity: ent });

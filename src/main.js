@@ -1551,6 +1551,11 @@ class Game {
       this.arenaHUD.update(this.state.bossArena, { bossAlive });
       const targets = this.arenaDirector?.getIndicatorTargets?.() || [];
       this.arenaHUD.updateIndicators(targets, this.scene.camera, this.scene.renderer?.domElement);
+      const playerT = this.playerEntity?.get('TransformComponent');
+      if (playerT) {
+        playerT.position._yaw = playerT.rotation.y;
+        this.arenaHUD.updateMinimap(playerT.position, targets);
+      }
     }
 
     this.saveManager.update(dt, this.state);

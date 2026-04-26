@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { eventBus, EVENTS } from '../../core/EventBus.js';
-import { BOSS_ARENA } from '../../constants.js';
+import { BOSS_ARENA, PLAYER } from '../../constants.js';
 import { createEnemy } from '../../prefabs/createEnemy.js';
 import { createGateCrystal } from '../../prefabs/createGateCrystal.js';
 import { weightedPick } from '../enemy/EnemyDefs.js';
@@ -135,7 +135,13 @@ export class AlienWarpGateComponent extends Component {
         x: gatePos.x + (i - (count - 1) / 2) * 2.5,
         z: gatePos.z + 1.5,
       };
-      const ent = createEnemy(def.type, tier, stats, offset);
+      const ent = createEnemy(
+        def.type,
+        tier,
+        stats,
+        offset,
+        { baseSpeedOverride: PLAYER.BASE_SPEED }
+      );
       ctx.world.spawn(ent);
       this._liveSpawns.add(ent);
       eventBus.emit(EVENTS.ENEMY_SPAWNED, { entity: ent });

@@ -38,8 +38,9 @@ import { WreckAnimatorComponent } from '../components/enemy/WreckAnimatorCompone
  * @param {number} tier
  * @param {PlayerStatsComponent|null} playerStats - for enemyModifiers
  * @param {{x?: number, z?: number}} [spawnOffset] - additional offset from random spawn
+ * @param {{baseSpeedOverride?: number}|null} [options] - optional per-spawn stat overrides
  */
-export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset = null) {
+export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset = null, options = null) {
   const def = ENEMY_DEFS[typeName];
   if (!def) throw new Error(`Unknown enemy type: ${typeName}`);
 
@@ -47,7 +48,10 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
   const dmgScale = Math.pow(1.05, tier - 1);
   const rawHp = Math.ceil(def.baseHp * hpScale);
   const rawDmg = Math.ceil(def.baseDamage * dmgScale);
-  const rawSpd = def.baseSpeed * (1 + tier * 0.004);
+  const baseSpeed = Number.isFinite(options?.baseSpeedOverride)
+    ? options.baseSpeedOverride
+    : def.baseSpeed;
+  const rawSpd = baseSpeed * (1 + tier * 0.004);
 
   const mods = playerStats?.enemyModifiers || null;
   const allMod = mods?.all || {};

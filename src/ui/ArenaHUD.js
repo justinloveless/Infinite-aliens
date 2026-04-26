@@ -27,6 +27,8 @@ export class ArenaHUD {
     this._buildFill      = document.getElementById('arena-build-fill');
     this._leavePrompt    = document.getElementById('arena-leave-prompt');
     this._indicators     = document.getElementById('arena-indicators');
+    this._mapCanvas      = document.getElementById('arena-minimap');
+    this._mapCtx         = this._mapCanvas?.getContext('2d') ?? null;
 
     this._indicatorEls = new Map(); // id -> element
   }
@@ -35,6 +37,9 @@ export class ArenaHUD {
   hide() {
     this._root?.classList.add('hidden');
     this._clearIndicators();
+    if (this._mapCtx && this._mapCanvas) {
+      this._mapCtx.clearRect(0, 0, this._mapCanvas.width, this._mapCanvas.height);
+    }
   }
 
   /**
@@ -87,6 +92,68 @@ export class ArenaHUD {
       this._leavePrompt.classList.remove('hidden');
     } else {
       this._leavePrompt.classList.add('hidden');
+    }
+  }
+
+  /**
+   * @param {THREE.Vector3 & {_yaw?:number}} playerPos
+   * @param {Array<{id, kind, worldPos:THREE.Vector3}>} targets
+   */
+  updateMinimap(playerPos, targets) {
+    const canvas = this._mapCanvas;
+    const ctx    = this._mapCtx;
+    if (!canvas || !ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.width  = canvas.offsetWidth  * dpr;
+    const H = canvas.height = canvas.offsetHeight * dpr;
+
+    const wx = x => ((x + 300) / 600) * W;
+    const wz = z => ((z + 300) / 600) * H;
+
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.strokeStyle = 'rgba(0, 245, 255, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, W, H);
+
+    const dot = (x, z, color, r) => {
+      ctx.beginPath();
+      ctx.arc(wx(x), wz(z), r, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = r * 3;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    };
+
+    for (const t of targets) {
+      if (!t?.worldPos) continue;
+      switch (t.kind) {
+        case 'boss':        dot(t.worldPos.x, t.worldPos.z, '#ff3355', 4 * dpr);   break;
+        case 'alien_gate':  dot(t.worldPos.x, t.worldPos.z, '#c066ff', 3.5 * dpr); break;
+        case 'player_gate': dot(t.worldPos.x, t.worldPos.z, '#39ff14', 3.5 * dpr); break;
+      }
+    }
+
+    if (playerPos) {
+      const px   = wx(playerPos.x);
+      const pz   = wz(playerPos.z);
+      const yaw  = playerPos._yaw ?? 0;
+      const size = 5 * dpr;
+      ctx.save();
+      ctx.translate(px, pz);
+      ctx.rotate(-yaw);
+      ctx.beginPath();
+      ctx.moveTo(0, -size);
+      ctx.lineTo( size * 0.6,  size * 0.7);
+      ctx.lineTo(-size * 0.6,  size * 0.7);
+      ctx.closePath();
+      ctx.fillStyle = '#00f5ff';
+      ctx.shadowColor = '#00f5ff';
+      ctx.shadowBlur = 6;
+      ctx.fill();
+      ctx.restore();
     }
   }
 

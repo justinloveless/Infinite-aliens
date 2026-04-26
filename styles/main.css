@@ -1723,6 +1723,17 @@ html, body {
   margin-bottom: 2px;
 }
 
+/* ===== ARENA MINIMAP ===== */
+#arena-minimap {
+  width: 140px;
+  height: 140px;
+  border: 1px solid rgba(0, 245, 255, 0.35);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.65);
+  box-shadow: 0 0 10px rgba(0, 245, 255, 0.15);
+  display: block;
+}
+
 /* ===== BOSS ARENA HUD ===== */
 #arena-hud {
   position: fixed;
