@@ -7,6 +7,7 @@ import { ShieldComponent } from '../components/health/ShieldComponent.js';
 import { RegenComponent } from '../components/health/RegenComponent.js';
 import { PlayerInputComponent } from '../components/player/PlayerInputComponent.js';
 import { ArenaTrailComponent } from '../components/player/ArenaTrailComponent.js';
+import { PlayerCrosshairComponent } from '../components/player/PlayerCrosshairComponent.js';
 import { PlayerStatsComponent } from '../components/player/PlayerStatsComponent.js';
 import { EnergyComponent } from '../components/player/EnergyComponent.js';
 import { ShipVisualsComponent } from '../components/player/ShipVisualsComponent.js';
@@ -41,6 +42,7 @@ export function createPlayer({ settings = null, state = null } = {}) {
   entity.add(new ShipVisualsComponent());
   entity.add(new PlayerInputComponent({ settings }));
   entity.add(new ArenaTrailComponent());
+  entity.add(new PlayerCrosshairComponent());
   entity.add(new PlayerDamageHandlerComponent());
   return entity;
 }

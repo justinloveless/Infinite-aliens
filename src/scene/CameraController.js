@@ -21,8 +21,8 @@ const COMBAT_SWAY_LERP     = 4;
 export class CameraController {
   constructor(camera) {
     this._camera = camera;
-    this._basePos = new THREE.Vector3(0, 9, 13);
-    this._baseLookAt = new THREE.Vector3(0, 0, -5);
+    this._basePos = new THREE.Vector3(0, 4, 10);
+    this._baseLookAt = new THREE.Vector3(0, 1, -5);
     this._shakeTimer = 0;
     this._shakeIntensity = 0;
     this._floatTime = 0;
@@ -51,6 +51,9 @@ export class CameraController {
     this._combatRoll = 0;
     this._combatSwayTarget = 0;
     this._combatSway = 0;
+    // Vertical follow for combat camera (player can now move on Y axis).
+    this._combatPlayerY = 0;
+    this._smoothCombatY = 0;
     /** Roll/sway in combat + arena chase when false. */
     this._cameraTiltEnabled = true;
   }
@@ -110,6 +113,9 @@ export class CameraController {
   setWarpFovBonus(t) {
     this._warpFovBonus = Math.max(0, Math.min(1, t || 0));
   }
+
+  /** Feed the player's current Y position for the combat camera to follow. */
+  setCombatPlayerY(y) { this._combatPlayerY = y ?? 0; }
 
   /**
    * Feed the combat-corridor screen tilt each frame.
@@ -223,6 +229,9 @@ export class CameraController {
     this._combatRoll += (rollTarget - this._combatRoll) * Math.min(1, delta * COMBAT_ROLL_LERP);
     this._combatSway += (swayTarget - this._combatSway) * Math.min(1, delta * COMBAT_SWAY_LERP);
 
+    // Follow player vertical position with a smooth lag.
+    this._smoothCombatY += (this._combatPlayerY - this._smoothCombatY) * Math.min(1, delta * 4);
+
     // Sign is negated vs. ship rotation.z because the combat camera looks
     // down at the ship (forward has a large -Y component), which inverts the
     // apparent roll direction relative to the arena chase cam.
@@ -230,12 +239,12 @@ export class CameraController {
     const swayX = this._combatSway;
 
     const camX = this._basePos.x + floatX + shakeX + swayX;
-    const camY = this._basePos.y + floatY + shakeY;
+    const camY = this._basePos.y + this._smoothCombatY + floatY + shakeY;
     const camZ = this._basePos.z;
     this._camera.position.set(camX, camY, camZ);
 
     const lookX = this._baseLookAt.x + shakeX + swayX * 0.5;
-    const lookY = this._baseLookAt.y + shakeY * 0.5;
+    const lookY = this._baseLookAt.y + this._smoothCombatY * 0.7 + shakeY * 0.5;
     const lookZ = this._baseLookAt.z;
 
     if (Math.abs(rollAngle) > 0.0001) {

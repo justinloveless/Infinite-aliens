@@ -58,16 +58,20 @@ export class SynthGrid {
     } else {
       const zStart = cfg.zStart;
       const zEnd = cfg.zEnd;
-      // Vertical lines running front-to-back
+      const FLOOR_Y = -5.5;
+      const CEIL_Y  =  5.5;
+      // Vertical lines running front-to-back (floor + ceiling)
       for (let i = 0; i <= cfg.vLines; i++) {
         const x = (i / cfg.vLines - 0.5) * cfg.width;
-        lines.push(x, -3.5, zStart, x, -3.5, zEnd);
+        lines.push(x, FLOOR_Y, zStart, x, FLOOR_Y, zEnd);
+        lines.push(x, CEIL_Y,  zStart, x, CEIL_Y,  zEnd);
       }
-      // Horizontal lines
+      // Horizontal lines (floor + ceiling)
       const span = zStart - zEnd;
       for (let i = 0; i <= cfg.hLines; i++) {
         const z = zStart - i * (span / cfg.hLines);
-        lines.push(-halfW, -3.5, z, halfW, -3.5, z);
+        lines.push(-halfW, FLOOR_Y, z, halfW, FLOOR_Y, z);
+        lines.push(-halfW, CEIL_Y,  z, halfW, CEIL_Y,  z);
       }
     }
 

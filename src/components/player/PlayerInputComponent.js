@@ -12,12 +12,11 @@ const ARROW_ALTS = {
 
 const X_MIN = PLAY_AREA.X_MIN + 2;
 const X_MAX = PLAY_AREA.X_MAX - 2;
-const Z_MIN = -8;
-const Z_MAX = 5;
 
 /**
  * Reads keyboard input and writes velocity into the player's TransformComponent.
- * Owns its own input listeners.
+ * W/S → vertical pitch (Y-axis). A/D → lateral (X-axis).
+ * Shift → boost (speed ×BOOST_MULT). Ctrl → brakes (high drag).
  */
 export class PlayerInputComponent extends Component {
   constructor({ settings = null } = {}) {
@@ -25,8 +24,8 @@ export class PlayerInputComponent extends Component {
     this._settings = settings;
     this._keys = {};
     this._vx = 0;
+    this._vy = 0;
     this._vz = 0;
-    this._time = 0;
     this._onKeyDown = e => { this._keys[e.code] = true; };
     this._onKeyUp = e => { this._keys[e.code] = false; };
   }
@@ -47,21 +46,13 @@ export class PlayerInputComponent extends Component {
   }
 
   update(dt, ctx) {
-    this._time += dt;
     const t = this.entity?.get('TransformComponent');
     if (!t) return;
 
     const player = this.entity.get('PlayerStatsComponent');
     let speed = (player?.speed ?? 3) * (player?.jammerSlowMult ?? 1);
-    // Apply active speed boost from ability
     const boost = this.entity.get('SpeedBoostAbilityComponent');
     if (boost?.isActive()) speed *= boost.boostMult;
-
-    const rawX = (this._isDown('moveRight') ? 1 : 0) - (this._isDown('moveLeft') ? 1 : 0);
-    const rawZ = (this._isDown('moveDown')  ? 1 : 0) - (this._isDown('moveUp')   ? 1 : 0);
-    const inputLen = Math.hypot(rawX, rawZ);
-    const inputX = inputLen > 0 ? rawX / inputLen : 0;
-    const inputZ = inputLen > 0 ? rawZ / inputLen : 0;
 
     // Arena phases use the dedicated flight controller in main.js; don't
     // touch position/rotation here or the PLAY_AREA clamp will drag the ship
@@ -69,26 +60,42 @@ export class PlayerInputComponent extends Component {
     const phase = ctx?.state?.round?.phase;
     if (!isOpenCombatPhase(phase)) {
       this._vx += (0 - this._vx) * dt * 10;
+      this._vy += (0 - this._vy) * dt * 10;
       this._vz += (0 - this._vz) * dt * 10;
       return;
     }
 
-    const accel = dt * 10;
-    const targetVx = inputX * speed;
-    const targetVz = inputZ * speed;
-    this._vx += (targetVx - this._vx) * accel;
-    this._vz += (targetVz - this._vz) * accel;
+    const isBoosting = this._keys['ShiftLeft'] || this._keys['ShiftRight'];
+    const isBraking  = this._keys['ControlLeft'] || this._keys['ControlRight'];
+
+    if (isBoosting) speed *= PLAY_AREA.BOOST_MULT;
+
+    const decelRate = isBraking ? PLAY_AREA.BRAKE_DRAG : 10;
+    const accel = dt * decelRate;
+
+    const rawX = (this._isDown('moveRight') ? 1 : 0) - (this._isDown('moveLeft') ? 1 : 0);
+    const ySign = this._settings?.invertYControls ? -1 : 1;
+    const rawY = ((this._isDown('moveUp') ? 1 : 0) - (this._isDown('moveDown') ? 1 : 0)) * ySign;
+    const inputLen = Math.hypot(rawX, rawY);
+    const inputX = inputLen > 0 ? rawX / inputLen : 0;
+    const inputY = inputLen > 0 ? rawY / inputLen : 0;
+
+    this._vx += (inputX * speed - this._vx) * accel;
+    this._vy += (inputY * speed - this._vy) * accel;
+    this._vz += (0 - this._vz) * dt * 10;
 
     t.position.x = THREE.MathUtils.clamp(t.position.x + this._vx * dt, X_MIN, X_MAX);
-    t.position.z = THREE.MathUtils.clamp(t.position.z + this._vz * dt, Z_MIN, Z_MAX);
-    t.position.y = Math.sin(this._time * 1.2) * 0.15;
+    t.position.y = THREE.MathUtils.clamp(t.position.y + this._vy * dt, PLAY_AREA.Y_MIN, PLAY_AREA.Y_MAX);
 
-    const bank = -(this._vx / Math.max(0.01, speed)) * 0.38;
-    const pitch = (this._vz / Math.max(0.01, speed)) * 0.12;
-    t.rotation.z = THREE.MathUtils.lerp(t.rotation.z, bank, dt * 7);
-    t.rotation.x = THREE.MathUtils.lerp(t.rotation.x, pitch, dt * 7);
+    const speedNorm = Math.max(0.01, speed);
+    const targetYaw   = -(this._vx / speedNorm) * 0.45;
+    const targetPitch =  (this._vy / speedNorm) * 0.35;
+    const targetBank  = -(this._vx / speedNorm) * 0.15;
+    t.rotation.y = THREE.MathUtils.lerp(t.rotation.y, targetYaw,   dt * 7);
+    t.rotation.x = THREE.MathUtils.lerp(t.rotation.x, targetPitch, dt * 7);
+    t.rotation.z = THREE.MathUtils.lerp(t.rotation.z, targetBank,  dt * 7);
   }
 
-  /** Exposed for world-motion scaling in main.js. */
-  getVelocity() { return { x: this._vx, z: this._vz }; }
+  /** Exposed for world-motion scaling and camera sway in main.js. */
+  getVelocity() { return { x: this._vx, y: this._vy, z: this._vz }; }
 }

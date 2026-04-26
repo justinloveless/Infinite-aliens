@@ -75,9 +75,12 @@ export const ENEMY = {
 
 export const PLAY_AREA = {
   X_MIN: -18, X_MAX: 18,
+  Y_MIN: -5,  Y_MAX: 5,
   Y_SHIP: 0,
   Z_SHIP: 0,
   ENEMY_X_SPREAD: 16,
+  BOOST_MULT: 1.8,   // speed × when Shift held
+  BRAKE_DRAG: 15,    // decel multiplier when Ctrl held
 };
 
 export const CURRENCIES = {
@@ -256,10 +259,17 @@ export const BOSS_ARENA = {
   BOSS_SPAWN_INTERVAL: 2.5,  // seconds between boss minion spawns while boss alive
   BOSS_MAX_LIVE_SPAWNS: 8,   // cap on concurrent minions spawned by the boss
 
+  // Vertical flight bounds
+  Y_MIN: -40, Y_MAX: 40,
+
   // Flight controller — inertia-lite (decoupled nose vs. velocity vector)
   YAW_SPEED: 2.0,            // rad/sec per A/D hold (nose-only; does not redirect velocity)
-  THRUST_ACCEL_MULT: 2.0,    // × baseSpeed per sec while holding W (forward thrust along nose)
-  BRAKE_DECEL_MULT: 3.0,     // × baseSpeed per sec while holding S (retro thrust along velocity)
+  THRUST_ACCEL_MULT: 2.0,    // × baseSpeed per sec while holding Shift (forward thrust along nose)
+  BOOST_ACCEL_MULT: 2.5,     // × baseSpeed for Shift thrust (replaces old W thrust)
+  BOOST_MAX_MULT: 2.0,       // raises velocity cap while Shift held
+  BRAKE_DECEL_MULT: 3.0,     // × baseSpeed per sec while holding Ctrl (retro thrust along velocity)
+  PITCH_ACCEL_MULT: 2.0,     // × baseSpeed per sec for W/S vertical pitch
+  Y_GRAVITY: 4.0,            // pull back toward Y=0 when not pitching
   MIN_SPEED_MULT: 0.45,      // × baseSpeed — floor on velocity magnitude (no full stop)
   MAX_SPEED_MULT: 1.5,       // × baseSpeed — hard cap on velocity magnitude
   VELOCITY_ALIGN_TAU: 2.0,   // seconds for velocity to relax toward nose heading (arcade forgiveness)

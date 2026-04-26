@@ -10,7 +10,7 @@ import { RangedAttackerComponent } from '../components/enemy/RangedAttackerCompo
 import { BossAttackerComponent } from '../components/enemy/BossAttackerComponent.js';
 import { LootTableComponent } from '../components/enemy/LootTableComponent.js';
 import { EnemySeparationComponent } from '../components/enemy/EnemySeparationComponent.js';
-import { BEHAVIOR_COMPONENTS } from '../components/enemy/behaviors.js';
+import { BEHAVIOR_COMPONENTS, EnemyVerticalTrackingComponent } from '../components/enemy/behaviors.js';
 import { ENEMY_DEFS } from '../components/enemy/EnemyDefs.js';
 import {
   ScatterAuraComponent,
@@ -37,7 +37,7 @@ import { WreckAnimatorComponent } from '../components/enemy/WreckAnimatorCompone
  * @param {string} typeName
  * @param {number} tier
  * @param {PlayerStatsComponent|null} playerStats - for enemyModifiers
- * @param {{x?: number, z?: number}} [spawnOffset] - additional offset from random spawn
+ * @param {{x?: number, y?: number, z?: number}} [spawnOffset] - additional offset from random spawn
  * @param {{baseSpeedOverride?: number}|null} [options] - optional per-spawn stat overrides
  */
 export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset = null, options = null) {
@@ -72,8 +72,9 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
   const entity = new Entity(['enemy', `enemy_${def.type}`]);
 
   const x = (Math.random() - 0.5) * 32 + (spawnOffset?.x ?? 0);
+  const y = (Math.random() - 0.5) * 8 + (spawnOffset?.y ?? 0);
   const z = -55 - Math.random() * 20 + (spawnOffset?.z ?? 0);
-  entity.add(new TransformComponent({ position: new THREE.Vector3(x, 0, z) }));
+  entity.add(new TransformComponent({ position: new THREE.Vector3(x, y, z) }));
 
   entity.add(new HealthComponent({
     hp: finalHp, maxHp: finalHp, armor: finalArmor,
@@ -122,6 +123,7 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
 
   entity.add(new LootTableComponent({ table: def.loot }));
   entity.add(new EnemySeparationComponent());
+  entity.add(new EnemyVerticalTrackingComponent({ speed: finalSpd }));
   entity.enemyType = def.type;
   entity.collisionRadius = def.collisionRadius;
 

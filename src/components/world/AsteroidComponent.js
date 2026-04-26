@@ -77,7 +77,11 @@ export class AsteroidComponent extends Component {
     if (position) {
       this._group.position.copy(position);
     } else {
-      this._group.position.set((Math.random() - 0.5) * 36, 0, -75 - Math.random() * 10);
+      this._group.position.set(
+        (Math.random() - 0.5) * 36,
+        (Math.random() - 0.5) * 10,
+        -75 - Math.random() * 10
+      );
     }
 
     if (velocity) {

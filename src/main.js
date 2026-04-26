@@ -133,8 +133,8 @@ class Game {
     this.upgradeApplier = null;
     this.arenaDirector = null;
     this.collision = new CollisionCoordinator(this.world);
-    this._arenaKeys = { left: false, right: false, up: false, down: false };
-    this._arenaVel = { x: 0, z: 0 };
+    this._arenaKeys = { left: false, right: false, up: false, down: false, boost: false, brake: false };
+    this._arenaVel = { x: 0, y: 0, z: 0 };
     this._arenaBank = 0;
     this._arenaInitSpeed = false;
     this._prevBossMusicActive = false;
@@ -676,6 +676,8 @@ class Game {
       if (code === 'ArrowRight' || code === 'KeyD') this._arenaKeys.right = val;
       if (code === 'ArrowUp'    || code === 'KeyW') this._arenaKeys.up    = val;
       if (code === 'ArrowDown'  || code === 'KeyS') this._arenaKeys.down  = val;
+      if (code === 'ShiftLeft'  || code === 'ShiftRight')   this._arenaKeys.boost = val;
+      if (code === 'ControlLeft'|| code === 'ControlRight') this._arenaKeys.brake = val;
     };
     window.addEventListener('keydown', e => {
       if (this._paused) return;
@@ -693,11 +695,11 @@ class Game {
    * Inertia-lite arena flight controller.
    *
    * Velocity is a world-space vector kept in `this._arenaVel`, independent of
-   * the ship's yaw. W adds thrust along the current nose; S applies retro
-   * thrust along the current velocity (brake). Releasing both = coast (no
-   * drag). A/D yaw the nose only — velocity lingers, so hard turns produce
-   * visible sideways drift. A mild "velocity relaxes toward nose" pull keeps
-   * the ship from ever flying permanently backwards.
+   * the ship's yaw. Shift adds thrust along the current nose; Ctrl applies retro
+   * thrust along the current velocity (brake). W/S pitch the ship up/down (Y-axis).
+   * A/D yaw the nose only — velocity lingers, so hard turns produce visible
+   * sideways drift. A mild "velocity relaxes toward nose" pull keeps the ship
+   * from ever flying permanently backwards.
    *
    * Soft edge-band steering auto-yaws toward origin and bleeds the outward
    * component of velocity when inside EDGE_BAND of a wall.
@@ -729,20 +731,39 @@ class Game {
     const fx = -Math.sin(yaw);
     const fz = -Math.cos(yaw);
 
-    // Forward thrust along nose.
+    // W/S → vertical pitch (Y-axis), optionally inverted via settings.
+    const ySign = this.settings?.invertYControls ? -1 : 1;
     if (this._arenaKeys.up) {
-      const a = baseSpd * BOSS_ARENA.THRUST_ACCEL_MULT * dt;
+      this._arenaVel.y += ySign * baseSpd * BOSS_ARENA.PITCH_ACCEL_MULT * dt;
+    }
+    if (this._arenaKeys.down) {
+      this._arenaVel.y -= ySign * baseSpd * BOSS_ARENA.PITCH_ACCEL_MULT * dt;
+    }
+
+    // Shift → forward thrust along nose (was W).
+    if (this._arenaKeys.boost) {
+      const a = baseSpd * BOSS_ARENA.BOOST_ACCEL_MULT * dt;
       this._arenaVel.x += fx * a;
       this._arenaVel.z += fz * a;
     }
 
-    // Retro brake along velocity (never flips sign — clamps to zero).
-    if (this._arenaKeys.down) {
+    // Ctrl → retro brake along velocity (was S; never flips sign).
+    if (this._arenaKeys.brake) {
       const s = Math.hypot(this._arenaVel.x, this._arenaVel.z);
       if (s > 0.001) {
         const dv = Math.min(s, baseSpd * BOSS_ARENA.BRAKE_DECEL_MULT * dt);
         this._arenaVel.x -= (this._arenaVel.x / s) * dv;
         this._arenaVel.z -= (this._arenaVel.z / s) * dv;
+      }
+    }
+
+    // Gravity: gently pull Y back toward 0 when not pitching.
+    if (!this._arenaKeys.up && !this._arenaKeys.down) {
+      const grav = BOSS_ARENA.Y_GRAVITY * dt;
+      if (Math.abs(this._arenaVel.y) <= grav) {
+        this._arenaVel.y = 0;
+      } else {
+        this._arenaVel.y -= Math.sign(this._arenaVel.y) * grav;
       }
     }
 
@@ -788,13 +809,18 @@ class Game {
       }
     }
 
-    // Hard cap on velocity magnitude.
+    // Boost raises the XZ velocity cap.
+    const effectiveMaxV = this._arenaKeys.boost
+      ? baseSpd * BOSS_ARENA.BOOST_MAX_MULT
+      : maxV;
+
+    // Hard cap on XZ velocity magnitude.
     speed = Math.hypot(this._arenaVel.x, this._arenaVel.z);
-    if (speed > maxV) {
-      const s = maxV / speed;
+    if (speed > effectiveMaxV) {
+      const s = effectiveMaxV / speed;
       this._arenaVel.x *= s;
       this._arenaVel.z *= s;
-      speed = maxV;
+      speed = effectiveMaxV;
     }
 
     // Minimum forward velocity — no full stop. Keeps pressure on the player
@@ -816,6 +842,11 @@ class Game {
     t.position.x += this._arenaVel.x * dt;
     t.position.z += this._arenaVel.z * dt;
 
+    // Y position — integrate, then clamp to vertical bounds.
+    t.position.y += this._arenaVel.y * dt;
+    if (t.position.y < BOSS_ARENA.Y_MIN) { t.position.y = BOSS_ARENA.Y_MIN; this._arenaVel.y = 0; }
+    if (t.position.y > BOSS_ARENA.Y_MAX) { t.position.y = BOSS_ARENA.Y_MAX; this._arenaVel.y = 0; }
+
     // Visual bank: bank INTO the turn (left turn → left wing dips → right
     // wing up → positive rotation.z in three.js). yawInput=+1 is a left turn,
     // so bank term is +yawInput. Lateral slip reinforces it: slipNorm>0 means
@@ -824,11 +855,13 @@ class Game {
     // Right vector (ship-local +X in world) = (cos(yaw), 0, -sin(yaw)).
     const rx = Math.cos(yaw), rz = -Math.sin(yaw);
     const slipDot = this._arenaVel.x * rx + this._arenaVel.z * rz; // positive = sliding to ship-right
-    const slipNorm = Math.max(-1, Math.min(1, slipDot / Math.max(0.001, maxV)));
+    const slipNorm = Math.max(-1, Math.min(1, slipDot / Math.max(0.001, effectiveMaxV)));
     const targetBank = yawInput * 0.55 + slipNorm * 0.35;
     this._arenaBank += (targetBank - this._arenaBank) * Math.min(1, dt * 7);
     t.rotation.z = this._arenaBank;
-    t.rotation.x = 0;
+    // Visual pitch: nose up when climbing, nose down when diving.
+    const targetPitch = (this._arenaVel.y / Math.max(0.001, baseSpd * BOSS_ARENA.PITCH_ACCEL_MULT)) * 0.4;
+    t.rotation.x = THREE.MathUtils.lerp(t.rotation.x, targetPitch, Math.min(1, dt * 5));
 
     // Sync the ship mesh position/rotation (ShipVisualsComponent also mirrors
     // from TransformComponent in its update, but this keeps the hull in sync
@@ -849,10 +882,9 @@ class Game {
     const trail = this.playerEntity.get('ArenaTrailComponent');
     trail?.setSpeedRatio?.(speedRatio);
 
-    // Thrust plume level: hold W for full flare, S cuts to near-zero,
-    // neither holds an idle baseline so the engines always read as "on".
-    const thrust = this._arenaKeys.up ? 1.0
-      : this._arenaKeys.down ? 0.05
+    // Thrust plume level: boost = full flare, brake = near-zero, idle baseline.
+    const thrust = this._arenaKeys.boost ? 1.0
+      : this._arenaKeys.brake ? 0.05
       : 0.4;
     this.playerEntity.get('ShipVisualsComponent')?.setThrust?.(thrust);
   }
@@ -860,6 +892,7 @@ class Game {
   /** Reset arena flight state on enter/exit so next run starts clean. */
   _resetArenaFlight() {
     this._arenaVel.x = 0;
+    this._arenaVel.y = 0;
     this._arenaVel.z = 0;
     this._arenaBank = 0;
     this._arenaInitSpeed = false;
@@ -1508,8 +1541,10 @@ class Game {
       const t = this.playerEntity.get('TransformComponent');
       const vel = this.playerEntity.get('PlayerInputComponent')?.getVelocity?.() || { x: 0 };
       this.camera.setCombatSway({ roll: t?.rotation?.z ?? 0, vx: vel.x });
+      this.camera.setCombatPlayerY(t?.position.y ?? 0);
     } else if (!arenaActive && !transitioning) {
       this.camera.setCombatSway({ roll: 0, vx: 0 });
+      this.camera.setCombatPlayerY(0);
     }
 
     this.camera.update(dt);                            mark('camera');

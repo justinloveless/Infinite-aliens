@@ -18,6 +18,7 @@ const DEFAULTS = {
   muted:            false,
   showFps:          false,
   cameraTiltEnabled: true,
+  invertYControls:  false,
   graphicsQuality:  'auto',
   keybinds: {
     moveUp:    'KeyW',
@@ -64,6 +65,7 @@ export class SettingsManager {
   get muted()            { return this._s.muted; }
   get showFps()      { return !!this._s.showFps; }
   get cameraTiltEnabled() { return this._s.cameraTiltEnabled !== false; }
+  get invertYControls() { return !!this._s.invertYControls; }
   get graphicsQuality() {
     const v = this._s.graphicsQuality;
     return GRAPHICS_QUALITY_OPTIONS.includes(v) ? v : 'auto';
@@ -118,6 +120,12 @@ export class SettingsManager {
     this._s.cameraTiltEnabled = !!v;
     this._save();
     this._emit('cameraTiltEnabled', this._s.cameraTiltEnabled);
+  }
+
+  setInvertYControls(v) {
+    this._s.invertYControls = !!v;
+    this._save();
+    this._emit('invertYControls', this._s.invertYControls);
   }
 
   setGraphicsQuality(v) {

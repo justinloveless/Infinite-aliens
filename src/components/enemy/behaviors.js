@@ -1,4 +1,5 @@
 import { Component } from '../../ecs/Component.js';
+import { PLAY_AREA } from '../../constants.js';
 
 /** Base class: exposes `speed` (scaled by speedScale + slow status each frame) */
 class EnemyBehaviorComponent extends Component {
@@ -280,6 +281,49 @@ export class BossAggressorBehaviorComponent extends EnemyBehaviorComponent {
     const perpZ = (dx / d);
     t.position.x += perpX * Math.sin(this._timer * 0.9) * spd * 0.35 * dt;
     t.position.z += perpZ * Math.sin(this._timer * 0.9) * spd * 0.35 * dt;
+  }
+}
+
+const Y_LAG_TAU = 2.0;    // seconds for target Y to respond to player Y changes
+const Y_TRACK_RANGE = 30; // XZ units — only track Y when within this distance
+
+/** Tracks the player's Y position with a time lag so enemies don't snap instantly. */
+export class EnemyVerticalTrackingComponent extends Component {
+  constructor({ speed = 2 } = {}) {
+    super();
+    this._speed = speed;
+    this._smoothTargetY = 0;
+  }
+
+  onAttach() {
+    const t = this.entity.get('TransformComponent');
+    if (t) this._smoothTargetY = t.position.y;
+  }
+
+  update(dt, ctx) {
+    const t = this.entity.get('TransformComponent');
+    const p = ctx.playerEntity?.get('TransformComponent')?.position;
+    if (!t || !p) return;
+
+    const dx = p.x - t.position.x;
+    const dz = p.z - t.position.z;
+    const xzDist = Math.sqrt(dx * dx + dz * dz);
+
+    if (xzDist > Y_TRACK_RANGE) {
+      // Outside range — anchor the target to current Y so no drift queues up.
+      this._smoothTargetY = t.position.y;
+      return;
+    }
+
+    // Smoothly lag the target Y behind the real player Y.
+    const k = 1 - Math.exp(-dt / Y_LAG_TAU);
+    this._smoothTargetY += (p.y - this._smoothTargetY) * k;
+
+    const slowMult = this.entity.get('StatusEffectsComponent')?.slowMult ?? 1;
+    const spd = this._speed * slowMult;
+    const dy = this._smoothTargetY - t.position.y;
+    const move = Math.sign(dy) * Math.min(Math.abs(dy), spd * dt);
+    t.position.y = Math.max(PLAY_AREA.Y_MIN, Math.min(PLAY_AREA.Y_MAX, t.position.y + move));
   }
 }
 

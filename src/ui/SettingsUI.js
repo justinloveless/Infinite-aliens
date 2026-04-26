@@ -306,6 +306,21 @@ export class SettingsUI {
     const el = document.createElement('div');
     el.className = 'settings-controls';
 
+    const invertYRow = document.createElement('div');
+    invertYRow.className = 'settings-row';
+    const invertYLabel = document.createElement('span');
+    invertYLabel.className = 'settings-label';
+    invertYLabel.textContent = 'INVERT Y CONTROLS';
+    this._invertYBtn = document.createElement('button');
+    this._invertYBtn.className = 'neon-btn small';
+    this._invertYBtn.onclick = () => {
+      this._settings.setInvertYControls(!this._settings.invertYControls);
+      this._syncInvertYBtn();
+    };
+    invertYRow.appendChild(invertYLabel);
+    invertYRow.appendChild(this._invertYBtn);
+    el.appendChild(invertYRow);
+
     for (const action of KEYBIND_ACTIONS) {
       const row = document.createElement('div');
       row.className = 'settings-row';
@@ -372,6 +387,7 @@ export class SettingsUI {
     this._syncVoiceBtn();
     this._syncSubtitlesBtn();
     this._syncKeybinds();
+    this._syncInvertYBtn();
     this._syncShowFpsBtn();
     this._syncCameraTiltBtn();
     this._syncQualityBtns();
@@ -399,6 +415,14 @@ export class SettingsUI {
     this._fpsBtn.textContent = on ? 'ON' : 'OFF';
     this._fpsBtn.style.borderColor = on ? 'var(--green)' : '';
     this._fpsBtn.style.color       = on ? 'var(--green)' : '';
+  }
+
+  _syncInvertYBtn() {
+    if (!this._invertYBtn) return;
+    const on = this._settings.invertYControls;
+    this._invertYBtn.textContent = on ? 'ON' : 'OFF';
+    this._invertYBtn.style.borderColor = on ? 'var(--green)' : 'var(--pink)';
+    this._invertYBtn.style.color       = on ? 'var(--green)' : 'var(--pink)';
   }
 
   _syncCameraTiltBtn() {
