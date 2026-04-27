@@ -142,6 +142,7 @@ class Game {
     this._arenaInitSpeed = false;
     this._prevBossMusicActive = false;
     this._paused = false;
+    this._firstPersonMode = false;
     this._returnJourneyPending = false;
     this.scanUI = new ScanUI(this.audio);
     this.abilityActionBar = new AbilityActionBar();
@@ -155,6 +156,7 @@ class Game {
     this._setupEventListeners();
     this._setupPrimaryFireInput();
     this._setupAbilityKeys();
+    this._setupViewKeys();
     this._setupArenaInput();
     this._setupSettingsButton();
     this._setupDebugMenuHotkey();
@@ -365,6 +367,11 @@ class Game {
     if (!this.state) return;
 
     this.setPaused(false);
+    if (this._firstPersonMode) {
+      this._firstPersonMode = false;
+      this.camera.setFirstPersonMode(false);
+      this.playerEntity?.get('ShipVisualsComponent')?.setMeshVisible(true);
+    }
     this.audio.stopMusic();
     this.audio.play('death');
 
@@ -668,6 +675,20 @@ class Game {
         .map(name => this.playerEntity?.get(name))
         .filter(Boolean);
       active[slot]?.trigger(this.world.ctx);
+    });
+  }
+
+  _setupViewKeys() {
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'KeyV') return;
+      if (this._paused) return;
+      if (this._isTypingTarget(e.target)) return;
+      const phase = this.state?.round?.phase;
+      if (phase !== 'combat' && phase !== 'boss_arena' && phase !== 'arena_transition') return;
+      this._firstPersonMode = !this._firstPersonMode;
+      this.camera.setFirstPersonMode(this._firstPersonMode);
+      const visuals = this.playerEntity?.get('ShipVisualsComponent');
+      visuals?.setMeshVisible(!this._firstPersonMode);
     });
   }
 
@@ -1553,6 +1574,9 @@ class Game {
       this.camera.setCombatPlayerY(0);
     }
 
+    if (this._firstPersonMode && this.playerEntity) {
+      this.camera.setFpTransform(this.playerEntity.get('TransformComponent'));
+    }
     this.camera.update(dt);                            mark('camera');
     this.scene.lerpEnvironment(dt);                    mark('environment');
     this._updateShaders(dt);                           mark('shaders');

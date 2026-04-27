@@ -120,9 +120,9 @@ export class RailgunComponent extends Component {
     }
     const t = this.entity.get('TransformComponent');
     if (t) {
-      const yaw = t.rotation.y;
+      const q = new THREE.Quaternion().setFromEuler(t.rotation);
       return t.position.clone().addScaledVector(
-        new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)), 1.2,
+        new THREE.Vector3(0, 0, -1).applyQuaternion(q), 1.2,
       );
     }
     return new THREE.Vector3();
@@ -130,8 +130,8 @@ export class RailgunComponent extends Component {
 
   _getFireDir() {
     const t = this.entity.get('TransformComponent');
-    const yaw = t?.rotation?.y ?? 0;
-    return new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)).normalize();
+    const q = new THREE.Quaternion().setFromEuler(t?.rotation ?? new THREE.Euler());
+    return new THREE.Vector3(0, 0, -1).applyQuaternion(q);
   }
 
   beginCharge() {

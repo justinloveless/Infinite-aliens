@@ -63,8 +63,8 @@ export class ManualGunComponent extends Component {
       : [t.position.clone().add(new THREE.Vector3(0, 0, -1.0))];
     // Fire along the ship's current yaw so the manual gun points where the
     // ship's nose is (essential for arena flight controls).
-    const yaw = t?.rotation?.y ?? 0;
-    const baseDir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const q = new THREE.Quaternion().setFromEuler(t.rotation);
+    const baseDir = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
     const pierces = stats?.projectilePierces ?? 0;
     const killsThisRun = ctx.state.round.killsThisRun || 0;
     const resonance = this.entity.get('ResonanceFieldComponent')?.level ?? 0;

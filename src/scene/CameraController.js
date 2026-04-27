@@ -56,10 +56,22 @@ export class CameraController {
     this._smoothCombatY = 0;
     /** Roll/sway in combat + arena chase when false. */
     this._cameraTiltEnabled = true;
+
+    this._fpMode = false;
+    this._fpTrack = null;
   }
 
   setCameraTiltEnabled(on) {
     this._cameraTiltEnabled = !!on;
+  }
+
+  setFirstPersonMode(on) {
+    this._fpMode = !!on;
+    if (!on) this._camera.up.set(0, 1, 0);
+  }
+
+  setFpTransform(t) {
+    this._fpTrack = t;
   }
 
   shake(intensity = 0.4, duration = 0.25) {
@@ -154,6 +166,32 @@ export class CameraController {
   update(delta) {
     this._floatTime += delta;
     this._shakeTimer = Math.max(0, this._shakeTimer - delta);
+
+    if (this._fpMode && this._fpTrack) {
+      const t = this._fpTrack;
+      const q = new THREE.Quaternion().setFromEuler(t.rotation);
+      const offset = new THREE.Vector3(0, 0, -0.6).applyQuaternion(q);
+      let shakeX = 0, shakeY = 0;
+      if (this._shakeTimer > 0) {
+        const s = this._shakeTimer / 0.25;
+        shakeX = (Math.random() - 0.5) * this._shakeIntensity * s;
+        shakeY = (Math.random() - 0.5) * this._shakeIntensity * s;
+      }
+      this._camera.position.set(
+        t.position.x + offset.x + shakeX,
+        t.position.y + offset.y + shakeY,
+        t.position.z + offset.z,
+      );
+      this._camera.quaternion.copy(q);
+      const targetFov = this._baseFov + this._speedRatio * FOV_SPEED_BONUS + this._warpFovBonus * FOV_WARP_BONUS;
+      const lerpRate = this._warpFovBonus > 0 ? FOV_WARP_LERP : FOV_LERP_RATE;
+      this._fov += (targetFov - this._fov) * Math.min(1, delta * lerpRate);
+      if (Math.abs(this._camera.fov - this._fov) > 0.01) {
+        this._camera.fov = this._fov;
+        this._camera.updateProjectionMatrix();
+      }
+      return;
+    }
 
     if (this._arenaMode && this._trackT) {
       const t = this._trackT;

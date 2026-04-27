@@ -215,6 +215,8 @@ export class ShipVisualsComponent extends Component {
     this._tickAttachments(dt);
   }
 
+  setMeshVisible(v) { this._group.visible = !!v; }
+
   /** Gimbal aim only for auto turret fire-types, not main/manual weapons. */
   _wantsAimAtTarget(slotId, stats) {
     if (!stats) return false;
