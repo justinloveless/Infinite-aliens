@@ -94,7 +94,6 @@ class Bucket {
     this.colorDirty = false;
     this.mesh = null;
     this._resize(INITIAL_CAPACITY);
-    scene.groups.projectiles.add(this.mesh);
   }
 
   _resize(newCapacity) {
@@ -152,6 +151,7 @@ class Bucket {
       prev.dispose();
     }
     this.mesh = mesh;
+    this._scene.groups.projectiles.add(mesh);
   }
 
   grow() {

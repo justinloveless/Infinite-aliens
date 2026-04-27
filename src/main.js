@@ -41,7 +41,8 @@ import { ArenaDirector } from './coordinators/ArenaDirector.js';
 import { ScanUI } from './ui/ScanUI.js';
 import { listInstalledItems, getItem } from './hangar/HangarSystem.js';
 import { getCounterTypeForItem, COUNTER_ENEMY_DEFS } from './data/counterEnemies.js';
-import { BLOOM, PLAYER, RUN, SCENE, WARP, CAMPAIGN, BOSS_ARENA } from './constants.js';
+import { BLOOM, PLAYER, RUN, SCENE, WARP, CAMPAIGN, BOSS_ARENA, PLAY_AREA } from './constants.js';
+import { MouseAimTracker } from './core/MouseAimTracker.js';
 import { getPreset } from './scene/EnvironmentPresets.js';
 import * as THREE from 'three';
 
@@ -78,6 +79,7 @@ class Game {
     this.synthGrid = new SynthGrid(this.scene.scene);
     this.camera = new CameraController(this.scene.camera);
     this.camera.setCameraTiltEnabled(this.settings.cameraTiltEnabled);
+    MouseAimTracker.init(this.scene.renderer.domElement);
 
     const { composer, postPasses } = setupPostProcessing(
       this.scene.renderer, this.scene.scene, this.scene.camera
@@ -133,8 +135,9 @@ class Game {
     this.upgradeApplier = null;
     this.arenaDirector = null;
     this.collision = new CollisionCoordinator(this.world);
-    this._arenaKeys = { left: false, right: false, up: false, down: false, boost: false, brake: false };
+    this._arenaKeys = { left: false, right: false, up: false, down: false, boost: false, strafeUp: false, strafeDown: false };
     this._arenaVel = { x: 0, y: 0, z: 0 };
+    this._arenaYawRate = 0;
     this._arenaBank = 0;
     this._arenaInitSpeed = false;
     this._prevBossMusicActive = false;
@@ -597,15 +600,13 @@ class Game {
     });
 
     window.addEventListener('keydown', e => {
-      if (e.code !== 'Space' || e.repeat || this._paused || this._isTypingTarget(e.target)) return;
+      if (e.code !== 'Space' || this._isTypingTarget(e.target)) return;
       e.preventDefault();
-      this._getPrimaryManualWeapon()?.onPrimaryFirePress();
     });
 
     window.addEventListener('keyup', e => {
-      if (e.code !== 'Space' || this._paused || this._isTypingTarget(e.target)) return;
+      if (e.code !== 'Space') return;
       e.preventDefault();
-      this._getPrimaryManualWeapon()?.onPrimaryFireRelease();
     });
 
     window.addEventListener('pointerup', e => {
@@ -676,8 +677,9 @@ class Game {
       if (code === 'ArrowRight' || code === 'KeyD') this._arenaKeys.right = val;
       if (code === 'ArrowUp'    || code === 'KeyW') this._arenaKeys.up    = val;
       if (code === 'ArrowDown'  || code === 'KeyS') this._arenaKeys.down  = val;
-      if (code === 'ShiftLeft'  || code === 'ShiftRight')   this._arenaKeys.boost = val;
-      if (code === 'ControlLeft'|| code === 'ControlRight') this._arenaKeys.brake = val;
+      if (code === 'ShiftLeft'   || code === 'ShiftRight')   this._arenaKeys.boost      = val;
+      if (code === 'Space')                                 this._arenaKeys.strafeUp   = val;
+      if (code === 'ControlLeft' || code === 'ControlRight') this._arenaKeys.strafeDown = val;
     };
     window.addEventListener('keydown', e => {
       if (this._paused) return;
@@ -723,32 +725,35 @@ class Game {
       this._arenaInitSpeed = true;
     }
 
-    const yawInput = (this._arenaKeys.left ? 1 : 0) - (this._arenaKeys.right ? 1 : 0);
-    t.rotation.y += yawInput * BOSS_ARENA.YAW_SPEED * dt;
+    // Mouse X → yaw rate spring (mouse at full right = MOUSE_YAW_MAX rad/s turn rate).
+    // Negative sign: mouse right (ma.x > 0) should turn the ship right (decrease rotation.y).
+    const ma = MouseAimTracker;
+    const ySign = this.settings?.invertYControls ? -1 : 1;
+    const targetYawRate = -ma.x * BOSS_ARENA.MOUSE_YAW_MAX;
+    this._arenaYawRate += (targetYawRate - this._arenaYawRate) * BOSS_ARENA.MOUSE_YAW_SPRING * dt;
+    t.rotation.y += this._arenaYawRate * dt;
+    const yawInput = -this._arenaYawRate / Math.max(0.001, BOSS_ARENA.MOUSE_YAW_MAX); // normalized for bank visual
 
     // Ship-local -Z is forward; rotation.y yaws around Y.
     const yaw = t.rotation.y;
     const fx = -Math.sin(yaw);
     const fz = -Math.cos(yaw);
 
-    // W/S → vertical pitch (Y-axis), optionally inverted via settings.
-    const ySign = this.settings?.invertYControls ? -1 : 1;
-    if (this._arenaKeys.up) {
-      this._arenaVel.y += ySign * baseSpd * BOSS_ARENA.PITCH_ACCEL_MULT * dt;
-    }
-    if (this._arenaKeys.down) {
-      this._arenaVel.y -= ySign * baseSpd * BOSS_ARENA.PITCH_ACCEL_MULT * dt;
-    }
+    // Mouse Y → vertical velocity spring; Space/Ctrl bias target up/down.
+    let targetVelY = ma.y * ySign * baseSpd * BOSS_ARENA.MOUSE_PITCH_MULT;
+    if (this._arenaKeys.strafeUp)   targetVelY += baseSpd * BOSS_ARENA.MOUSE_PITCH_MULT;
+    if (this._arenaKeys.strafeDown) targetVelY -= baseSpd * BOSS_ARENA.MOUSE_PITCH_MULT;
+    this._arenaVel.y += (targetVelY - this._arenaVel.y) * BOSS_ARENA.MOUSE_VY_SPRING * dt;
 
-    // Shift → forward thrust along nose (was W).
-    if (this._arenaKeys.boost) {
+    // W/Shift → forward thrust along nose.
+    if (this._arenaKeys.boost || this._arenaKeys.up) {
       const a = baseSpd * BOSS_ARENA.BOOST_ACCEL_MULT * dt;
       this._arenaVel.x += fx * a;
       this._arenaVel.z += fz * a;
     }
 
-    // Ctrl → retro brake along velocity (was S; never flips sign).
-    if (this._arenaKeys.brake) {
+    // S → retro brake along velocity (never flips sign).
+    if (this._arenaKeys.down) {
       const s = Math.hypot(this._arenaVel.x, this._arenaVel.z);
       if (s > 0.001) {
         const dv = Math.min(s, baseSpd * BOSS_ARENA.BRAKE_DECEL_MULT * dt);
@@ -757,14 +762,12 @@ class Game {
       }
     }
 
-    // Gravity: gently pull Y back toward 0 when not pitching.
-    if (!this._arenaKeys.up && !this._arenaKeys.down) {
-      const grav = BOSS_ARENA.Y_GRAVITY * dt;
-      if (Math.abs(this._arenaVel.y) <= grav) {
-        this._arenaVel.y = 0;
-      } else {
-        this._arenaVel.y -= Math.sign(this._arenaVel.y) * grav;
-      }
+    // A/D → lateral strafe along ship-local right vector (cos(yaw), 0, -sin(yaw)).
+    if (this._arenaKeys.left || this._arenaKeys.right) {
+      const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+      const strafeA = baseSpd * BOSS_ARENA.BOOST_ACCEL_MULT * dt;
+      if (this._arenaKeys.right) { this._arenaVel.x += rx * strafeA; this._arenaVel.z += rz * strafeA; }
+      if (this._arenaKeys.left)  { this._arenaVel.x -= rx * strafeA; this._arenaVel.z -= rz * strafeA; }
     }
 
     // Mild velocity-aligns-with-nose pull (arcade forgiveness). Preserves
@@ -809,8 +812,8 @@ class Game {
       }
     }
 
-    // Boost raises the XZ velocity cap.
-    const effectiveMaxV = this._arenaKeys.boost
+    // W/Shift raises the XZ velocity cap.
+    const effectiveMaxV = (this._arenaKeys.boost || this._arenaKeys.up)
       ? baseSpd * BOSS_ARENA.BOOST_MAX_MULT
       : maxV;
 
@@ -860,7 +863,7 @@ class Game {
     this._arenaBank += (targetBank - this._arenaBank) * Math.min(1, dt * 7);
     t.rotation.z = this._arenaBank;
     // Visual pitch: nose up when climbing, nose down when diving.
-    const targetPitch = (this._arenaVel.y / Math.max(0.001, baseSpd * BOSS_ARENA.PITCH_ACCEL_MULT)) * 0.4;
+    const targetPitch = (this._arenaVel.y / Math.max(0.001, baseSpd * BOSS_ARENA.MOUSE_PITCH_MULT)) * 0.4;
     t.rotation.x = THREE.MathUtils.lerp(t.rotation.x, targetPitch, Math.min(1, dt * 5));
 
     // Sync the ship mesh position/rotation (ShipVisualsComponent also mirrors
@@ -882,9 +885,9 @@ class Game {
     const trail = this.playerEntity.get('ArenaTrailComponent');
     trail?.setSpeedRatio?.(speedRatio);
 
-    // Thrust plume level: boost = full flare, brake = near-zero, idle baseline.
-    const thrust = this._arenaKeys.boost ? 1.0
-      : this._arenaKeys.brake ? 0.05
+    // Thrust plume level: boost/W = full flare, brake/S = near-zero, idle baseline.
+    const thrust = (this._arenaKeys.boost || this._arenaKeys.up) ? 1.0
+      : this._arenaKeys.down ? 0.05
       : 0.4;
     this.playerEntity.get('ShipVisualsComponent')?.setThrust?.(thrust);
   }
@@ -894,6 +897,7 @@ class Game {
     this._arenaVel.x = 0;
     this._arenaVel.y = 0;
     this._arenaVel.z = 0;
+    this._arenaYawRate = 0;
     this._arenaBank = 0;
     this._arenaInitSpeed = false;
     this.camera?.setSpeedRatio?.(0);
@@ -1204,6 +1208,7 @@ class Game {
     // galaxy's unique arena track.
     const unsub = eventBus.on(EVENTS.ARENA_TRANSITION_ENDED, () => {
       this.ui.show('arenaHud');
+      document.getElementById('hud-top-center')?.classList.add('hidden');
       this.audio.playMusic(this._arenaMusicKey(galaxyIndex));
       unsub();
     });
@@ -1308,6 +1313,7 @@ class Game {
     this.state.bossArena = { active: false, subPhase: 'inactive', bossDefeated: false, gatesTotal: 3, gatesClosed: 0, buildProgress: 0 };
     this.arenaHUD.hide();
     this.ui.hide('arenaHud');
+    document.getElementById('hud-top-center')?.classList.remove('hidden');
     this.arenaDirector?.exit();
     const startTier = nextGalaxy * CAMPAIGN.SECTORS_PER_GALAXY + 1;
     const startDist = nextGalaxy > 0 ? (startTier - 1) * RUN.DISTANCE_PER_TIER : 0;
@@ -1583,7 +1589,8 @@ class Game {
 
     if (phase === 'boss_arena' || phase === 'arena_transition') {
       const bossAlive = this.arenaDirector?._isBossAlive?.() ?? true;
-      this.arenaHUD.update(this.state.bossArena, { bossAlive });
+      const bossHealthFraction = this.arenaDirector?.getBossHealthFraction?.() ?? null;
+      this.arenaHUD.update(this.state.bossArena, { bossAlive, bossHealthFraction });
       const targets = this.arenaDirector?.getIndicatorTargets?.() || [];
       this.arenaHUD.updateIndicators(targets, this.scene.camera, this.scene.renderer?.domElement);
       const playerT = this.playerEntity?.get('TransformComponent');

@@ -3,11 +3,29 @@ import { PLAY_AREA } from '../../constants.js';
 
 /** Base class: exposes `speed` (scaled by speedScale + slow status each frame) */
 class EnemyBehaviorComponent extends Component {
-  constructor({ speed = 2, speedScale = 1 } = {}) {
+  constructor({ speed = 2, speedScale = 1, turnRate = Infinity } = {}) {
     super();
     this.speed = speed;
     this.speedScale = speedScale;
+    this.turnRate = turnRate;
     this._timer = 0;
+    this._vx = 0;
+    this._vz = 0;
+  }
+
+  /** Rotate the stored velocity unit vector toward (desiredX, desiredZ) at turnRate rad/s. */
+  _steer(desiredX, desiredZ, dt) {
+    if (this._vx === 0 && this._vz === 0) { this._vx = desiredX; this._vz = desiredZ; return; }
+    if (!isFinite(this.turnRate)) { this._vx = desiredX; this._vz = desiredZ; return; }
+    const curAngle = Math.atan2(this._vz, this._vx);
+    const desAngle = Math.atan2(desiredZ, desiredX);
+    let diff = desAngle - curAngle;
+    if (diff > Math.PI) diff -= 2 * Math.PI;
+    if (diff < -Math.PI) diff += 2 * Math.PI;
+    const turn = Math.sign(diff) * Math.min(Math.abs(diff), this.turnRate * dt);
+    const a = curAngle + turn;
+    this._vx = Math.cos(a);
+    this._vz = Math.sin(a);
   }
 
   _playerPos(ctx) {
@@ -33,8 +51,9 @@ export class ChargeBehaviorComponent extends EnemyBehaviorComponent {
     const d = Math.sqrt(dx * dx + dz * dz);
     if (d < 0.1) return;
     const spd = this.speed * this.speedScale * this._slow(this.entity);
-    t.position.x += (dx / d) * spd * dt;
-    const zDelta = (dz / d) * spd * dt;
+    this._steer(dx / d, dz / d, dt);
+    t.position.x += this._vx * spd * dt;
+    const zDelta = this._vz * spd * dt;
     t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
   }
 }
@@ -52,11 +71,15 @@ export class ZigzagFastBehaviorComponent extends EnemyBehaviorComponent {
     const d = Math.sqrt(dx * dx + dz * dz);
     if (d < 0.1) return;
     const spd = this.speed * this.speedScale * this._slow(this.entity);
-    const lateral = Math.sin(this._timer * 14) * spd * 0.95;
+    const lateral = Math.sin(this._timer * 14) * 0.95;
     const perpX = -dz / d;
     const perpZ = dx / d;
-    t.position.x += ((dx / d) * spd + perpX * lateral) * dt;
-    const zDelta = ((dz / d) * spd + perpZ * lateral) * dt;
+    const wx = dx / d + perpX * lateral;
+    const wz = dz / d + perpZ * lateral;
+    const wl = Math.sqrt(wx * wx + wz * wz) || 1;
+    this._steer(wx / wl, wz / wl, dt);
+    t.position.x += this._vx * spd * dt;
+    const zDelta = this._vz * spd * dt;
     t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
   }
 }
@@ -73,8 +96,11 @@ export class ZigzagBehaviorComponent extends EnemyBehaviorComponent {
     const d = Math.sqrt(dx * dx + dz * dz);
     if (d < 0.1) return;
     const spd = this.speed * this.speedScale * this._slow(this.entity);
-    t.position.x += ((dx / d) * spd + this._dir * spd * 0.8) * dt;
-    const zDelta = (dz / d) * spd * dt;
+    const wx = dx / d + this._dir * 0.8;
+    const wl = Math.sqrt(wx * wx + 1) || 1;
+    this._steer(wx / wl, dz / d / wl, dt);
+    t.position.x += this._vx * spd * dt;
+    const zDelta = this._vz * spd * dt;
     t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
   }
 }
@@ -90,12 +116,14 @@ export class KeepRangeBehaviorComponent extends EnemyBehaviorComponent {
     if (d < 0.001) return;
     const spd = this.speed * this.speedScale * this._slow(this.entity);
     if (d < this.keepDist) {
-      t.position.x -= (dx / d) * spd * dt * 0.5;
-      const zDelta = -(dz / d) * spd * dt * 0.5;
+      this._steer(-dx / d, -dz / d, dt);
+      t.position.x += this._vx * spd * dt * 0.5;
+      const zDelta = this._vz * spd * dt * 0.5;
       t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
     } else if (d > this.keepDist + 4) {
-      t.position.x += (dx / d) * spd * dt;
-      const zDelta = (dz / d) * spd * dt;
+      this._steer(dx / d, dz / d, dt);
+      t.position.x += this._vx * spd * dt;
+      const zDelta = this._vz * spd * dt;
       t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
     }
   }
@@ -114,8 +142,9 @@ export class SpeedMatchBehaviorComponent extends EnemyBehaviorComponent {
     const d = Math.sqrt(dx * dx + dz * dz);
     if (d < 0.1) return;
     const spd = this.speed * this.speedScale * this._slow(this.entity);
-    t.position.x += (dx / d) * spd * dt;
-    const zDelta = (dz / d) * spd * dt;
+    this._steer(dx / d, dz / d, dt);
+    t.position.x += this._vx * spd * dt;
+    const zDelta = this._vz * spd * dt;
     t.position.z += zDelta > 0 ? zDelta : spd * 0.3 * dt;
   }
 }

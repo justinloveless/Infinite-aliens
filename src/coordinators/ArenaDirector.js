@@ -4,6 +4,7 @@ import { BOSS_ARENA, PLAYER } from '../constants.js';
 import { getPreset } from '../scene/EnvironmentPresets.js';
 import { createEnemy } from '../prefabs/createEnemy.js';
 import { createExplosion } from '../prefabs/createExplosion.js';
+import { createBossDeathExplosion } from '../prefabs/createBossDeathExplosion.js';
 import { createAlienWarpGate } from '../prefabs/createAlienWarpGate.js';
 import { createPlayerWarpGate } from '../prefabs/createPlayerWarpGate.js';
 import { weightedPick } from '../components/enemy/EnemyDefs.js';
@@ -222,16 +223,16 @@ export class ArenaDirector {
     this._killUnsub = eventBus.on(EVENTS.ENEMY_KILLED, ({ entity }) => {
       const phase = this.state.round.phase;
       if (phase !== 'boss_arena' && phase !== 'arena_transition') return;
-      if (entity === this._bossEntity || entity?.hasTag?.('arena_boss')) {
-        this._onBossDefeated();
-      }
+      const isBoss = entity === this._bossEntity || entity?.hasTag?.('arena_boss');
+      if (isBoss) this._onBossDefeated();
       const t = entity?.get?.('TransformComponent');
       if (t && !entity?.hasTag?.('gate_crystal')) {
-        const isBoss = entity.hasTag?.('arena_boss');
-        this.world.spawn(createExplosion(t.position, {
-          color: isBoss ? 0xaa00ff : 0xff6600,
-          scale: isBoss ? 3.0 : 1.0,
-        }));
+        if (isBoss) {
+          this.world.spawn(createBossDeathExplosion(t.position));
+          this.audio?.play('bossNovaExplosion');
+        } else {
+          this.world.spawn(createExplosion(t.position, { color: 0xff6600, scale: 1.0 }));
+        }
       }
     });
   }
@@ -541,6 +542,13 @@ export class ArenaDirector {
   _isBossAlive() {
     const b = this._bossEntity;
     return !!(b && !b._destroyed && b.active && !this.state.bossArena.bossDefeated);
+  }
+
+  getBossHealthFraction() {
+    if (!this._isBossAlive()) return null;
+    const health = this._bossEntity?.get('HealthComponent');
+    if (!health || health.maxHp <= 0) return null;
+    return Math.max(0, health.hp / health.maxHp);
   }
 
   exit() {

@@ -33,6 +33,7 @@ html, body {
   top: 0; left: 0;
   width: 100%; height: 100%;
   display: block;
+  cursor: none;
 }
 
 /* Pause (z-index above HUD so input is blocked until resume) */
@@ -1732,6 +1733,53 @@ html, body {
   background: rgba(0, 0, 0, 0.65);
   box-shadow: 0 0 10px rgba(0, 245, 255, 0.15);
   display: block;
+}
+
+/* ===== BOSS HP BAR ===== */
+#boss-hp-hud {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 75;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+  width: clamp(300px, 40vw, 520px);
+}
+#boss-hp-hud.hidden { display: none; }
+#boss-hp-label {
+  font-family: var(--font-main);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: #ff3355;
+  text-shadow: 0 0 12px rgba(255, 51, 85, 0.8), 0 0 24px rgba(255, 0, 60, 0.4);
+  text-transform: uppercase;
+}
+#boss-hp-track {
+  width: 100%;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(255, 51, 85, 0.55);
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: 0 0 18px rgba(255, 0, 60, 0.35), inset 0 0 6px rgba(0, 0, 0, 0.6);
+}
+#boss-hp-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #cc0033, #ff3355);
+  transition: width 0.12s ease-out;
+  box-shadow: inset 0 0 10px rgba(255, 120, 120, 0.35);
+}
+#boss-hp-value {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  color: rgba(255, 140, 140, 0.75);
 }
 
 /* ===== BOSS ARENA HUD ===== */

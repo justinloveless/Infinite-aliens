@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Component } from '../../ecs/Component.js';
 import { PLAY_AREA } from '../../constants.js';
 import { isOpenCombatPhase } from '../../core/phaseUtil.js';
+import { MouseAimTracker } from '../../core/MouseAimTracker.js';
 
 const ARROW_ALTS = {
   moveUp:    'ArrowUp',
@@ -14,9 +15,8 @@ const X_MIN = PLAY_AREA.X_MIN + 2;
 const X_MAX = PLAY_AREA.X_MAX - 2;
 
 /**
- * Reads keyboard input and writes velocity into the player's TransformComponent.
- * W/S → vertical pitch (Y-axis). A/D → lateral (X-axis).
- * Shift → boost (speed ×BOOST_MULT). Ctrl → brakes (high drag).
+ * Mouse-aim flight: the crosshair follows the mouse; a spring force pulls the
+ * ship toward it. W/Shift = boost, S = brake, A/D = strafe X, Space/Ctrl = strafe Y.
  */
 export class PlayerInputComponent extends Component {
   constructor({ settings = null } = {}) {
@@ -65,32 +65,53 @@ export class PlayerInputComponent extends Component {
       return;
     }
 
-    const isBoosting = this._keys['ShiftLeft'] || this._keys['ShiftRight'];
-    const isBraking  = this._keys['ControlLeft'] || this._keys['ControlRight'];
+    const isBoosting     = this._keys['ShiftLeft'] || this._keys['ShiftRight'] || this._isDown('moveUp');
+    const isBraking      = this._isDown('moveDown');
+    const isStrafingLeft  = this._isDown('moveLeft');
+    const isStrafingRight = this._isDown('moveRight');
+    const isStrafingUp    = this._keys['Space'];
+    const isStrafingDown  = this._keys['ControlLeft'] || this._keys['ControlRight'];
 
-    if (isBoosting) speed *= PLAY_AREA.BOOST_MULT;
-
-    const decelRate = isBraking ? PLAY_AREA.BRAKE_DRAG : 10;
-    const accel = dt * decelRate;
-
-    const rawX = (this._isDown('moveRight') ? 1 : 0) - (this._isDown('moveLeft') ? 1 : 0);
+    const ma = MouseAimTracker;
     const ySign = this._settings?.invertYControls ? -1 : 1;
-    const rawY = ((this._isDown('moveUp') ? 1 : 0) - (this._isDown('moveDown') ? 1 : 0)) * ySign;
-    const inputLen = Math.hypot(rawX, rawY);
-    const inputX = inputLen > 0 ? rawX / inputLen : 0;
-    const inputY = inputLen > 0 ? rawY / inputLen : 0;
+    const aimAngle = PLAY_AREA.MOUSE_AIM_ANGLE;
 
-    this._vx += (inputX * speed - this._vx) * accel;
-    this._vy += (inputY * speed - this._vy) * accel;
+    // Mouse position maps to a target velocity via trigonometric scaling so the
+    // response feels proportional rather than linearly dead-zone-free.
+    const boostMult = isBoosting ? PLAY_AREA.BOOST_MULT : 1;
+    const mouseVx = Math.sin(ma.x * aimAngle) * speed * boostMult;
+    const mouseVy = Math.sin(ma.y * aimAngle * ySign) * speed * boostMult;
+
+    // Keyboard strafe: additive bias on the mouse-driven spring target.
+    let targetVx = mouseVx;
+    let targetVy = mouseVy;
+    if (isStrafingLeft)  targetVx -= speed * boostMult;
+    if (isStrafingRight) targetVx += speed * boostMult;
+    if (isStrafingUp)    targetVy += speed * boostMult;
+    if (isStrafingDown)  targetVy -= speed * boostMult;
+
+    // Spring drives velocity toward the mouse-derived target; Shift doubles the
+    // spring rate so the ship snaps faster when boosting.
+    const spring = PLAY_AREA.MOUSE_SPRING * (isBoosting ? 2 : 1);
+    this._vx += (targetVx - this._vx) * spring * dt;
+    this._vy += (targetVy - this._vy) * spring * dt;
+
+    // S applies heavy damping for a quick stop.
+    if (isBraking) {
+      this._vx += (0 - this._vx) * PLAY_AREA.BRAKE_DRAG * dt;
+      this._vy += (0 - this._vy) * PLAY_AREA.BRAKE_DRAG * dt;
+    }
+
     this._vz += (0 - this._vz) * dt * 10;
 
     t.position.x = THREE.MathUtils.clamp(t.position.x + this._vx * dt, X_MIN, X_MAX);
     t.position.y = THREE.MathUtils.clamp(t.position.y + this._vy * dt, PLAY_AREA.Y_MIN, PLAY_AREA.Y_MAX);
 
+    // Rotation follows mouse aim only — strafe moves the ship without tilting it.
     const speedNorm = Math.max(0.01, speed);
-    const targetYaw   = -(this._vx / speedNorm) * 0.45;
-    const targetPitch =  (this._vy / speedNorm) * 0.35;
-    const targetBank  = -(this._vx / speedNorm) * 0.15;
+    const targetYaw   = -(mouseVx / speedNorm) * 0.45;
+    const targetPitch =  (mouseVy / speedNorm) * 0.35;
+    const targetBank  = -(mouseVx / speedNorm) * 0.15;
     t.rotation.y = THREE.MathUtils.lerp(t.rotation.y, targetYaw,   dt * 7);
     t.rotation.x = THREE.MathUtils.lerp(t.rotation.x, targetPitch, dt * 7);
     t.rotation.z = THREE.MathUtils.lerp(t.rotation.z, targetBank,  dt * 7);

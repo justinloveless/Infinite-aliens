@@ -206,6 +206,12 @@ export const SFX_SPECS = {
     prompt:
       'Sharp instantaneous railgun discharge crack sound effect, deep magnetic thud with a fast high-frequency electrical snap, 0.4 seconds, massive kinetic impact followed by brief ionized air hiss tail, retro-futuristic cozy sci-fi, satisfying and weighty but not harsh',
   },
+  bossNovaExplosion: {
+    file: 'sfx-boss-nova-explosion.mp3',
+    volume: 4.0,
+    prompt:
+      'Massive cinematic boss death explosion sound effect, enormous low-frequency detonation shockwave with a deep thunderous initial impact followed by 4 seconds of rolling bass rumble and crackling energy debris, warm analog reverb bloom swells outward, subtle triumphant harmonic undertone rises through the low-end decay, retro-futuristic colossal supernova energy release, 5 seconds total duration, sci-fi space opera scale, full-bodied and cinematic, powerful but not harsh or clipping',
+  },
 };
 
 export const SFX_BY_KEY = Object.fromEntries(

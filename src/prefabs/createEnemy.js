@@ -12,6 +12,7 @@ import { LootTableComponent } from '../components/enemy/LootTableComponent.js';
 import { EnemySeparationComponent } from '../components/enemy/EnemySeparationComponent.js';
 import { BEHAVIOR_COMPONENTS, EnemyVerticalTrackingComponent } from '../components/enemy/behaviors.js';
 import { ENEMY_DEFS } from '../components/enemy/EnemyDefs.js';
+import { ENEMY } from '../constants.js';
 import {
   ScatterAuraComponent,
   RegenJammerAuraComponent,
@@ -91,12 +92,12 @@ export function createEnemy(typeName, tier = 1, playerStats = null, spawnOffset 
   }));
 
   const BehaviorCls = BEHAVIOR_COMPONENTS[def.behavior] || BEHAVIOR_COMPONENTS.charge;
-  entity.add(new BehaviorCls({
-    speed: finalSpd,
-    keepDist: def.keepRangeDist,
-  }));
-
   const isBossShape = (def.behavior?.startsWith('boss')) || String(def.type).endsWith('_boss');
+  entity.add(new BehaviorCls({
+    speed: isBossShape ? finalSpd : finalSpd * ENEMY.SPEED_MULT,
+    keepDist: def.keepRangeDist,
+    turnRate: isBossShape ? Infinity : ENEMY.TURN_RATE,
+  }));
   const meleeSuicide = !isBossShape;
   if (def.attackPattern) {
     // Boss with distinct attack pattern — gets ranged boss attacker + melee contact

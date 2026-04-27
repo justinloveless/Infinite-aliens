@@ -1,5 +1,5 @@
 // Audio manager: optional MP3 SFX (decoded buffers) + synth fallback; <audio> for music loops
-import { MUSIC_BY_KEY, SFX_BY_KEY, urlPublicAudio } from '../audio/audioAssets.js';
+import { MUSIC_BY_KEY, SFX_BY_KEY, SFX_SPECS, urlPublicAudio } from '../audio/audioAssets.js';
 
 export class AudioManager {
   constructor() {
@@ -47,6 +47,7 @@ export class AudioManager {
   playAtRate(name, rate = 1.0) {
     if (this._muted || !this._initialized || !this._ctx) return;
 
+    const specVol = SFX_SPECS[name]?.volume ?? 1;
     const buf = this._sfxBuffers.get(name);
     if (buf) {
       try {
@@ -55,7 +56,7 @@ export class AudioManager {
         src.buffer = buf;
         src.playbackRate.value = rate;
         const g = ctx.createGain();
-        g.gain.value = this._sfxVolume;
+        g.gain.value = this._sfxVolume * specVol;
         src.connect(g);
         g.connect(ctx.destination);
         src.start();
@@ -63,10 +64,10 @@ export class AudioManager {
       return;
     }
 
-    this._playSynth(name, rate);
+    this._playSynth(name, rate, specVol);
   }
 
-  _playSynth(name, rate = 1.0) {
+  _playSynth(name, rate = 1.0, volMult = 1) {
     const defs = {
       laser: { freq: 880, type: 'sawtooth', duration: 0.12, decay: 0.08, vol: 0.15, sweep: 0.3 },
       missile: { freq: 440, type: 'square', duration: 0.25, decay: 0.15, vol: 0.2, sweep: -0.2 },
@@ -107,6 +108,7 @@ export class AudioManager {
       warp: { freq: 180, type: 'sawtooth', duration: 2.4, decay: 2.0, vol: 0.3, sweep: 1.4, noise: true },
       railgunCharge: { freq: 80, type: 'sawtooth', duration: 2.5, decay: 2.4, vol: 0.28, sweep: 6.0 },
       railgunFire: { freq: 200, type: 'sawtooth', duration: 0.35, decay: 0.28, vol: 0.38, sweep: -0.85, noise: true },
+      bossNovaExplosion: { freq: 40, type: 'sawtooth', duration: 5.0, decay: 4.8, vol: 0.5, sweep: -0.97, noise: true },
     };
 
     const def = defs[name];
@@ -129,7 +131,7 @@ export class AudioManager {
         t + def.duration
       );
 
-      gain.gain.setValueAtTime(def.vol * this._sfxVolume, t);
+      gain.gain.setValueAtTime(def.vol * this._sfxVolume * volMult, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + def.decay);
 
       osc.start(t);
@@ -143,7 +145,7 @@ export class AudioManager {
         const noise = ctx.createBufferSource();
         noise.buffer = buffer;
         const noiseGain = ctx.createGain();
-        noiseGain.gain.setValueAtTime(def.vol * this._sfxVolume * 0.6, t);
+        noiseGain.gain.setValueAtTime(def.vol * this._sfxVolume * 0.6 * volMult, t);
         noiseGain.gain.exponentialRampToValueAtTime(0.001, t + def.decay);
         noise.connect(noiseGain);
         noiseGain.connect(ctx.destination);

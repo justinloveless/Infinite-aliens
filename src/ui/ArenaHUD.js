@@ -29,6 +29,9 @@ export class ArenaHUD {
     this._indicators     = document.getElementById('arena-indicators');
     this._mapCanvas      = document.getElementById('arena-minimap');
     this._mapCtx         = this._mapCanvas?.getContext('2d') ?? null;
+    this._bossHpHud      = document.getElementById('boss-hp-hud');
+    this._bossHpFill     = document.getElementById('boss-hp-fill');
+    this._bossHpValue    = document.getElementById('boss-hp-value');
 
     this._indicatorEls = new Map(); // id -> element
   }
@@ -36,6 +39,7 @@ export class ArenaHUD {
   show() { this._root?.classList.remove('hidden'); }
   hide() {
     this._root?.classList.add('hidden');
+    this._bossHpHud?.classList.add('hidden');
     this._clearIndicators();
     if (this._mapCtx && this._mapCanvas) {
       this._mapCtx.clearRect(0, 0, this._mapCanvas.width, this._mapCanvas.height);
@@ -44,11 +48,31 @@ export class ArenaHUD {
 
   /**
    * @param {object} bossArena - state.bossArena
-   * @param {{ bossAlive?: boolean }} opts
+   * @param {{ bossAlive?: boolean, bossHealthFraction?: number|null }} opts
    */
   update(bossArena, opts = {}) {
     if (!bossArena) return;
     const { subPhase, bossDefeated, gatesClosed, gatesTotal, buildProgress } = bossArena;
+
+    // Boss HP bar
+    const frac = opts.bossHealthFraction;
+    if (frac !== null && frac !== undefined && !bossDefeated) {
+      this._bossHpHud?.classList.remove('hidden');
+      const pct = Math.max(0, Math.min(1, frac)) * 100;
+      if (this._bossHpFill) this._bossHpFill.style.width = `${pct}%`;
+      if (this._bossHpValue) this._bossHpValue.textContent = `${Math.ceil(pct)}%`;
+      if (this._bossHpFill) {
+        if (pct > 50) {
+          this._bossHpFill.style.background = 'linear-gradient(90deg, #cc0033, #ff3355)';
+        } else if (pct > 25) {
+          this._bossHpFill.style.background = 'linear-gradient(90deg, #ff4400, #ff6600)';
+        } else {
+          this._bossHpFill.style.background = 'linear-gradient(90deg, #ff0000, #ff2200)';
+        }
+      }
+    } else {
+      this._bossHpHud?.classList.add('hidden');
+    }
 
     // Boss objective (optional)
     if (bossDefeated) {

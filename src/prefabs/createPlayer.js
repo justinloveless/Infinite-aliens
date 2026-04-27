@@ -42,7 +42,7 @@ export function createPlayer({ settings = null, state = null } = {}) {
   entity.add(new ShipVisualsComponent());
   entity.add(new PlayerInputComponent({ settings }));
   entity.add(new ArenaTrailComponent());
-  entity.add(new PlayerCrosshairComponent());
+  entity.add(new PlayerCrosshairComponent({ settings }));
   entity.add(new PlayerDamageHandlerComponent());
   return entity;
 }

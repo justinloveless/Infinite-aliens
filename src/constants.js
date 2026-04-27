@@ -71,6 +71,8 @@ export const ENEMY = {
   SPEED_SCALING: 1.005,
   SPAWN_Z: -55,
   CONTACT_Z: 2.5,             // z position to trigger contact damage
+  SPEED_MULT: 1.6,            // global multiplier on all non-boss enemy speeds
+  TURN_RATE: 1.8,             // rad/s — how fast non-boss enemies can steer (worse = lower)
 };
 
 export const PLAY_AREA = {
@@ -79,8 +81,10 @@ export const PLAY_AREA = {
   Y_SHIP: 0,
   Z_SHIP: 0,
   ENEMY_X_SPREAD: 16,
-  BOOST_MULT: 1.8,   // speed × when Shift held
-  BRAKE_DRAG: 15,    // decel multiplier when Ctrl held
+  BOOST_MULT: 1.8,      // speed × when Shift held
+  BRAKE_DRAG: 15,       // decel multiplier when Ctrl held
+  MOUSE_SPRING: 5,      // velocity response rate toward mouse target
+  MOUSE_AIM_ANGLE: 0.9, // max aim deflection (radians) at full mouse edge
 };
 
 export const CURRENCIES = {
@@ -207,7 +211,7 @@ export const RARITY_META = {
 };
 
 export const MANUAL_GUN = {
-  HEAT_PER_SHOT:     20,
+  HEAT_PER_SHOT:     5,
   HEAT_MAX:         100,
   HEAT_COOL_RATE:    25,   // units per second
   OVERHEAT_DURATION:  2.0, // seconds locked after overheating
@@ -261,6 +265,12 @@ export const BOSS_ARENA = {
 
   // Vertical flight bounds
   Y_MIN: -40, Y_MAX: 40,
+
+  // Mouse-aim flight controller
+  MOUSE_YAW_MAX:    1.6, // rad/s yaw rate at full mouse-X deflection
+  MOUSE_YAW_SPRING: 5,   // how quickly yaw rate ramps up/down
+  MOUSE_PITCH_MULT: 1.5, // vertical velocity multiplier relative to baseSpd
+  MOUSE_VY_SPRING:  5,   // how quickly vertical velocity responds
 
   // Flight controller — inertia-lite (decoupled nose vs. velocity vector)
   YAW_SPEED: 2.0,            // rad/sec per A/D hold (nose-only; does not redirect velocity)
